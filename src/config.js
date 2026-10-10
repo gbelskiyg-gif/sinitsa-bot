@@ -26,3 +26,11 @@ export const isAdmin = (id) => ADMIN_IDS.includes(Number(id));
 // Узнать ID группы: написать в группе /chatid
 export const ORDERS_CHAT_ID = Number(process.env.ORDERS_CHAT_ID || 0);
 export const notifyChats = () => (ORDERS_CHAT_ID ? [ORDERS_CHAT_ID] : ADMIN_IDS);
+
+// Данные продавца для политики конфиденциальности и согласия (страницы /privacy и /consent)
+export const LEGAL = {
+  name: process.env.OPERATOR_NAME || "",
+  inn: process.env.OPERATOR_INN || "",
+  email: process.env.OPERATOR_EMAIL || "",
+  date: process.env.LEGAL_DATE || "11.10.2026",
+};

@@ -41,7 +41,9 @@ function packInfo(t, pack) {
   if (pack === "wholesale") return { price: t.wholesale.price, label: `опт ${t.wholesale.grams} г` };
   return { price: t.prices[pack], label: `${pack} г` };
 }
-const art = (t) => `<div class="art"><span aria-hidden="true">${S.kinds[t.kind].glyph}</span></div>`;
+const art = (t) => t.photo
+  ? `<div class="art photo"><img src="${esc(t.photo)}" alt="${esc(t.name)}" loading="lazy"></div>`
+  : `<div class="art"><span aria-hidden="true">${S.kinds[t.kind].glyph}</span></div>`;
 
 // ---------- каталог ----------
 const GROUPS = [["all", "Все"], ["gaba", "ГАБА"], ["oolong", "Улуны"], ["red", "Красный чай"], ["puer", "Пуэры"]];
@@ -365,6 +367,7 @@ function renderCheckout(total) {
       <label>Способ получения<select id="f-delivery" name="delivery"><option value="delivery">Доставка</option><option value="pickup" ${f.delivery === "pickup" ? "selected" : ""}>Самовывоз</option></select></label>
       <label id="addr-wrap">Город и адрес<input id="f-address" name="address" maxlength="300" value="${esc(f.address || "")}"></label>
       <label>Комментарий (необязательно)<textarea id="f-comment" name="comment" rows="3" maxlength="500"></textarea></label>
+      <label class="consent"><input type="checkbox" id="f-consent" name="consent"> <span>Даю <a href="/consent" data-doc>согласие на обработку персональных данных</a> и принимаю <a href="/privacy" data-doc>политику конфиденциальности</a></span></label>
       <div class="total"><span>Итого</span><span>${rub(total)}</span></div>
       <p class="error" id="err"></p>
       <button class="btn wide" id="send" ${inTelegram() ? "" : "disabled"}>Отправить заказ</button>
@@ -376,6 +379,8 @@ function renderCheckout(total) {
   $("#f").onsubmit = async (e) => {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(e.target));
+    data.consent = $("#f-consent").checked;
+    if (!data.consent) { $("#err").textContent = "Отметьте согласие на обработку персональных данных."; return; }
     try { localStorage.setItem("form", JSON.stringify({ name: data.name, phone: data.phone, delivery: data.delivery, address: data.address })); } catch {}
     $("#send").disabled = true; $("#err").textContent = "";
     try {
@@ -446,6 +451,8 @@ function route() {
   else renderCatalog();
 }
 document.addEventListener("click", (e) => {
+  const doc = e.target.closest("a[data-doc]");
+  if (doc && tgApp?.openLink) { e.preventDefault(); tgApp.openLink(location.origin + doc.getAttribute("href")); return; }
   const c = e.target.closest("[data-tea]");
   if (c) return openTea(c.dataset.tea);
   const st = e.target.closest("[data-set]");

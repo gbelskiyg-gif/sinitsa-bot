@@ -17,8 +17,16 @@ const store = await import("../src/db.js");
 let server, base;
 const user = { id: 42, first_name: "Тест", username: "tester" };
 const init = signInitData(user, TOKEN);
+const withConsent = (opts) => {
+  if (opts.method === "POST" && opts.body) {
+    const b = JSON.parse(opts.body);
+    if (!("consent" in b)) b.consent = true;
+    return { ...opts, body: JSON.stringify(b) };
+  }
+  return opts;
+};
 const call = (p, opts = {}) =>
-  fetch(base + p, { ...opts, headers: { "content-type": "application/json", "x-telegram-init-data": opts.init ?? init } }).then(async (r) => ({ status: r.status, body: await r.json() }));
+  fetch(base + p, { ...withConsent(opts), headers: { "content-type": "application/json", "x-telegram-init-data": opts.init ?? init } }).then(async (r) => ({ status: r.status, body: await r.json() }));
 
 before(async () => {
   server = startServer(0);
@@ -131,4 +139,41 @@ test("отзыв через 3 дня после завершения и учёт
   store.saveFeedback(id, 888, { wish: "softer" });
   const me = await call("/api/me", { init: signInitData(u, TOKEN) });
   assert.deepEqual(me.body.feedback[0], { rating: "bad", wish: "softer", teaIds: [9] });
+});
+
+test("без согласия на обработку данных заказ не принимается", async () => {
+  const r = await call("/api/orders", { method: "POST", init: signInitData({ id: 990 }, TOKEN), body: JSON.stringify({ items: [{ teaId: 1, pack: "50", qty: 1 }], name: "А", phone: "89001234567", delivery: "pickup", consent: false }) });
+  assert.equal(r.status, 400);
+  assert.match(r.body.error, /согласие/);
+});
+
+test("страницы политики и согласия открываются", async () => {
+  for (const p of ["/privacy", "/consent"]) {
+    const r = await fetch(base + p);
+    assert.equal(r.status, 200);
+    assert.match(await r.text(), /персональных данных/);
+  }
+});
+
+test("через год персональные данные из завершённых заказов удаляются", async () => {
+  const id = store.userOrders(42)[0].id;
+  store.setStatus(id, "done");
+  store.db.prepare("UPDATE orders SET updated_at = datetime('now','-400 days') WHERE id = ?").run(id);
+  assert.ok(store.anonymizeOldOrders(365) >= 1);
+  const o = store.getOrder(id);
+  assert.equal(o.phone, ""); assert.equal(o.name, "");
+  assert.ok(o.items.length > 0, "состав заказа остаётся");
+});
+
+test("фото чая подхватывается из public/teas", async () => {
+  const dir = path.join(path.dirname(new URL(import.meta.url).pathname), "..", "public", "teas");
+  fs.mkdirSync(dir, { recursive: true });
+  const f = path.join(dir, "1.webp");
+  if (fs.existsSync(f)) return;
+  fs.writeFileSync(f, "x");
+  try {
+    const cat = (await call("/api/catalog", { init: "" })).body;
+    assert.match(cat.teas.find((t) => t.id === 1).photo, /^\/teas\/1\.webp\?v=\d+$/);
+    assert.equal(cat.teas.find((t) => t.id === 2).photo, "");
+  } finally { fs.unlinkSync(f); }
 });

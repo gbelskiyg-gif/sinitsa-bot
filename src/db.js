@@ -57,6 +57,7 @@ for (const sql of [
   "ALTER TABLE orders ADD COLUMN done_at TEXT",
   "ALTER TABLE orders ADD COLUMN feedback_asked INTEGER NOT NULL DEFAULT 0",
   "ALTER TABLE orders ADD COLUMN promo TEXT",
+  "ALTER TABLE orders ADD COLUMN consent_at TEXT",
 ]) {
   try {
     db.exec(sql);
@@ -94,8 +95,8 @@ function rowToOrder(r) {
 export function createOrder(o) {
   const res = db
     .prepare(
-      `INSERT INTO orders (user_id, name, phone, delivery, address, comment, items_json, total, promo)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO orders (user_id, name, phone, delivery, address, comment, items_json, total, promo, consent_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
     )
     .run(o.userId, o.name, o.phone, o.delivery, o.address || "", o.comment || "", JSON.stringify(o.items), o.total, o.promo || "");
   return getOrder(Number(res.lastInsertRowid));
@@ -123,6 +124,16 @@ export function setStatus(id, status) {
   ).run(status, status, id);
   return getOrder(id);
 }
+/** Через 12 месяцев после выполнения или отмены удаляем имя, телефон, адрес и комментарий. */
+export function anonymizeOldOrders(days = 365) {
+  return db
+    .prepare(
+      `UPDATE orders SET name = '', phone = '', address = '', comment = ''
+       WHERE status IN ('done','cancelled') AND updated_at < datetime('now', ?) AND (phone != '' OR name != '')`
+    )
+    .run(`-${days} days`).changes;
+}
+
 export function isFirstOrder(userId) {
   return db.prepare("SELECT COUNT(*) AS n FROM orders WHERE user_id = ? AND status != 'cancelled'").get(userId).n === 0;
 }

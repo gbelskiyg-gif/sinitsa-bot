@@ -15,6 +15,7 @@ import {
   refreshAdminMessages,
 } from "./orders.js";
 import { tgSafe } from "./telegram.js";
+import { consentPage, privacyPage } from "./legal.js";
 
 const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "public");
 const TYPES = {
@@ -23,9 +24,31 @@ const TYPES = {
   ".js": "text/javascript; charset=utf-8",
   ".jpg": "image/jpeg",
   ".png": "image/png",
+  ".webp": "image/webp",
   ".svg": "image/svg+xml",
   ".ico": "image/x-icon",
 };
+
+// Фото чаёв: public/teas/<id>.webp|jpg|jpeg|png. Есть файл — показываем фото, нет — иероглиф.
+function photoMap() {
+  const map = {};
+  try {
+    for (const f of fs.readdirSync(path.join(PUBLIC_DIR, "teas"))) {
+      const m = f.match(/^(\d+)\.(webp|jpe?g|png)$/i);
+      if (!m) continue;
+      const v = Math.round(fs.statSync(path.join(PUBLIC_DIR, "teas", f)).mtimeMs / 1000);
+      map[m[1]] = `/teas/${f}?v=${v}`;
+    }
+  } catch {
+    /* папки ещё нет */
+  }
+  return map;
+}
+
+function html(res, body) {
+  res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" });
+  res.end(body);
+}
 
 function send(res, status, data) {
   const body = JSON.stringify(data);
@@ -82,8 +105,9 @@ async function api(req, res, url) {
   // Каталог доступен всем, в том числе вне Telegram
   if (req.method === "GET" && url.pathname === "/api/catalog") {
     const avail = store.availability();
+    const photos = photoMap();
     return send(res, 200, {
-      teas: TEAS.map((t) => ({ ...t, available: avail[t.id] !== false, quiz: quizOf(t) })),
+      teas: TEAS.map((t) => ({ ...t, available: avail[t.id] !== false, quiz: quizOf(t), photo: photos[t.id] || "" })),
       kinds: KINDS,
       recipes: RECIPES,
       mugRecipes: MUG_RECIPES,
@@ -143,6 +167,8 @@ export function startServer(port) {
     const url = new URL(req.url, "http://x");
     try {
       if (url.pathname.startsWith("/api/")) return await api(req, res, url);
+      if (url.pathname === "/privacy") return html(res, privacyPage());
+      if (url.pathname === "/consent") return html(res, consentPage());
       if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, { error: "method" });
       return serveStatic(req, res);
     } catch (e) {

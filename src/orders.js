@@ -1,5 +1,5 @@
 import { ADMIN_IDS } from "./config.js";
-import { KINDS, PACKS, STATUS, findTea, packInfo, rub } from "./catalog.js";
+import { KINDS, PACKS, PROMOS, STATUS, findTea, normalizePromo, packInfo, rub } from "./catalog.js";
 import * as store from "./db.js";
 import { esc, tgSafe } from "./telegram.js";
 
@@ -10,7 +10,27 @@ export const SET_DISCOUNT = 0.1;
 const clean = (s, max) => String(s ?? "").replace(/\s+/g, " ").trim().slice(0, max);
 
 /** Проверяет заказ из мини-приложения и считает сумму по ценам каталога (цены клиента не используются). */
-export function buildOrder(body, user) {
+export function isValidSet(group, get = (i) => i) {
+  const g = group.map(get);
+  return (
+    g.length >= 3 &&
+    g.length <= 6 &&
+    new Set(g.map((i) => i.teaId)).size === g.length &&
+    g.every((i) => i.pack === "20" && i.qty === g[0].qty)
+  );
+}
+const discountLine = (name, label, discount) => ({ teaId: 0, name, pack: "", label, grams: 0, price: -discount, qty: 1, sum: -discount, set: "" });
+
+/** Проверить промокод заранее, чтобы показать покупателю скидку в корзине. */
+export function checkPromo(code, isFirstOrder) {
+  const c = normalizePromo(code);
+  const promo = PROMOS[c];
+  if (!promo) return { ok: false, error: "Такого промокода нет." };
+  if (promo.firstOrderOnly && !isFirstOrder) return { ok: false, error: "Этот промокод действует только на первый заказ." };
+  return { ok: true, code: c, percent: promo.percent, label: promo.label };
+}
+
+export function buildOrder(body, user, { isFirstOrder = false } = {}) {
   const raw = Array.isArray(body?.items) ? body.items : [];
   if (!raw.length) throw new OrderError("Корзина пуста.");
   if (raw.length > 30) throw new OrderError("Слишком много позиций в одном заказе.");
@@ -27,17 +47,25 @@ export function buildOrder(body, user) {
     const set = typeof it.set === "string" ? it.set.slice(0, 40) : "";
     items.push({ teaId: tea.id, name: tea.name, pack, label: p.label, grams: p.grams, price: p.price, qty, sum: p.price * qty, set });
   }
-  // Пробный набор: три разных чая по 20 г в одинаковом количестве, скидка 10%
+  // Набор: 3–6 разных чаёв по 20 г в одинаковом количестве, скидка 10%
   const sets = {};
   for (const i of items) if (i.set) (sets[i.set] ||= []).push(i);
+  const inValidSet = new Set();
   for (const group of Object.values(sets)) {
-    const ok =
-      group.length === 3 &&
-      new Set(group.map((i) => i.teaId)).size === 3 &&
-      group.every((i) => i.pack === "20" && i.qty === group[0].qty);
-    if (!ok) continue;
+    if (!isValidSet(group)) continue;
+    group.forEach((i) => inValidSet.add(i));
     const discount = Math.round((group.reduce((s, i) => s + i.sum, 0) * SET_DISCOUNT) / 10) * 10;
-    items.push({ teaId: 0, name: "Скидка на пробный набор", pack: "", label: "−10%", grams: 0, price: -discount, qty: 1, sum: -discount, set: "" });
+    items.push(discountLine("Скидка на набор", "−10%", discount));
+  }
+  // Промокод: действует на всё, что не входит в набор со скидкой
+  const code = normalizePromo(body.promo);
+  if (code) {
+    const promo = PROMOS[code];
+    if (!promo) throw new OrderError("Такого промокода нет. Проверьте написание или уберите его.");
+    if (promo.firstOrderOnly && !isFirstOrder) throw new OrderError("Этот промокод действует только на первый заказ.");
+    const base = items.filter((i) => i.teaId && !inValidSet.has(i)).reduce((s, i) => s + i.sum, 0);
+    const discount = Math.round((base * promo.percent) / 100 / 10) * 10;
+    if (discount > 0) items.push(discountLine(`Промокод ${code}`, `−${promo.percent}%`, discount));
   }
   const name = clean(body.name, 80);
   const phoneDigits = String(body.phone ?? "").replace(/\D/g, "");
@@ -55,7 +83,8 @@ export function buildOrder(body, user) {
     address: delivery === "delivery" ? address : "",
     comment,
     items,
-    total: items.reduce((s, i) => s + i.sum, 0),
+    total: Math.max(0, items.reduce((s, i) => s + i.sum, 0)),
+    promo: code || "",
   };
 }
 
@@ -132,7 +161,7 @@ export function publicOrder(o) {
     status: o.status,
     statusLabel: STATUS[o.status],
     createdAt: o.created_at,
-    items: o.items.map(({ teaId, name, label, qty, sum }) => ({ teaId, name, label, qty, sum })),
+    items: o.items.map(({ teaId, name, label, qty, sum, pack, set }) => ({ teaId, name, label, qty, sum, pack, set })),
     total: o.total,
     delivery: o.delivery,
     canCancel: o.status === "new",

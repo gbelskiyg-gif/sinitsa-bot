@@ -120,3 +120,14 @@ form input, form textarea, form select { display: block; width: 100%; margin-top
 
 .toast { position: fixed; left: 50%; bottom: calc(92px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 999px; font-weight: 600; font-size: 14px; z-index: 30; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* наборы и промокод */
+.sets { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(240px, 78%); gap: 10px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 8px; scroll-snap-type: x mandatory; scrollbar-width: none; }
+.set { scroll-snap-align: start; display: flex; flex-direction: column; gap: 6px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: radial-gradient(circle at 100% 0, #c88abb1f, transparent 55%), var(--card); }
+.set-e { font-size: 26px; }
+.set h3 { font-size: 20px; }
+.set p { margin: 0; }
+.set .btn { margin-top: auto; }
+.promo { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0 0; }
+.promo .search { flex: 1 1 160px; }
+.promo .error { flex-basis: 100%; margin: 0; }

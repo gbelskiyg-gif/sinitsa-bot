@@ -43,7 +43,29 @@ db.exec(`
   );
 `);
 
-const insertStock = db.prepare("INSERT OR IGNORE INTO stock (tea_id, available) VALUES (?, 1)");
+db.exec(`
+  CREATE TABLE IF NOT EXISTS feedback (
+    order_id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    rating TEXT,
+    wish TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+// Миграции для баз, созданных ранее
+for (const sql of [
+  "ALTER TABLE orders ADD COLUMN done_at TEXT",
+  "ALTER TABLE orders ADD COLUMN feedback_asked INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE orders ADD COLUMN promo TEXT",
+]) {
+  try {
+    db.exec(sql);
+  } catch {
+    /* колонка уже есть */
+  }
+}
+
+const insertStock =db.prepare("INSERT OR IGNORE INTO stock (tea_id, available) VALUES (?, 1)");
 for (const t of TEAS) insertStock.run(t.id);
 
 // ---------- наличие ----------
@@ -72,10 +94,10 @@ function rowToOrder(r) {
 export function createOrder(o) {
   const res = db
     .prepare(
-      `INSERT INTO orders (user_id, name, phone, delivery, address, comment, items_json, total)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO orders (user_id, name, phone, delivery, address, comment, items_json, total, promo)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
-    .run(o.userId, o.name, o.phone, o.delivery, o.address || "", o.comment || "", JSON.stringify(o.items), o.total);
+    .run(o.userId, o.name, o.phone, o.delivery, o.address || "", o.comment || "", JSON.stringify(o.items), o.total, o.promo || "");
   return getOrder(Number(res.lastInsertRowid));
 }
 export function getOrder(id) {
@@ -96,8 +118,36 @@ export function recentOrderCount(userId, minutes) {
     .get(userId, `-${minutes} minutes`).n;
 }
 export function setStatus(id, status) {
-  db.prepare("UPDATE orders SET status = ?, updated_at = datetime('now') WHERE id = ?").run(status, id);
+  db.prepare(
+    "UPDATE orders SET status = ?, updated_at = datetime('now'), done_at = CASE WHEN ? = 'done' THEN datetime('now') ELSE done_at END WHERE id = ?"
+  ).run(status, status, id);
   return getOrder(id);
+}
+export function isFirstOrder(userId) {
+  return db.prepare("SELECT COUNT(*) AS n FROM orders WHERE user_id = ? AND status != 'cancelled'").get(userId).n === 0;
+}
+
+// ---------- отзывы ----------
+export function ordersDueForFeedback(days) {
+  return db
+    .prepare("SELECT * FROM orders WHERE status = 'done' AND feedback_asked = 0 AND done_at <= datetime('now', ?)")
+    .all(`-${days} days`)
+    .map(rowToOrder);
+}
+export function markFeedbackAsked(orderId) {
+  db.prepare("UPDATE orders SET feedback_asked = 1 WHERE id = ?").run(orderId);
+}
+export function saveFeedback(orderId, userId, fields) {
+  db.prepare("INSERT OR IGNORE INTO feedback (order_id, user_id) VALUES (?, ?)").run(orderId, userId);
+  if (fields.rating) db.prepare("UPDATE feedback SET rating = ? WHERE order_id = ? AND user_id = ?").run(fields.rating, orderId, userId);
+  if (fields.wish) db.prepare("UPDATE feedback SET wish = ? WHERE order_id = ? AND user_id = ?").run(fields.wish, orderId, userId);
+}
+/** Отзывы покупателя: по каким чаям и с какой оценкой. */
+export function userFeedback(userId) {
+  return db
+    .prepare("SELECT f.rating, f.wish, o.items_json FROM feedback f JOIN orders o ON o.id = f.order_id WHERE f.user_id = ? ORDER BY f.created_at DESC LIMIT 20")
+    .all(userId)
+    .map((r) => ({ rating: r.rating, wish: r.wish, teaIds: JSON.parse(r.items_json).map((i) => i.teaId).filter(Boolean) }));
 }
 export function setAdminMsgs(id, msgs) {
   db.prepare("UPDATE orders SET admin_msgs = ? WHERE id = ?").run(JSON.stringify(msgs), id);

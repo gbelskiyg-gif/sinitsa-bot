@@ -10,6 +10,7 @@ const WELCOME =
   "🐦 Добро пожаловать в «Синицу»!\n\n" +
   "Мы верим, что у каждого человека есть свой чай.\n\n" +
   "🍵 Не знаете, с чего начать? Ответьте на 5 коротких вопросов, и мы подберём три чая под ваш вкус и способ заваривания.\n\n" +
+  "🎁 На первый заказ — промокод SINITSA10, скидка 10%.\n\n" +
   "Выбирайте, с чего начнём:";
 
 const ABOUT =
@@ -140,6 +141,46 @@ async function onCallback(q) {
     return tgSafe("sendMessage", { chat_id: chat, text: "Напишите вопрос одним сообщением, мы передадим его продавцу." });
   }
 
+  // Отзыв покупателя: fb:<заказ>:<оценка>, затем fw:<заказ>:<пожелание>
+  if (data.startsWith("fb:") || data.startsWith("fw:")) {
+    const [kind, id, value] = data.split(":");
+    const order = store.getOrder(Number(id));
+    if (!order || order.user_id !== q.from.id) return answer();
+    if (kind === "fb" && RATINGS[value]) {
+      store.saveFeedback(order.id, q.from.id, { rating: value });
+      await tgSafe("editMessageText", {
+        chat_id: chat,
+        message_id: q.message.message_id,
+        text: `${RATINGS[value]} Спасибо! А чего хотелось бы в следующий раз?`,
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "💪 Покрепче", callback_data: `fw:${id}:stronger` }, { text: "🌿 Помягче", callback_data: `fw:${id}:softer` }],
+            [{ text: "🍯 Послаще", callback_data: `fw:${id}:sweeter` }, { text: "🌸 Ароматнее", callback_data: `fw:${id}:aroma` }],
+            [{ text: "👌 Всё отлично, так же", callback_data: `fw:${id}:same` }],
+          ],
+        },
+      });
+      return answer();
+    }
+    if (kind === "fw" && WISHES[value]) {
+      store.saveFeedback(order.id, q.from.id, { wish: value });
+      await tgSafe("editMessageText", {
+        chat_id: chat,
+        message_id: q.message.message_id,
+        text: `Записали: ${WISHES[value]}. Следующий подбор учтёт ваш отзыв 🐦`,
+        reply_markup: { inline_keyboard: [[shopButton("🍵 Подобрать следующий чай", "#quiz")]] },
+      });
+      const fb = store.userFeedback(q.from.id)[0];
+      for (const admin of ADMIN_IDS)
+        await tgSafe("sendMessage", {
+          chat_id: admin,
+          text: `📝 Отзыв по заказу №${order.id}: ${RATINGS[fb?.rating] || ""} ${WISHES[value]}`,
+        });
+      return answer("Спасибо!");
+    }
+    return answer();
+  }
+
   if (!isAdmin(q.from.id)) return answer("Недоступно");
 
   if (data.startsWith("stock:")) {
@@ -168,6 +209,31 @@ async function onCallback(q) {
   return answer();
 }
 
+const RATINGS = { good: "👍 Понравился.", ok: "😐 Нормально.", bad: "👎 Не моё." };
+const WISHES = { stronger: "покрепче", softer: "помягче", sweeter: "послаще", aroma: "ароматнее", same: "всё отлично" };
+const FEEDBACK_AFTER_DAYS = Number(process.env.FEEDBACK_AFTER_DAYS || 3);
+
+/** Через несколько дней после «Завершён» спрашиваем, как зашёл чай. Один раз на заказ. */
+async function askFeedback() {
+  for (const o of store.ordersDueForFeedback(FEEDBACK_AFTER_DAYS)) {
+    store.markFeedbackAsked(o.id);
+    const names = o.items.filter((i) => i.teaId).map((i) => i.name);
+    await tgSafe("sendMessage", {
+      chat_id: o.user_id,
+      text: `Уже попробовали чай из заказа №${o.id}?\n${names.map((n) => `• ${n}`).join("\n")}\n\nКак он вам? Это поможет подобрать следующий 🍵`,
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: "👍 Понравился", callback_data: `fb:${o.id}:good` },
+            { text: "😐 Нормально", callback_data: `fb:${o.id}:ok` },
+            { text: "👎 Не моё", callback_data: `fb:${o.id}:bad` },
+          ],
+        ],
+      },
+    });
+  }
+}
+
 export async function startBot() {
   const me = await tg("getMe");
   console.log(`Бот @${me.username} запущен`);
@@ -178,6 +244,8 @@ export async function startBot() {
       { command: "help", description: "О магазине и как заказать" },
     ],
   });
+  setInterval(() => askFeedback().catch((e) => console.error("[feedback]", e)), 30 * 60 * 1000);
+  askFeedback().catch((e) => console.error("[feedback]", e));
   if (!ADMIN_IDS.length) console.warn("ADMIN_IDS не задан: заказы некому будет получать. Напишите боту /id и добавьте ID.");
   poll(async (u) => {
     if (u.message) await onMessage(u.message);

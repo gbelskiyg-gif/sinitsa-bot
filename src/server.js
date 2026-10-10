@@ -4,11 +4,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { verifyInitData } from "./auth.js";
 import { BOT_TOKEN } from "./config.js";
-import { KINDS, MUG_RECIPES, RECIPES, TASTES, TEAS, quizOf } from "./catalog.js";
+import { KINDS, MUG_RECIPES, RECIPES, SETS, TASTES, TEAS, quizOf } from "./catalog.js";
 import * as store from "./db.js";
 import {
   OrderError,
   buildOrder,
+  checkPromo,
   notifyAdminsNew,
   publicOrder,
   refreshAdminMessages,
@@ -86,6 +87,7 @@ async function api(req, res, url) {
       kinds: KINDS,
       recipes: RECIPES,
       mugRecipes: MUG_RECIPES,
+      sets: SETS.filter((s) => s.teas.every((id) => avail[id] !== false)),
       tastes: TASTES,
     });
   }
@@ -98,11 +100,20 @@ async function api(req, res, url) {
     return send(res, 200, { orders: store.userOrders(user.id).map(publicOrder) });
   }
 
+  if (req.method === "GET" && url.pathname === "/api/promo") {
+    return send(res, 200, checkPromo(url.searchParams.get("code"), store.isFirstOrder(user.id)));
+  }
+
+  // Отзывы покупателя для подбора: что понравилось и чего хотелось
+  if (req.method === "GET" && url.pathname === "/api/me") {
+    return send(res, 200, { feedback: store.userFeedback(user.id), firstOrder: store.isFirstOrder(user.id) });
+  }
+
   if (req.method === "POST" && url.pathname === "/api/orders") {
     if (store.recentOrderCount(user.id, 60) >= 5)
       return send(res, 429, { error: "Слишком много заказов за час. Напишите нам в бот, поможем." });
     const body = await readJson(req);
-    const draft = buildOrder(body, user);
+    const draft = buildOrder(body, user, { isFirstOrder: store.isFirstOrder(user.id) });
     const order = store.createOrder(draft);
     await notifyAdminsNew(order, user.username);
     await tgSafe("sendMessage", {

@@ -89,3 +89,46 @@ test("статика отдаётся, выход за папку запрещё
   const bad = await fetch(base + "/..%2Fsrc%2Fconfig.js");
   assert.notEqual(bad.status, 200);
 });
+
+test("готовый набор из 5 чаёв по 20 г получает скидку 10%", async () => {
+  const u = { id: 501 };
+  const ids = [4, 7, 16, 23, 11];
+  const items = ids.map((id) => ({ teaId: id, pack: "20", qty: 1, set: "first-steps-x" }));
+  const r = await call("/api/orders", { method: "POST", init: signInitData(u, TOKEN), body: JSON.stringify({ items, name: "Н", phone: "89001234567", delivery: "pickup" }) });
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  const cat = (await call("/api/catalog", { init: "" })).body;
+  const sum = ids.reduce((s, id) => s + cat.teas.find((t) => t.id === id).prices["20"], 0);
+  assert.equal(r.body.order.total, sum - Math.round(sum * 0.1 / 10) * 10);
+  assert.ok(cat.sets.length >= 4);
+});
+
+test("промокод: работает на первый заказ, не работает на второй, неверный код — ошибка", async () => {
+  const u = signInitData({ id: 777 }, TOKEN);
+  const body = (promo) => JSON.stringify({ items: [{ teaId: 13, pack: "50", qty: 2 }], name: "П", phone: "89001234567", delivery: "pickup", promo });
+  let r = await call("/api/promo?code=синица10", { init: u });
+  assert.equal(r.body.ok, true);
+  r = await call("/api/orders", { method: "POST", init: u, body: body("НЕТТАКОГО") });
+  assert.equal(r.status, 400);
+  r = await call("/api/orders", { method: "POST", init: u, body: body("sinitsa10") });
+  assert.equal(r.status, 201);
+  assert.equal(r.body.order.total, 590 * 2 - 120);
+  r = await call("/api/orders", { method: "POST", init: u, body: body("SINITSA10") });
+  assert.equal(r.status, 400);
+  assert.match(r.body.error, /первый заказ/);
+});
+
+test("отзыв через 3 дня после завершения и учёт в /api/me", async () => {
+  const u = { id: 888 };
+  const r = await call("/api/orders", { method: "POST", init: signInitData(u, TOKEN), body: JSON.stringify({ items: [{ teaId: 9, pack: "50", qty: 1 }], name: "О", phone: "89001234567", delivery: "pickup" }) });
+  const id = r.body.order.id;
+  store.setStatus(id, "done");
+  assert.equal(store.ordersDueForFeedback(3).filter((o) => o.id === id).length, 0, "рано");
+  store.db.prepare("UPDATE orders SET done_at = datetime('now','-4 days') WHERE id = ?").run(id);
+  assert.equal(store.ordersDueForFeedback(3).filter((o) => o.id === id).length, 1);
+  store.markFeedbackAsked(id);
+  assert.equal(store.ordersDueForFeedback(3).filter((o) => o.id === id).length, 0, "спрашиваем один раз");
+  store.saveFeedback(id, 888, { rating: "bad" });
+  store.saveFeedback(id, 888, { wish: "softer" });
+  const me = await call("/api/me", { init: signInitData(u, TOKEN) });
+  assert.deepEqual(me.body.feedback[0], { rating: "bad", wish: "softer", teaIds: [9] });
+});

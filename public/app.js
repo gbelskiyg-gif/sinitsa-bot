@@ -8,7 +8,7 @@ const rub = (n) => n.toLocaleString("ru-RU").replace(/ /g, " ") + " ₽";
 const BOT_LINK = "https://t.me/sinitsa_chai_bot";
 const SET_DISCOUNT = 0.1;
 
-const S = { teas: [], kinds: {}, recipes: {}, mugRecipes: {}, tastes: {}, group: "all", query: "", sort: "pop", cart: [], quiz: null, checkout: false, review: null };
+const S = { teas: [], kinds: {}, recipes: {}, mugRecipes: {}, tastes: {}, sets: [], group: "all", query: "", sort: "pop", cart: [], quiz: null, checkout: false, promo: null, me: null };
 
 // ---------- хранение корзины ----------
 function loadCart() { try { S.cart = JSON.parse(localStorage.getItem("cart") || "[]"); } catch { S.cart = []; } }
@@ -62,6 +62,7 @@ function renderCatalog() {
     <label class="search"><span aria-hidden="true">⌕</span><input id="q" type="search" placeholder="Найти свой чай" value="${esc(S.query)}" autocomplete="off"></label>
     <div class="chips scroll" id="groups">${GROUPS.map(([k, l]) => `<button class="chip" data-g="${k}" aria-pressed="${S.group === k}">${l}</button>`).join("")}
       <button class="chip" id="sort">${{ pop: "По умолчанию", asc: "Сначала дешевле", desc: "Сначала дороже" }[S.sort]} ⇅</button></div>
+    ${!S.query && S.group === "all" && S.sets.length ? setsHTML() : ""}
     <p class="note">${list.length} из ${S.teas.length} · цены за 50 г · собираем под заказ</p>
     <div class="grid">${list.length ? list.map(cardHTML).join("") : `<p class="muted">Ничего не нашли. Попробуйте другое слово.</p>`}</div>`;
   $("#q").addEventListener("input", (e) => { S.query = e.target.value.trim().toLowerCase(); const pos = e.target.selectionStart; renderCatalog(); const q = $("#q"); q.focus(); q.setSelectionRange(pos, pos); });
@@ -70,6 +71,27 @@ function renderCatalog() {
     if (b.id === "sort") S.sort = { pop: "asc", asc: "desc", desc: "pop" }[S.sort]; else S.group = b.dataset.g;
     renderCatalog();
   });
+}
+function setPrice(set) {
+  const sum = set.teas.reduce((s, id) => s + (tea(id)?.prices["20"] || 0), 0);
+  return { sum, final: sum - Math.round((sum * SET_DISCOUNT) / 10) * 10 };
+}
+function setsHTML() {
+  return `<h2 class="section-title" style="padding-top:8px">Наборы по 20 г</h2>
+    <p class="note" style="margin-top:0">Готовые сочетания со скидкой 10%. Каждый чай по 20 г.</p>
+    <div class="sets">${S.sets.map((set) => {
+      const p = setPrice(set);
+      return `<div class="set"><div class="set-e">${set.emoji}</div><h3>${esc(set.title)}</h3><p class="muted small">${esc(set.text)}</p>
+        <p class="small">${set.teas.map((id) => esc(tea(id)?.name || "")).join(" · ")}</p>
+        <div class="big-price" style="font-size:22px">${rub(p.final)} <small><s>${rub(p.sum)}</s></small></div>
+        <button class="btn wide" data-set="${set.key}">В корзину</button></div>`;
+    }).join("")}</div>`;
+}
+function addSet(key) {
+  const set = S.sets.find((s) => s.key === key); if (!set) return;
+  const id = `${key}-${Date.now().toString(36)}`;
+  set.teas.forEach((teaId) => S.cart.push({ teaId, pack: "20", qty: 1, set: id }));
+  saveCart(); toast(`Набор «${set.title}» в корзине`);
 }
 function cardHTML(t) {
   return `<button class="card${t.available ? "" : " off"}" data-tea="${t.id}">${art(t)}
@@ -166,6 +188,23 @@ function renderQuiz() {
   window.scrollTo(0, 0);
 }
 
+// Отзывы покупателя: «не моё» убирает чай, пожелания сдвигают подбор
+function lastWish() { return S.me?.feedback?.find((f) => f.wish)?.wish || ""; }
+function feedbackBonus(t) {
+  const fb = S.me?.feedback || [];
+  if (fb.some((f) => f.rating === "bad" && f.teaIds.includes(t.id))) return -Infinity;
+  let b = 0;
+  const likedKinds = new Set(fb.filter((f) => f.rating === "good").flatMap((f) => f.teaIds.map((id) => tea(id)?.kind)));
+  if (likedKinds.has(t.kind)) b += 2;
+  const w = lastWish();
+  if (w === "stronger") b += (t.quiz.caffeine === 3 ? 2 : 0) + (t.strengths.includes("full") ? 1 : 0);
+  if (w === "softer") b += (t.quiz.bitter ? -2 : 0) + (t.quiz.caffeine === 3 ? -1 : 0) + (["gaba", "light_oolong"].includes(t.kind) ? 1 : 0);
+  if (w === "sweeter") b += t.tastes.some((x) => x === "honey" || x === "fruity") ? 2 : 0;
+  if (w === "aroma") b += (t.tastes.includes("floral") ? 2 : 0) + (t.kind === "dancong" ? 1 : 0);
+  if (w === "same" && likedKinds.has(t.kind)) b += 1;
+  return b;
+}
+const WISH_LABEL = { stronger: "покрепче", softer: "помягче", sweeter: "послаще", aroma: "ароматнее", same: "так же, как в прошлый раз" };
 function scoreTea(t, a) {
   const q = t.quiz;
   if (!t.available) return null;
@@ -182,6 +221,8 @@ function scoreTea(t, a) {
   if (a.dislikes.includes("bitter") && q.bitter === 1) s -= 2;
   if (a.dislikes.includes("strong") && q.caffeine === 3) s -= 2;
   if (t.kind === "puer") s -= 2; // тип пуэра не уточнён у поставщика: не ставим его первым
+  s += feedbackBonus(t);
+  if (s === -Infinity) return null;
   return { t, s, matched };
 }
 
@@ -220,7 +261,8 @@ function renderResults() {
   const sum = picks.reduce((s, [, x]) => s + x.t.prices["20"], 0);
   const disc = Math.round((sum * SET_DISCOUNT) / 10) * 10;
   $("#view").innerHTML = `<div class="quiz-head"><div class="eyebrow">Ваш подбор</div>
-    <div class="progress"><i style="width:100%"></i></div><h2 class="q-title">Три чая для вас</h2></div>
+    <div class="progress"><i style="width:100%"></i></div><h2 class="q-title">Три чая для вас</h2>
+    ${S.me?.feedback?.length ? `<p class="muted small" style="margin:6px 0 0">Учли ваши прошлые отзывы${lastWish() ? `: хотелось ${WISH_LABEL[lastWish()]}` : ""}.</p>` : ""}</div>
     ${picks.map(([role, x]) => {
       const r = S.recipes[x.t.kind];
       return `<article class="result"><div class="role">${role}</div><h3>${esc(x.t.name)}</h3>
@@ -254,15 +296,19 @@ function cartLines() {
   for (const l of lines) if (l.i.set) (sets[l.i.set] ||= []).push(l);
   let discount = 0;
   for (const g of Object.values(sets))
-    if (g.length === 3 && new Set(g.map((l) => l.t.id)).size === 3 && g.every((l) => l.i.pack === "20" && l.i.qty === g[0].i.qty))
+    if (g.length >= 3 && g.length <= 6 && new Set(g.map((l) => l.t.id)).size === g.length && g.every((l) => l.i.pack === "20" && l.i.qty === g[0].i.qty)) {
       discount += Math.round((g.reduce((s, l) => s + l.sum, 0) * SET_DISCOUNT) / 10) * 10;
-  const total = lines.reduce((s, l) => s + l.sum, 0) - discount;
-  return { lines, discount, total };
+      g.forEach((l) => (l.inSet = true));
+    }
+  const promoBase = lines.filter((l) => !l.inSet).reduce((s, l) => s + l.sum, 0);
+  const promoOff = S.promo ? Math.round((promoBase * S.promo.percent) / 100 / 10) * 10 : 0;
+  const total = Math.max(0, lines.reduce((s, l) => s + l.sum, 0) - discount - promoOff);
+  return { lines, discount, promoOff, total };
 }
 
 function renderCart() {
   S.cart = S.cart.filter((i) => tea(i.teaId));
-  const { lines, discount, total } = cartLines();
+  const { lines, discount, promoOff, total } = cartLines();
   if (!lines.length) {
     $("#view").innerHTML = `<div class="empty"><h2>Корзина пуста</h2><p>Откройте чай в каталоге или пройдите подбор.</p>
       <a class="btn" href="#quiz">🍵 Подобрать чай</a></div>`;
@@ -271,10 +317,14 @@ function renderCart() {
   if (S.checkout) return renderCheckout(total);
   const off = lines.filter((l) => !l.t.available);
   $("#view").innerHTML = `<h2 class="section-title">Корзина</h2>
-    ${lines.map((l) => `<div class="line"><div><h3>${esc(l.t.name)}</h3><div class="muted small">${esc(l.label)}${l.i.set ? " · пробный набор" : ""}${l.t.available ? "" : " · <span class=error>нет в наличии</span>"}</div>
+    ${lines.map((l) => `<div class="line"><div><h3>${esc(l.t.name)}</h3><div class="muted small">${esc(l.label)}${l.i.set ? " · в наборе" : ""}${l.t.available ? "" : " · <span class=error>нет в наличии</span>"}</div>
       <div class="qty" style="margin-top:8px"><button data-d="-1" data-i="${l.idx}" aria-label="Меньше">−</button><b>${l.i.qty}</b><button data-d="1" data-i="${l.idx}" aria-label="Больше">+</button></div></div>
       <div class="sum">${rub(l.sum)}</div></div>`).join("")}
-    ${discount ? `<div class="line"><div class="muted">Скидка на пробный набор</div><div class="sum">−${rub(discount)}</div></div>` : ""}
+    ${discount ? `<div class="line"><div class="muted">Скидка на набор</div><div class="sum">−${rub(discount)}</div></div>` : ""}
+    ${inTelegram() ? `<div class="promo">${S.promo
+      ? `<div class="line" style="border:0"><div class="muted">Промокод ${esc(S.promo.code)} · ${esc(S.promo.label)}</div><div class="sum">−${rub(promoOff)}</div></div><button class="link" id="promo-off">Убрать промокод</button>`
+      : `<label class="search"><input id="promo" placeholder="Промокод" autocomplete="off"></label><button class="btn ghost" id="promo-go">Применить</button>`}
+      <p class="error" id="promo-err"></p></div>` : ""}
     <div class="total"><span>Итого</span><span>${rub(total)}</span></div>
     <p class="note">Без доставки. Чай собираем под заказ: продавец подтвердит наличие, сумму с доставкой и сроки в чате с ботом. Оплата после подтверждения.</p>
     ${off.length ? `<p class="error">Уберите чаи, которых нет в наличии, чтобы оформить заказ.</p>` : ""}
@@ -288,6 +338,15 @@ function renderCart() {
     saveCart(); renderCart();
   };
   $("#go").onclick = () => { S.checkout = true; renderCart(); };
+  $("#promo-off")?.addEventListener("click", () => { S.promo = null; renderCart(); });
+  $("#promo-go")?.addEventListener("click", async () => {
+    const code = $("#promo").value.trim(); if (!code) return;
+    try {
+      const r = await api("/api/promo?code=" + encodeURIComponent(code));
+      if (!r.ok) { $("#promo-err").textContent = r.error; return; }
+      S.promo = r; renderCart(); toast("Промокод применён");
+    } catch (err) { $("#promo-err").textContent = err.message; }
+  });
 }
 
 function loadForm() { try { return JSON.parse(localStorage.getItem("form") || "{}"); } catch { return {}; } }
@@ -317,8 +376,8 @@ function renderCheckout(total) {
     try { localStorage.setItem("form", JSON.stringify({ name: data.name, phone: data.phone, delivery: data.delivery, address: data.address })); } catch {}
     $("#send").disabled = true; $("#err").textContent = "";
     try {
-      const { order } = await api("/api/orders", { method: "POST", body: JSON.stringify({ ...data, items: S.cart }) });
-      S.cart = []; saveCart(); S.checkout = false;
+      const { order } = await api("/api/orders", { method: "POST", body: JSON.stringify({ ...data, items: S.cart, promo: S.promo?.code || "" }) });
+      S.cart = []; saveCart(); S.checkout = false; S.promo = null; if (S.me) S.me.firstOrder = false;
       $("#view").innerHTML = `<div class="empty"><h2>Заказ №${order.id} отправлен 🍵</h2><p>Продавец подтвердит наличие, сумму с доставкой и сроки в чате с ботом. Оплата после подтверждения.</p>
         <a class="btn" href="#orders">Мои заказы</a></div>`;
       try { tgApp?.HapticFeedback?.notificationOccurred("success"); } catch {}
@@ -341,10 +400,27 @@ async function renderOrders() {
     }
     $("#view").innerHTML = `<h2 class="section-title">Мои заказы</h2>` + orders.map((o) => `
       <div class="line" style="display:block"><div style="display:flex;justify-content:space-between;gap:12px"><h3>Заказ №${o.id}</h3><span class="status ${o.status}">${esc(o.statusLabel)}</span></div>
-      <div class="muted small">${o.items.map((i) => i.teaId ? `${esc(i.name)}, ${esc(i.label)} × ${i.qty}` : esc(i.name)).join("<br>")}</div>
+      <div class="muted small">${o.items.map((i) => i.teaId ? `${esc(i.name)}, ${esc(i.label)} × ${i.qty}` : `${esc(i.name)}: −${rub(-i.sum)}`).join("<br>")}</div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px"><b class="sum" style="color:var(--gold)">${rub(o.total)}</b>
-      ${o.canCancel ? `<button class="link" data-cancel="${o.id}">Отменить</button>` : ""}</div></div>`).join("");
+      <span style="display:flex;gap:16px">${o.canCancel ? `<button class="link" data-cancel="${o.id}">Отменить</button>` : ""}
+      <button class="link" data-repeat="${o.id}">Повторить</button></span></div></div>`).join("");
+    S.lastOrders = orders;
     $("#view").onclick = async (e) => {
+      const rp = e.target.closest("[data-repeat]");
+      if (rp) {
+        const o = S.lastOrders.find((x) => x.id === Number(rp.dataset.repeat));
+        const setIds = {};
+        let added = 0;
+        for (const i of o.items) {
+          const t = tea(i.teaId); if (!t || !t.available) continue;
+          const set = i.set ? (setIds[i.set] ||= "rep-" + Math.random().toString(36).slice(2, 8)) : "";
+          S.cart.push({ teaId: i.teaId, pack: i.pack, qty: i.qty, set }); added++;
+        }
+        saveCart();
+        if (!added) return toast("Этих чаёв сейчас нет в наличии");
+        toast(added < o.items.filter((i) => i.teaId).length ? "Добавили то, что есть в наличии" : "Заказ в корзине");
+        location.hash = "#cart"; return;
+      }
       const b = e.target.closest("[data-cancel]"); if (!b) return;
       if (b.dataset.sure !== "1") { b.dataset.sure = "1"; b.textContent = "Точно отменить?"; return; }
       try { await api(`/api/orders/${b.dataset.cancel}/cancel`, { method: "POST" }); toast("Заказ отменён"); renderOrders(); }
@@ -368,7 +444,9 @@ function route() {
 }
 document.addEventListener("click", (e) => {
   const c = e.target.closest("[data-tea]");
-  if (c) openTea(c.dataset.tea);
+  if (c) return openTea(c.dataset.tea);
+  const st = e.target.closest("[data-set]");
+  if (st) addSet(st.dataset.set);
 });
 window.addEventListener("hashchange", route);
 
@@ -376,7 +454,8 @@ window.addEventListener("hashchange", route);
   loadCart(); updateBadge();
   try {
     const data = await api("/api/catalog");
-    Object.assign(S, { teas: data.teas, kinds: data.kinds, recipes: data.recipes, mugRecipes: data.mugRecipes, tastes: data.tastes });
+    Object.assign(S, { teas: data.teas, kinds: data.kinds, recipes: data.recipes, mugRecipes: data.mugRecipes, tastes: data.tastes, sets: data.sets || [] });
+    if (inTelegram()) api("/api/me").then((me) => (S.me = me)).catch(() => {});
   } catch {
     $("#view").innerHTML = `<div class="empty"><h2>Не удалось загрузить каталог</h2><p>Проверьте интернет и откройте магазин ещё раз.</p></div>`;
     return;

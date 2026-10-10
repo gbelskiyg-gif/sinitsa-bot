@@ -71,7 +71,28 @@ export const MUG_RECIPES = {
   puer: "3–4 г на 250 мл, кипяток, 2–3 минуты; первую воду слить",
 };
 
-export const PACKS =["20", "50", "100", "wholesale"];
+/**
+ * Готовые наборы: каждый чай по 20 г, скидка 10% (SET_DISCOUNT в orders.js).
+ * Чтобы изменить состав, поменяйте номера чаёв (id из teas.js).
+ */
+export const SETS = [
+  { key: "morning", emoji: "🌅", title: "Утро", text: "Бодрящие красные чаи: мёд, солод, хлеб. Для завтрака и начала дня.", teas: [13, 14, 16] },
+  { key: "pause", emoji: "🌿", title: "Пауза", text: "Мягкие и спокойные: ГАБА и светлые улуны для неспешного чаепития.", teas: [6, 9, 28] },
+  { key: "after-meal", emoji: "🍂", title: "После еды", text: "Тёплые и глубокие: шу пуэр и тёмный улун.", teas: [11, 7, 21] },
+  { key: "first-steps", emoji: "🧭", title: "Знакомство", text: "Пять разных видов китайского чая, чтобы понять, что ближе.", teas: [4, 7, 16, 23, 11] },
+];
+
+// Промокоды. Регистр и русская раскладка («синица10») не важны.
+export const PROMOS = {
+  SINITSA10: { percent: 10, firstOrderOnly: true, label: "Первый заказ −10%" },
+};
+export function normalizePromo(code) {
+  let c = String(code || "").trim().toUpperCase().replace(/\s+/g, "");
+  if (c.startsWith("СИНИЦА")) c = "SINITSA" + c.slice(6);
+  return c;
+}
+
+export const PACKS = ["20", "50", "100", "wholesale"];
 
 export const STATUS = {
   new: "Новый",

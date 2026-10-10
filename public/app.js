@@ -322,7 +322,10 @@ function renderCart() {
       <div class="sum">${rub(l.sum)}</div></div>`).join("")}
     ${discount ? `<div class="line"><div class="muted">Скидка на набор</div><div class="sum">−${rub(discount)}</div></div>` : ""}
     ${inTelegram() ? `<div class="promo">${S.promo
-      ? `<div class="line" style="border:0"><div class="muted">Промокод ${esc(S.promo.code)} · ${esc(S.promo.label)}</div><div class="sum">−${rub(promoOff)}</div></div><button class="link" id="promo-off">Убрать промокод</button>`
+      ? (promoOff
+        ? `<div class="line" style="border:0"><div class="muted">Промокод ${esc(S.promo.code)} · ${esc(S.promo.label)}</div><div class="sum">−${rub(promoOff)}</div></div>`
+        : `<p class="muted small" style="margin:0">Промокод ${esc(S.promo.code)} не складывается со скидкой набора. Он сработает на чаи, которые вы добавите отдельно.</p>`) +
+        `<button class="link" id="promo-off">Убрать промокод</button>`
       : `<label class="search"><input id="promo" placeholder="Промокод" autocomplete="off"></label><button class="btn ghost" id="promo-go">Применить</button>`}
       <p class="error" id="promo-err"></p></div>` : ""}
     <div class="total"><span>Итого</span><span>${rub(total)}</span></div>
@@ -344,7 +347,7 @@ function renderCart() {
     try {
       const r = await api("/api/promo?code=" + encodeURIComponent(code));
       if (!r.ok) { $("#promo-err").textContent = r.error; return; }
-      S.promo = r; renderCart(); toast("Промокод применён");
+      S.promo = r; renderCart(); toast(cartLines().promoOff ? "Промокод применён" : "На наборы уже действует скидка");
     } catch (err) { $("#promo-err").textContent = err.message; }
   });
 }

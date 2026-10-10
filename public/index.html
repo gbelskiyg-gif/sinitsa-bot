@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Синица — китайский чай</title>
+<link rel="icon" href="/emblem.jpg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Prata&display=swap">
+<link rel="stylesheet" href="/app.css">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="#catalog"><img src="/emblem.jpg" alt="" width="40" height="40"><span>Синица</span></a>
+</header>
+
+<main id="view" aria-live="polite"></main>
+
+<nav class="nav" aria-label="Разделы">
+  <a href="#catalog" data-tab="catalog"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg>Каталог</a>
+  <a href="#quiz" data-tab="quiz"><svg viewBox="0 0 24 24"><path d="M5 10h12v3a6 6 0 0 1-12 0z"/><path d="M17 11h1.5a2 2 0 0 1 0 4H16"/><path d="M8 3c0 2 2 2 2 4M12 3c0 2 2 2 2 4"/></svg>Подбор</a>
+  <a href="#cart" data-tab="cart"><svg viewBox="0 0 24 24"><path d="M6 8h12l-1 12H7z"/><path d="M9 8a3 3 0 0 1 6 0"/></svg>Корзина<b class="badge" id="cart-count" hidden></b></a>
+  <a href="#orders" data-tab="orders"><svg viewBox="0 0 24 24"><path d="M7 3h10v18l-5-3-5 3z"/></svg>Заказы</a>
+</nav>
+
+<dialog id="tea"><div class="sheet" id="tea-body"></div></dialog>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script src="/app.js"></script>
+</body>
+</html>

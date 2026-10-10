@@ -174,6 +174,6 @@ test("фото чая подхватывается из public/teas", async () =
   try {
     const cat = (await call("/api/catalog", { init: "" })).body;
     assert.match(cat.teas.find((t) => t.id === 1).photo, /^\/teas\/1\.webp\?v=\d+$/);
-    assert.equal(cat.teas.find((t) => t.id === 2).photo, "");
+    assert.equal(cat.teas.find((t) => t.id === 1).photoExample, false);
   } finally { fs.unlinkSync(f); }
 });

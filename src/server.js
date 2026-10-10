@@ -29,20 +29,28 @@ const TYPES = {
   ".ico": "image/x-icon",
 };
 
-// Фото чаёв: public/teas/<id>.webp|jpg|jpeg|png. Есть файл — показываем фото, нет — иероглиф.
-function photoMap() {
+// Фото чаёв:
+//   public/teas/<id>.webp|jpg|png       — настоящее фото конкретного чая;
+//   public/teas/kinds/<вид>.webp|jpg|png — фото для примера по виду чая (gaba, red, shu…).
+// Нет ни того ни другого — показывается иероглиф.
+function scanPhotos(dir, re) {
   const map = {};
   try {
-    for (const f of fs.readdirSync(path.join(PUBLIC_DIR, "teas"))) {
-      const m = f.match(/^(\d+)\.(webp|jpe?g|png)$/i);
+    for (const f of fs.readdirSync(path.join(PUBLIC_DIR, dir))) {
+      const m = f.match(re);
       if (!m) continue;
-      const v = Math.round(fs.statSync(path.join(PUBLIC_DIR, "teas", f)).mtimeMs / 1000);
-      map[m[1]] = `/teas/${f}?v=${v}`;
+      const v = Math.round(fs.statSync(path.join(PUBLIC_DIR, dir, f)).mtimeMs / 1000);
+      map[m[1]] = `/${dir}/${f}?v=${v}`;
     }
   } catch {
     /* папки ещё нет */
   }
   return map;
+}
+function photoOf(tea, own, kinds) {
+  if (own[tea.id]) return { photo: own[tea.id], photoExample: false };
+  if (kinds[tea.kind]) return { photo: kinds[tea.kind], photoExample: true };
+  return { photo: "", photoExample: false };
 }
 
 function html(res, body) {
@@ -105,9 +113,10 @@ async function api(req, res, url) {
   // Каталог доступен всем, в том числе вне Telegram
   if (req.method === "GET" && url.pathname === "/api/catalog") {
     const avail = store.availability();
-    const photos = photoMap();
+    const own = scanPhotos("teas", /^(\d+)\.(webp|jpe?g|png)$/i);
+    const kinds = scanPhotos("teas/kinds", /^([a-z_]+)\.(webp|jpe?g|png)$/i);
     return send(res, 200, {
-      teas: TEAS.map((t) => ({ ...t, available: avail[t.id] !== false, quiz: quizOf(t), photo: photos[t.id] || "" })),
+      teas: TEAS.map((t) => ({ ...t, available: avail[t.id] !== false, quiz: quizOf(t), ...photoOf(t, own, kinds) })),
       kinds: KINDS,
       recipes: RECIPES,
       mugRecipes: MUG_RECIPES,

@@ -42,7 +42,7 @@ function packInfo(t, pack) {
   return { price: t.prices[pack], label: `${pack} г` };
 }
 const art = (t) => t.photo
-  ? `<div class="art photo"><img src="${esc(t.photo)}" alt="${esc(t.name)}" loading="lazy"></div>`
+  ? `<div class="art photo"><img src="${esc(t.photo)}" alt="${esc(t.name)}" loading="lazy">${t.photoExample ? `<span class="ex">фото для примера</span>` : ""}</div>`
   : `<div class="art"><span aria-hidden="true">${S.kinds[t.kind].glyph}</span></div>`;
 
 // ---------- каталог ----------

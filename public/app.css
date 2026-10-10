@@ -140,3 +140,4 @@ form input, form textarea, form select { display: block; width: 100%; margin-top
 form label.consent { display: flex; gap: 10px; align-items: flex-start; color: var(--ink); font-size: 13px; line-height: 1.5; }
 form label.consent input { width: 20px; height: 20px; margin: 1px 0 0; flex: none; accent-color: var(--gold); }
 form label.consent a { color: var(--gold); }
+.art.photo .ex { position: absolute; left: 6px; bottom: 6px; font: 600 9px/1 var(--body); letter-spacing: .04em; color: #f4ede3cc; background: #100f15b3; padding: 4px 6px; border-radius: 6px; }

@@ -1,4 +1,4 @@
-import { ADMIN_IDS } from "./config.js";
+import { notifyChats } from "./config.js";
 import { KINDS, PACKS, PROMOS, STATUS, findTea, normalizePromo, packInfo, rub } from "./catalog.js";
 import * as store from "./db.js";
 import { esc, tgSafe } from "./telegram.js";
@@ -125,7 +125,7 @@ const CUSTOMER_STATUS = {
 
 export async function notifyAdminsNew(order, username) {
   const msgs = [];
-  for (const chat of ADMIN_IDS) {
+  for (const chat of notifyChats()) {
     const m = await tgSafe("sendMessage", {
       chat_id: chat,
       text: "🆕 " + orderText(order, { forAdmin: true, username }),

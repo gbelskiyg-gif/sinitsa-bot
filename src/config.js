@@ -21,3 +21,8 @@ export const PORT = Number(process.env.PORT || 3000);
 export const DATA_DIR = path.resolve(process.env.DATA_DIR || "./data");
 
 export const isAdmin = (id) => ADMIN_IDS.includes(Number(id));
+
+// Группа для заказов, вопросов и отзывов. Если не задана — всё приходит продавцам в личку.
+// Узнать ID группы: написать в группе /chatid
+export const ORDERS_CHAT_ID = Number(process.env.ORDERS_CHAT_ID || 0);
+export const notifyChats = () => (ORDERS_CHAT_ID ? [ORDERS_CHAT_ID] : ADMIN_IDS);

@@ -1,4 +1,4 @@
-import { ADMIN_IDS, PUBLIC_URL, isAdmin } from "./config.js";
+import { ADMIN_IDS, ORDERS_CHAT_ID, PUBLIC_URL, isAdmin, notifyChats } from "./config.js";
 import { STATUS, TEAS, findTea, rub } from "./catalog.js";
 import * as store from "./db.js";
 import { adminKeyboard, canMove, notifyCustomer, orderText, refreshAdminMessages } from "./orders.js";
@@ -110,7 +110,7 @@ async function forwardToAdmins(msg) {
   const u = msg.from;
   const who = `${esc(u.first_name || "")}${u.username ? ` (@${esc(u.username)})` : ""}`;
   let sent = false;
-  for (const admin of ADMIN_IDS) {
+  for (const admin of notifyChats()) {
     const head = await tgSafe("sendMessage", {
       chat_id: admin,
       text: `💬 Сообщение от ${who}. Чтобы ответить, нажмите «Ответить» на сообщение ниже.`,
@@ -130,7 +130,22 @@ async function forwardToAdmins(msg) {
   });
 }
 
+async function onGroupMessage(msg) {
+  const text = msg.text || "";
+  if (/^\/chatid(@\w+)?$/.test(text))
+    return tgSafe("sendMessage", { chat_id: msg.chat.id, text: `ID этой группы: ${msg.chat.id}` });
+  // Ответ продавца покупателю прямо из группы
+  const reply = msg.reply_to_message;
+  if (reply && msg.from && isAdmin(msg.from.id)) {
+    const userId = store.supportUser(msg.chat.id, reply.message_id);
+    if (!userId) return;
+    const ok = await tgSafe("copyMessage", { chat_id: userId, from_chat_id: msg.chat.id, message_id: msg.message_id });
+    return tgSafe("sendMessage", { chat_id: msg.chat.id, reply_to_message_id: msg.message_id, text: ok ? "Отправлено покупателю ✅" : "Не удалось отправить: возможно, покупатель остановил бота." });
+  }
+}
+
 async function onMessage(msg) {
+  if (msg.chat.type === "group" || msg.chat.type === "supergroup") return onGroupMessage(msg);
   if (msg.chat.type !== "private") return;
   const text = msg.text || "";
   const from = msg.from;
@@ -215,7 +230,7 @@ async function onCallback(q) {
         reply_markup: { inline_keyboard: [[shopButton("🍵 Подобрать следующий чай", "#quiz")]] },
       });
       const fb = store.userFeedback(q.from.id)[0];
-      for (const admin of ADMIN_IDS)
+      for (const admin of notifyChats())
         await tgSafe("sendMessage", {
           chat_id: admin,
           text: `📝 Отзыв по заказу №${order.id}: ${RATINGS[fb?.rating] || ""} ${WISHES[value]}`,
@@ -290,6 +305,7 @@ export async function startBot() {
   });
   setInterval(() => askFeedback().catch((e) => console.error("[feedback]", e)), 30 * 60 * 1000);
   askFeedback().catch((e) => console.error("[feedback]", e));
+  if (ORDERS_CHAT_ID) console.log(`Заказы и вопросы идут в группу ${ORDERS_CHAT_ID}`);
   if (!ADMIN_IDS.length) console.warn("ADMIN_IDS не задан: заказы некому будет получать. Напишите боту /id и добавьте ID.");
   poll(async (u) => {
     if (u.message) await onMessage(u.message);

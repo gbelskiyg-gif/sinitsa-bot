@@ -1,6 +1,6 @@
 // Каталог «Синицы».
 // Розница 20/50/100 г: розница второго поставщика +15%, но не ниже закупки ×1,7 (см. sinitsa_prices.xlsx).
-// Опт: от 500 г кратно фасовке поставщика, закупка ×1,35. Закупка у поставщика под заказ.
+// Опт: одна фасовка первого поставщика (из его таблицы), закупка ×1,35. Закупка у поставщика под заказ.
 // Чтобы поменять цену или описание, правьте этот файл. Наличие меняется в боте командой /stock.
 
 export const TEAS = [
@@ -24,8 +24,8 @@ export const TEAS = [
    "100": 2490
   },
   "wholesale": {
-   "grams": 600,
-   "price": 11830,
+   "grams": 200,
+   "price": 3950,
    "perKg": 19800
   },
   "effect": {
@@ -53,8 +53,8 @@ export const TEAS = [
    "100": 2190
   },
   "wholesale": {
-   "grams": 600,
-   "price": 10370,
+   "grams": 200,
+   "price": 3460,
    "perKg": 17300
   },
   "effect": {
@@ -84,8 +84,8 @@ export const TEAS = [
    "100": 2690
   },
   "wholesale": {
-   "grams": 600,
-   "price": 12800,
+   "grams": 200,
+   "price": 4270,
    "perKg": 21400
   },
   "effect": {
@@ -115,8 +115,8 @@ export const TEAS = [
    "100": 1740
   },
   "wholesale": {
-   "grams": 500,
-   "price": 6620,
+   "grams": 250,
+   "price": 3310,
    "perKg": 13300
   },
   "effect": {
@@ -145,8 +145,8 @@ export const TEAS = [
    "100": 2690
   },
   "wholesale": {
-   "grams": 500,
-   "price": 10670,
+   "grams": 250,
+   "price": 5340,
    "perKg": 21400
   },
   "effect": {
@@ -175,8 +175,8 @@ export const TEAS = [
    "100": 1540
   },
   "wholesale": {
-   "grams": 500,
-   "price": 5810,
+   "grams": 250,
+   "price": 2910,
    "perKg": 11700
   },
   "effect": {
@@ -269,8 +269,8 @@ export const TEAS = [
    "100": 1040
   },
   "wholesale": {
-   "grams": 500,
-   "price": 3920,
+   "grams": 100,
+   "price": 790,
    "perKg": 7900
   },
   "effect": {
@@ -298,8 +298,8 @@ export const TEAS = [
    "100": 690
   },
   "wholesale": {
-   "grams": 500,
-   "price": 2430,
+   "grams": 100,
+   "price": 490,
    "perKg": 4900
   },
   "effect": {
@@ -327,8 +327,8 @@ export const TEAS = [
    "100": 640
   },
   "wholesale": {
-   "grams": 500,
-   "price": 2160,
+   "grams": 250,
+   "price": 1080,
    "perKg": 4400
   },
   "effect": {
@@ -452,8 +452,8 @@ export const TEAS = [
    "100": 890
   },
   "wholesale": {
-   "grams": 500,
-   "price": 2570,
+   "grams": 250,
+   "price": 1290,
    "perKg": 5200
   },
   "effect": {
@@ -482,8 +482,8 @@ export const TEAS = [
    "100": 840
   },
   "wholesale": {
-   "grams": 500,
-   "price": 2430,
+   "grams": 250,
+   "price": 1220,
    "perKg": 4900
   },
   "effect": {
@@ -513,8 +513,8 @@ export const TEAS = [
    "100": 1590
   },
   "wholesale": {
-   "grams": 500,
-   "price": 5810,
+   "grams": 100,
+   "price": 1170,
    "perKg": 11700
   },
   "effect": {
@@ -544,8 +544,8 @@ export const TEAS = [
    "100": 1590
   },
   "wholesale": {
-   "grams": 500,
-   "price": 5940,
+   "grams": 100,
+   "price": 1190,
    "perKg": 11900
   },
   "effect": {
@@ -575,8 +575,8 @@ export const TEAS = [
    "100": 1440
   },
   "wholesale": {
-   "grams": 500,
-   "price": 5270,
+   "grams": 250,
+   "price": 2640,
    "perKg": 10600
   },
   "effect": {
@@ -633,8 +633,8 @@ export const TEAS = [
    "100": 990
   },
   "wholesale": {
-   "grams": 714,
-   "price": 5130,
+   "grams": 357,
+   "price": 2570,
    "perKg": 7200
   },
   "effect": {
@@ -664,8 +664,8 @@ export const TEAS = [
    "100": 890
   },
   "wholesale": {
-   "grams": 500,
-   "price": 3240,
+   "grams": 50,
+   "price": 330,
    "perKg": 6500
   },
   "effect": {
@@ -725,8 +725,8 @@ export const TEAS = [
    "100": 640
   },
   "wholesale": {
-   "grams": 500,
-   "price": 2160,
+   "grams": 250,
+   "price": 1080,
    "perKg": 4400
   },
   "effect": {
@@ -754,8 +754,8 @@ export const TEAS = [
    "100": 790
   },
   "wholesale": {
-   "grams": 500,
-   "price": 2840,
+   "grams": 100,
+   "price": 570,
    "perKg": 5700
   },
   "effect": {
@@ -784,8 +784,8 @@ export const TEAS = [
    "100": 840
   },
   "wholesale": {
-   "grams": 714,
-   "price": 4320,
+   "grams": 357,
+   "price": 2170,
    "perKg": 6100
   },
   "effect": {
@@ -814,8 +814,8 @@ export const TEAS = [
    "100": 1240
   },
   "wholesale": {
-   "grams": 500,
-   "price": 4590,
+   "grams": 250,
+   "price": 2300,
    "perKg": 9200
   },
   "effect": {
@@ -873,8 +873,8 @@ export const TEAS = [
    "100": 790
   },
   "wholesale": {
-   "grams": 500,
-   "price": 2570,
+   "grams": 250,
+   "price": 1290,
    "perKg": 5200
   },
   "effect": {

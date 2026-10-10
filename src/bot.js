@@ -1,5 +1,5 @@
 import { ADMIN_IDS, PUBLIC_URL, isAdmin } from "./config.js";
-import { TEAS, findTea } from "./catalog.js";
+import { STATUS, TEAS, findTea, rub } from "./catalog.js";
 import * as store from "./db.js";
 import { adminKeyboard, canMove, notifyCustomer, orderText, refreshAdminMessages } from "./orders.js";
 import { esc, poll, tg, tgSafe } from "./telegram.js";
@@ -20,10 +20,38 @@ const ABOUT =
 
 const ADMIN_HELP =
   "<b>Для продавца</b>\n" +
-  "/active — заказы в работе\n" +
-  "/stock — наличие чаёв (нажмите на чай, чтобы включить или выключить)\n" +
-  "/id — ваш Telegram ID\n\n" +
+  "Внизу появились кнопки «🧾 Заказы в работе» и «🫙 Наличие».\n" +
+  "В «Наличии» нажмите на чай, чтобы включить или выключить его в магазине.\n\n" +
   "Новые заказы приходят сюда с кнопками статусов. Сообщения покупателей тоже приходят сюда: чтобы ответить, сделайте «Ответить» на пересланное сообщение.";
+
+// Кнопки постоянного меню внизу чата
+const BTN = {
+  quiz: "🍵 Подобрать чай",
+  shop: "🛍 Каталог",
+  orders: "📦 Мои заказы",
+  about: "🐦 О Синице",
+  active: "🧾 Заказы в работе",
+  stock: "🫙 Наличие",
+};
+function menuKeyboard(userId) {
+  const rows = [
+    [{ text: BTN.quiz }, { text: BTN.shop }],
+    [{ text: BTN.orders }, { text: BTN.about }],
+  ];
+  if (isAdmin(userId)) rows.push([{ text: BTN.active }, { text: BTN.stock }]);
+  return { keyboard: rows, resize_keyboard: true, is_persistent: true, input_field_placeholder: "Напишите вопрос продавцу" };
+}
+const openButton = (text, hash) => ({ inline_keyboard: [[shopButton(text, hash)]] });
+
+async function myOrders(msg) {
+  const list = store.userOrders(msg.from.id).slice(0, 5);
+  if (!list.length)
+    return tgSafe("sendMessage", { chat_id: msg.chat.id, text: "Заказов пока нет. Начните с подбора или каталога 🍵", reply_markup: openButton("🛍 Открыть магазин", "") });
+  const text = list
+    .map((o) => `<b>№${o.id}</b> · ${STATUS[o.status]} · ${rub(o.total)}\n` + o.items.filter((i) => i.teaId).map((i) => `  ${esc(i.name)}, ${esc(i.label)} × ${i.qty}`).join("\n"))
+    .join("\n\n");
+  return tgSafe("sendMessage", { chat_id: msg.chat.id, text, parse_mode: "HTML", reply_markup: openButton("📦 Открыть мои заказы", "#orders") });
+}
 
 function startKeyboard() {
   return {
@@ -53,7 +81,12 @@ async function onStart(msg) {
     reply_markup: startKeyboard(),
   });
   if (!photo) await tgSafe("sendMessage", { chat_id: chat, text: WELCOME, reply_markup: startKeyboard() });
-  if (isAdmin(msg.from.id)) await tgSafe("sendMessage", { chat_id: chat, text: ADMIN_HELP, parse_mode: "HTML" });
+  await tgSafe("sendMessage", {
+    chat_id: chat,
+    text: isAdmin(msg.from.id) ? ADMIN_HELP : "Меню всегда под рукой, внизу чата 👇\nВопрос продавцу можно просто написать сообщением.",
+    parse_mode: "HTML",
+    reply_markup: menuKeyboard(msg.from.id),
+  });
 }
 
 async function onActive(msg) {
@@ -89,6 +122,7 @@ async function forwardToAdmins(msg) {
   await tgSafe("sendMessage", {
     chat_id: msg.chat.id,
     text: sent ? "Передали продавцу, ответ придёт сюда 🙂" : "Не получилось передать сообщение. Попробуйте чуть позже.",
+    reply_markup: menuKeyboard(msg.from.id),
   });
 }
 
@@ -99,12 +133,18 @@ async function onMessage(msg) {
   if (from) store.upsertUser(from);
 
   if (text.startsWith("/start")) return onStart(msg);
+  if (text === BTN.quiz)
+    return tgSafe("sendMessage", { chat_id: msg.chat.id, text: "Пять коротких вопросов, и мы предложим три чая под ваш вкус и способ заваривания.", reply_markup: openButton("🍵 Начать подбор", "#quiz") });
+  if (text === BTN.shop)
+    return tgSafe("sendMessage", { chat_id: msg.chat.id, text: "29 чаёв и готовые наборы по 20 г. Каждый можно взять на пробу.", reply_markup: openButton("🛍 Открыть каталог", "") });
+  if (text === BTN.orders) return myOrders(msg);
+  if (text === BTN.about) return tgSafe("sendMessage", { chat_id: msg.chat.id, text: ABOUT, reply_markup: menuKeyboard(from.id) });
   if (text.startsWith("/id")) return tgSafe("sendMessage", { chat_id: msg.chat.id, text: `Ваш Telegram ID: ${from.id}` });
   if (text.startsWith("/help")) return tgSafe("sendMessage", { chat_id: msg.chat.id, text: ABOUT, reply_markup: startKeyboard() });
 
   if (isAdmin(from.id)) {
-    if (text.startsWith("/active")) return onActive(msg);
-    if (text.startsWith("/stock"))
+    if (text.startsWith("/active") || text === BTN.active) return onActive(msg);
+    if (text.startsWith("/stock") || text === BTN.stock)
       return tgSafe("sendMessage", { chat_id: msg.chat.id, text: "Наличие чаёв. Нажмите, чтобы переключить:", reply_markup: stockKeyboard() });
     if (text.startsWith("/admin")) return tgSafe("sendMessage", { chat_id: msg.chat.id, text: ADMIN_HELP, parse_mode: "HTML" });
     // Ответ продавца покупателю
@@ -116,10 +156,10 @@ async function onMessage(msg) {
         return tgSafe("sendMessage", { chat_id: msg.chat.id, text: ok ? "Отправлено покупателю ✅" : "Не удалось отправить: возможно, покупатель остановил бота." });
       }
     }
-    if (text.startsWith("/")) return tgSafe("sendMessage", { chat_id: msg.chat.id, text: ADMIN_HELP, parse_mode: "HTML" });
     return tgSafe("sendMessage", {
       chat_id: msg.chat.id,
-      text: "Чтобы ответить покупателю, нажмите «Ответить» на его сообщение.",
+      text: "Меню продавца внизу 👇 Чтобы ответить покупателю, нажмите «Ответить» на его сообщение.",
+      reply_markup: menuKeyboard(from.id),
     });
   }
 
@@ -252,3 +292,4 @@ export async function startBot() {
     else if (u.callback_query) await onCallback(u.callback_query);
   });
 }
+export const _test = { onMessage, onCallback };

@@ -4,7 +4,11 @@ import * as store from "./db.js";
 import { adminKeyboard, canMove, notifyCustomer, orderText, refreshAdminMessages } from "./orders.js";
 import { esc, poll, tg, tgSafe } from "./telegram.js";
 
-const shopButton = (text, hash = "") => ({ text, web_app: { url: `${PUBLIC_URL}/${hash}` } });
+// Раздел передаём через ?tab=, потому что после # Telegram дописывает свои параметры запуска
+const shopButton = (text, hash = "") => ({
+  text,
+  web_app: { url: hash ? `${PUBLIC_URL}/?tab=${hash.replace("#", "")}` : `${PUBLIC_URL}/` },
+});
 
 const WELCOME =
   "🐦 Добро пожаловать в «Синицу»!\n\n" +

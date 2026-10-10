@@ -460,5 +460,9 @@ window.addEventListener("hashchange", route);
     $("#view").innerHTML = `<div class="empty"><h2>Не удалось загрузить каталог</h2><p>Проверьте интернет и откройте магазин ещё раз.</p></div>`;
     return;
   }
+  // Раздел, с которого открыли приложение из бота: ?tab=quiz | orders | cart
+  const tab = new URLSearchParams(location.search).get("tab");
+  if (["quiz", "orders", "cart", "catalog"].includes(tab)) history.replaceState(null, "", `${location.pathname}#${tab}`);
+  else if (!/^#(quiz|orders|cart|catalog)$/.test(location.hash)) history.replaceState(null, "", `${location.pathname}${location.search}#catalog`);
   route();
 })();

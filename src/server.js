@@ -19,6 +19,7 @@ import { tgSafe } from "./telegram.js";
 import { consentPage, privacyPage, termsPage } from "./legal.js";
 import { menuKeyboard } from "./menu.js";
 import { requestWholesale } from "./wholesale.js";
+import { checkToken, ordersCsv } from "./export.js";
 
 const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "public");
 const TYPES = {
@@ -217,6 +218,12 @@ export function startServer(port) {
       if (url.pathname === "/privacy") return html(res, privacyPage());
       if (url.pathname === "/consent") return html(res, consentPage());
       if (url.pathname === "/terms") return html(res, termsPage());
+      // Таблица заказов для Google Таблиц (по секретной ссылке)
+      if (url.pathname === "/export/orders.csv") {
+        if (!checkToken(url.searchParams.get("key"))) return send(res, 403, { error: "forbidden" });
+        res.writeHead(200, { "content-type": "text/csv; charset=utf-8", "cache-control": "no-store" });
+        return res.end(ordersCsv());
+      }
       if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, { error: "method" });
       return serveStatic(req, res);
     } catch (e) {

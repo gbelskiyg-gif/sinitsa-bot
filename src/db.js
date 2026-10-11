@@ -214,6 +214,10 @@ export function createOrder(o) {
     .run(o.userId, o.name, o.phone, o.delivery, o.address || "", o.comment || "", JSON.stringify(o.items), o.total, o.promo || "");
   return getOrder(Number(res.lastInsertRowid));
 }
+/** Все заказы для таблицы: новые сверху, с ником покупателя. */
+export function ordersForExport() {
+  return db.prepare("SELECT o.*, u.username, u.first_name AS tg_name FROM orders o LEFT JOIN users u ON u.id = o.user_id ORDER BY o.id DESC").all().map(rowToOrder);
+}
 export function getOrder(id) {
   return rowToOrder(db.prepare("SELECT * FROM orders WHERE id = ?").get(id));
 }

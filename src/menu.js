@@ -11,6 +11,7 @@ export const BTN = {
   stock: "🫙 Наличие",
   payment: "💳 Реквизиты",
   stats: "📊 Статистика",
+  sheet: "🗂 Таблица заказов",
 };
 
 // Версия меню: если поменяли кнопки, увеличьте — бот один раз разошлёт новое меню всем
@@ -22,6 +23,6 @@ export function menuKeyboard(userId) {
     [{ text: BTN.orders }, { text: BTN.delivery }],
     [{ text: BTN.about }],
   ];
-  if (isAdmin(userId)) rows.push([{ text: BTN.active }, { text: BTN.stock }], [{ text: BTN.payment }, { text: BTN.stats }]);
+  if (isAdmin(userId)) rows.push([{ text: BTN.active }, { text: BTN.stock }], [{ text: BTN.payment }, { text: BTN.stats }], [{ text: BTN.sheet }]);
   return { keyboard: rows, resize_keyboard: true, is_persistent: true, input_field_placeholder: "Напишите нам вопрос" };
 }

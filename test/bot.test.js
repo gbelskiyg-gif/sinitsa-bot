@@ -32,7 +32,7 @@ const last = () => sent[sent.length - 1];
 
 test("продавец задаёт реквизиты в боте, покупатель получает их при принятии заказа", async () => {
   await _test.onMessage(adminMsg("💳 Реквизиты"));
-  assert.match(last().text, /ещё не заданы/);
+  assert.match(last().text, /Т-Банк/, "по умолчанию уже есть реквизиты");
   await _test.onMessage(adminMsg("+7 900 123-45-67\nТ-Банк\nАлександр Б."));
   assert.match(last().text, /Сохранили/);
   assert.deepEqual(store.getSetting("payment"), { phone: "+7 900 123-45-67", bank: "Т-Банк", name: "Александр Б." });

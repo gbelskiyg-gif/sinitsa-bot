@@ -138,7 +138,9 @@ export function adminKeyboard(o) {
 
 // ---------- оплата переводом ----------
 /** Реквизиты: { phone, bank, name } — продавец задаёт их в боте кнопкой «💳 Реквизиты». */
-export const getPayment = () => store.getSetting("payment", null);
+// Реквизиты по умолчанию; кнопка «💳 Реквизиты» в боте их заменяет
+const DEFAULT_PAYMENT = { phone: "8 905 589 03 71", bank: "Т-Банк", name: "Александр Б." };
+export const getPayment = () => store.getSetting("payment", DEFAULT_PAYMENT);
 export function paymentText(o) {
   const p = getPayment();
   const head = `Заказ №${o.id} принят 🍵\nК оплате: ${rub(o.total)}`;

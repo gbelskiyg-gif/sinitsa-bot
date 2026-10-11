@@ -5,6 +5,7 @@ import { adminKeyboard, canMove, claimPaid, getPayment, notifyCustomer, orderTex
 import { esc, poll, tg, tgSafe } from "./telegram.js";
 import { BTN, MENU_VERSION, menuKeyboard } from "./menu.js";
 import { requestWholesale } from "./wholesale.js";
+import { sheetFormula } from "./export.js";
 
 // Раздел передаём через ?tab=, потому что после # Telegram дописывает свои параметры запуска
 const shopButton = (text, hash = "") => ({
@@ -265,6 +266,18 @@ async function onMessage(msg) {
     if (text.startsWith("/pay") || text === BTN.payment) return askPayment(msg);
     if (awaitingPayment.has(from.id) && text && !text.startsWith("/")) return savePayment(msg);
     if (text.startsWith("/stats") || text === BTN.stats) return sendStats(msg.chat.id, 7);
+    if (text.startsWith("/sheet") || text === BTN.sheet)
+      return tgSafe("sendMessage", {
+        chat_id: msg.chat.id,
+        parse_mode: "HTML",
+        text:
+          "🗂 <b>Все заказы в Google Таблице</b>\n\n" +
+          "1. Создайте новую Google Таблицу.\n" +
+          "2. В ячейку A1 вставьте эту формулу целиком (нажмите на неё, чтобы скопировать):\n\n" +
+          `<code>${esc(sheetFormula(PUBLIC_URL))}</code>\n\n` +
+          "3. Нажмите Enter — появятся все заказы с покупателями, составом, доставкой и статусом. Новые заказы и смена статуса подтягиваются сами примерно раз в час.\n\n" +
+          "⚠️ В формуле секретный ключ: не публикуйте её и не открывайте доступ к таблице посторонним — там телефоны и адреса покупателей.",
+      });
     if (text.startsWith("/active") || text === BTN.active) return onActive(msg);
     if (text.startsWith("/stock") || text === BTN.stock)
       return tgSafe("sendMessage", { chat_id: msg.chat.id, text: "Наличие чаёв. Нажмите, чтобы переключить:", reply_markup: stockKeyboard() });

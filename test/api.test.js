@@ -269,3 +269,16 @@ test("опт не кладётся в корзину, «Я оптовик» пр
   const cat = (await call("/api/catalog", { init: "" })).body;
   assert.ok(!("meet" in cat.delivery));
 });
+
+test("таблица заказов для Google: только по секретной ссылке, со всеми полями", async () => {
+  const { exportToken } = await import("../src/export.js");
+  let r = await fetch(base + "/export/orders.csv?key=wrong");
+  assert.equal(r.status, 403);
+  r = await fetch(base + "/export/orders.csv?key=" + exportToken());
+  assert.equal(r.status, 200);
+  const csv = await r.text();
+  const [head, first] = csv.replace(/^\ufeff/, "").split("\n");
+  assert.match(head, /№,Дата \(МСК\),Статус,Имя,Telegram,Телефон,Доставка,Адрес,Состав/);
+  assert.ok(first && /^\d+,/.test(first), "есть строки заказов");
+  assert.ok(!/^=/.test(csv.split(",").find((c) => c.startsWith("=")) || ""), "формулы не пропускаем");
+});

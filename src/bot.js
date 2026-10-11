@@ -116,6 +116,76 @@ async function savePayment(msg) {
   return tgSafe("sendMessage", { chat_id: msg.chat.id, text: `Сохранили ✅\n\n${paymentInfo()}\n\nТеперь, когда вы принимаете заказ, бот сам отправит покупателю сумму и реквизиты с кнопкой «Я оплатил».`, reply_markup: menuKeyboard(msg.from.id) });
 }
 
+// ---------- напоминание о корзине ----------
+// Один раз: через 3 часа после того, как положили чай и не оформили. Не ночью и не чаще раза в 14 дней.
+const REMIND_AFTER_HOURS = Number(process.env.REMIND_AFTER_HOURS || 3);
+export function cartReminderText(items) {
+  const list = String(items || "").split(" | ").map((s) => s.trim()).filter(Boolean);
+  const shown = list.slice(0, 4).map((x) => `• ${x}`).join("\n") + (list.length > 4 ? `\n• и ещё ${list.length - 4}` : "");
+  return `Здравствуйте! Это «Синица» 🐦\n\nВ корзине остался ваш чай${shown ? ":\n" + shown : "."}\n\nОн никуда не делся — можно оформить, когда будет удобно. Если что-то смутило или не получилось, просто напишите сюда, поможем выбрать 🍵`;
+}
+async function sendCartReminder(uid, items) {
+  const ok = await tgSafe("sendMessage", {
+    chat_id: uid,
+    text: cartReminderText(items),
+    reply_markup: { inline_keyboard: [[shopButton("🛒 Открыть корзину", "#cart")]] },
+  });
+  store.markReminded(uid); // даже если не дошло — не пытаемся снова
+  return !!ok;
+}
+async function autoRemind({ anyHour = false } = {}) {
+  const h = Number(new Date().toLocaleString("en-US", { timeZone: "Europe/Moscow", hour: "numeric", hour12: false }));
+  if (!anyHour && (h < 10 || h >= 21)) return; // не пишем рано утром и поздно вечером
+  for (const c of store.cartsToRemind(REMIND_AFTER_HOURS, 72)) {
+    if (isAdmin(c.user_id)) continue;
+    await sendCartReminder(c.user_id, c.items);
+  }
+}
+
+// ---------- статистика для продавца ----------
+const QUIZ_STEPS = ["себе или в подарок", "на что похож чай", "когда пить", "какие ноты", "что не нравится", "как заваривать"];
+const pct = (a, b) => (b ? ` (${Math.round((a / b) * 100)}%)` : "");
+function ago(sqlTime) {
+  const h = Math.max(0, Math.round((Date.now() - Date.parse(sqlTime.replace(" ", "T") + "Z")) / 3600000));
+  return h < 1 ? "только что" : h < 24 ? `${h} ч назад` : `${Math.round(h / 24)} дн. назад`;
+}
+export function statsText(days) {
+  const f = store.funnel(days);
+  const n = (k) => f[k] || 0;
+  const lines = [`📊 <b>Статистика за ${days} дн.</b>`, "", "<b>Путь покупателя</b> (разные люди):"];
+  lines.push(`Открыли магазин — ${n("app_open")}`);
+  lines.push(`Начали подбор — ${n("quiz_start")}, дошли до конца — ${n("quiz_done")}${pct(n("quiz_done"), n("quiz_start"))}`);
+  lines.push(`Открыли наборы — ${n("sets_open")}, свой набор — ${n("builder_open")}`);
+  lines.push(`Положили в корзину — ${n("cart_add")}`);
+  lines.push(`Начали оформление — ${n("checkout_open")}${pct(n("checkout_open"), n("cart_add"))}`);
+  lines.push(`Отправили заказ — ${n("order_sent")}${pct(n("order_sent"), n("cart_add"))}`);
+  if (n("order_error")) lines.push(`Ошибка при оформлении — ${n("order_error")} (стоит посмотреть, что не так)`);
+  const drop = store.quizDropoff(days);
+  if (drop.length) {
+    lines.push("", "<b>Где бросили подбор:</b>");
+    for (const d of drop) lines.push(`вопрос ${d.step} «${QUIZ_STEPS[d.step - 1] || "?"}» — ${d.n} чел.`);
+  }
+  const top = store.topTeas(days);
+  if (top.length) {
+    lines.push("", "<b>Чаще всего смотрят:</b>");
+    for (const t of top) lines.push(`${esc(findTea(t.id)?.name || "чай " + t.id)} — ${t.n}`);
+  }
+  const carts = store.abandonedCarts(days);
+  lines.push("", carts.length ? `🛒 <b>Брошенные корзины (${carts.length}):</b>` : "🛒 Брошенных корзин нет.");
+  for (const c of carts) {
+    const who = `${esc(c.first_name || "Без имени")}${c.username ? ` (@${esc(c.username)})` : ""}`;
+    lines.push(`• ${who}, ${ago(c.last_at)}: ${esc((c.items || "").split(" | ").slice(0, 3).join("; "))}${c.reached_checkout ? " — дошёл(а) до оформления" : ""}${c.reminded_at ? " · напоминали" : ""}`);
+  }
+  return { text: lines.join("\n"), carts };
+}
+async function sendStats(chat, days) {
+  const { text, carts } = statsText(days);
+  const kb = carts.filter((c) => !store.remindedRecently(c.user_id, 14)).slice(0, 8)
+    .map((c) => [{ text: `💬 Напомнить: ${(c.first_name || "покупатель").slice(0, 20)}`, callback_data: `rem:${c.user_id}` }]);
+  kb.push([{ text: days === 7 ? "За 30 дней" : "За 7 дней", callback_data: `stats:${days === 7 ? 30 : 7}` }]);
+  return tgSafe("sendMessage", { chat_id: chat, text: text.slice(0, 4000), parse_mode: "HTML", reply_markup: { inline_keyboard: kb } });
+}
+
 async function onActive(msg) {
   const list = store.activeOrders();
   if (!list.length) return tgSafe("sendMessage", { chat_id: msg.chat.id, text: "Заказов в работе нет." });
@@ -189,6 +259,7 @@ async function onMessage(msg) {
     if (text.startsWith("/cancel") && awaitingPayment.delete(from.id)) return tgSafe("sendMessage", { chat_id: msg.chat.id, text: "Отменили, реквизиты не изменились.", reply_markup: menuKeyboard(from.id) });
     if (text.startsWith("/pay") || text === BTN.payment) return askPayment(msg);
     if (awaitingPayment.has(from.id) && text && !text.startsWith("/")) return savePayment(msg);
+    if (text.startsWith("/stats") || text === BTN.stats) return sendStats(msg.chat.id, 7);
     if (text.startsWith("/active") || text === BTN.active) return onActive(msg);
     if (text.startsWith("/stock") || text === BTN.stock)
       return tgSafe("sendMessage", { chat_id: msg.chat.id, text: "Наличие чаёв. Нажмите, чтобы переключить:", reply_markup: stockKeyboard() });
@@ -280,6 +351,19 @@ async function onCallback(q) {
 
   if (!isAdmin(q.from.id)) return answer("Недоступно");
 
+  if (data.startsWith("stats:")) {
+    await answer();
+    return sendStats(chat, Number(data.split(":")[1]) === 30 ? 30 : 7);
+  }
+  // Напомнить вручную о брошенной корзине — не чаще раза в 14 дней
+  if (data.startsWith("rem:")) {
+    const uid = Number(data.split(":")[1]);
+    if (store.remindedRecently(uid, 14)) return answer("Уже напоминали недавно");
+    const c = store.abandonedCarts(30).find((x) => x.user_id === uid);
+    const ok = await sendCartReminder(uid, c?.items || "");
+    return answer(ok ? "Напомнили ✅" : "Не получилось: возможно, человек остановил бота");
+  }
+
   if (data.startsWith("payno:")) {
     const order = store.getOrder(Number(data.split(":")[1]));
     if (!order || order.status !== "accepted") return answer("Статус уже изменён");
@@ -352,6 +436,7 @@ export async function startBot() {
     ],
   });
   setInterval(() => askFeedback().catch((e) => console.error("[feedback]", e)), 30 * 60 * 1000);
+  setInterval(() => autoRemind().catch((e) => console.error("[remind]", e)), 30 * 60 * 1000);
   askFeedback().catch((e) => console.error("[feedback]", e));
   sendMenuToOldUsers().catch((e) => console.error("[menu]", e));
   if (ORDERS_CHAT_ID) console.log(`Заказы и вопросы идут в группу ${ORDERS_CHAT_ID}`);
@@ -361,4 +446,4 @@ export async function startBot() {
     else if (u.callback_query) await onCallback(u.callback_query);
   });
 }
-export const _test = { onMessage, onCallback };
+export const _test = { onMessage, onCallback, autoRemind, statsText };

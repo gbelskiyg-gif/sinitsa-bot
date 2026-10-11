@@ -73,3 +73,41 @@ test("личная встреча: при принятии без реквизи
   const m = sent.find((x) => x.chat_id === 501);
   assert.match(m.text, /при встрече/);
 });
+
+test("аналитика: брошенная корзина видна в статистике, бот один раз напоминает", async () => {
+  store.upsertUser({ id: 700, first_name: "Анна", username: "anna" });
+  store.logEvent(700, "app_open");
+  store.logEvent(700, "quiz_start");
+  store.logEvent(700, "quiz_step", 1);
+  store.logEvent(700, "quiz_step", 2);
+  store.logEvent(700, "cart_add", "Пуэр зайчик, тигр, дракон по годам · 50 г");
+  store.logEvent(700, "cart_add", "набор «Пауза» · 20 г");
+  // делаем вид, что это было 4 часа назад
+  store.db.prepare("UPDATE events SET created_at = datetime('now','-4 hours') WHERE user_id = 700").run();
+
+  const { text } = _test.statsText(7);
+  assert.match(text, /Положили в корзину — \d/);
+  assert.match(text, /вопрос 2 «на что похож чай» — 1/);
+  assert.match(text, /Анна \(@anna\)/);
+
+  sent.length = 0;
+  await _test.autoRemind({ anyHour: true });
+  const m = sent.find((x) => x.chat_id === 700);
+  assert.ok(m, "напоминание отправлено");
+  assert.match(m.text, /Пуэр зайчик, тигр, дракон по годам · 50 г/);
+  assert.match(m.text, /набор «Пауза» · 20 г/);
+
+  sent.length = 0;
+  await _test.autoRemind({ anyHour: true });
+  assert.ok(!sent.some((x) => x.chat_id === 700), "второй раз не пишем");
+});
+
+test("кто оформил заказ после корзины — не получает напоминание", async () => {
+  store.logEvent(701, "cart_add", "Габа Дундин · 50 г");
+  store.db.prepare("UPDATE events SET created_at = datetime('now','-5 hours') WHERE user_id = 701").run();
+  const draft = buildOrder({ items: [{ teaId: 6, pack: "50", qty: 1 }], name: "Б", phone: "89001234567", delivery: "meet", consent: true, terms: true }, { id: 701 }, { isFirstOrder: true });
+  store.createOrder(draft);
+  sent.length = 0;
+  await _test.autoRemind({ anyHour: true });
+  assert.ok(!sent.some((x) => x.chat_id === 701));
+});

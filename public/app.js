@@ -34,6 +34,11 @@ async function api(path, opts = {}) {
   return data;
 }
 const inTelegram = () => !!tgApp?.initData;
+// Аналитика: отмечаем шаги, чтобы видеть, где люди уходят. Только в Telegram, тихо, без ожидания ответа.
+function track(name, data = "") {
+  if (!inTelegram()) return;
+  try { fetch("/api/event", { method: "POST", keepalive: true, headers: { "content-type": "application/json", "x-telegram-init-data": tgApp.initData }, body: JSON.stringify({ name, data: String(data) }) }).catch(() => {}); } catch {}
+}
 
 // ---------- помощники каталога ----------
 const tea = (id) => S.teas.find((t) => t.id === Number(id));
@@ -100,7 +105,7 @@ function renderSets() {
         <div class="big-price" style="font-size:22px">${rub(p.final)} <small><s>${rub(p.sum)}</s></small></div>
         <button class="btn wide" data-set="${set.key}">В корзину · ${set.teas.length} × ${pack} г</button></div>`;
     }).join("")}</div>` : `<p class="muted">Сейчас наборы собрать не из чего — часть чаёв закончилась. Загляните в каталог.</p>`}`;
-  $("#build").onclick = () => { S.builder = { ids: [], pack: "20" }; renderSets(); scrollTo(0, 0); };
+  $("#build").onclick = () => { track("builder_open"); S.builder = { ids: [], pack: "20" }; renderSets(); scrollTo(0, 0); };
   $("#view").onclick = (e) => {
     const b = e.target.closest("[data-set-packs] [data-p]"); if (!b) return;
     S.setPack[b.parentElement.dataset.setPacks] = b.dataset.p;
@@ -139,7 +144,7 @@ function renderBuilder() {
   $("#build-add").onclick = () => {
     const set = "own-" + Date.now().toString(36);
     B.ids.forEach((teaId) => S.cart.push({ teaId, pack: B.pack, qty: 1, set }));
-    saveCart(); toast(`Ваш набор (${B.ids.length} × ${B.pack} г) в корзине`); S.builder = null; location.hash = "#cart";
+    saveCart(); toast(`Ваш набор (${B.ids.length} × ${B.pack} г) в корзине`); track("cart_add", `свой набор · ${B.ids.length} × ${B.pack} г`); S.builder = null; location.hash = "#cart";
   };
 }
 
@@ -149,6 +154,7 @@ function addSet(key) {
   const id = `${key}-${Date.now().toString(36)}`;
   set.teas.forEach((teaId) => S.cart.push({ teaId, pack, qty: 1, set: id }));
   saveCart(); toast(`Набор «${set.title}» по ${pack} г в корзине`);
+  track("cart_add", `набор «${set.title}» · ${pack} г`);
 }
 function cardHTML(t) {
   return `<button class="card${t.available ? "" : " off"}" data-tea="${t.id}">${art(t)}
@@ -159,6 +165,7 @@ function cardHTML(t) {
 // ---------- карточка чая ----------
 function openTea(id) {
   const t = tea(id); if (!t) return;
+  track("tea_open", t.id);
   let pack = "50", qty = 1;
   const r = S.recipes[t.kind];
   const body = $("#tea-body");
@@ -195,6 +202,7 @@ function addToCart(teaId, pack, qty, set = "") {
   const ex = S.cart.find((i) => i.teaId === teaId && i.pack === pack && (i.set || "") === set);
   if (ex) ex.qty = Math.min(20, ex.qty + qty); else S.cart.push({ teaId, pack, qty, set });
   saveCart(); toast("Добавлено в корзину");
+  track("cart_add", `${tea(teaId)?.name || teaId} · ${pack === "wholesale" ? "опт" : pack + " г"}`);
 }
 
 // ---------- подбор ----------
@@ -244,6 +252,7 @@ function renderQuiz() {
   const { step, a } = S.quiz;
   if (step >= QUESTIONS.length) return renderResults();
   const q = QUESTIONS[step];
+  if (S.quiz.tracked !== step) { S.quiz.tracked = step; if (step === 0) track("quiz_start"); track("quiz_step", step + 1); }
   const g = isGift(a) && q.gift ? q.gift : {};
   const opts = q.options.filter(([v]) => !(q.key === "dislikes" && a.likes.includes(v))).map(([v, e, l, sub]) => (g.labels?.[v] ? [v, e, g.labels[v][0], g.labels[v][1]] : [v, e, l, sub]));
   const sel = (v) => (q.multi ? a[q.key].includes(v) : a[q.key] === v);
@@ -272,7 +281,7 @@ function renderQuiz() {
   if (S.quiz.shown !== step) { S.quiz.shown = step; window.scrollTo(0, 0); }
 }
 
-function quitQuiz() { newQuiz(); location.hash = "#catalog"; }
+function quitQuiz() { track("quiz_exit", S.quiz?.step ?? ""); newQuiz(); location.hash = "#catalog"; }
 
 // Отзывы покупателя: «не моё» убирает чай, пожелания сдвигают подбор
 function lastWish() { return S.me?.feedback?.find((f) => f.wish)?.wish || ""; }
@@ -372,6 +381,7 @@ function whyText(x, a, role) {
 
 function renderResults() {
   const a = S.quiz.a;
+  if (!S.quiz.doneTracked) { S.quiz.doneTracked = true; track("quiz_done", a.who); }
   const picks = pickThree(a);
   if (!picks.length) {
     $("#view").innerHTML = `<div class="empty"><h2>Не нашли точного совпадения</h2><p>Попробуйте убрать одно из ограничений или напишите нам в бот, подберём вручную.</p>
@@ -417,11 +427,11 @@ function renderResults() {
   $("#trial")?.addEventListener("click", () => {
     const set = "quiz-" + Date.now().toString(36);
     picks.forEach(([, x]) => S.cart.push({ teaId: x.t.id, pack: setPack, qty: 1, set }));
-    saveCart(); toast("Набор в корзине"); location.hash = "#cart";
+    saveCart(); toast("Набор в корзине"); track("cart_add", `набор из подбора · ${setPack} г`); location.hash = "#cart";
   });
   $("#again").onclick = () => { newQuiz(); renderQuiz(); };
   $("#home").onclick = quitQuiz;
-  $("#more-btn")?.addEventListener("click", (e) => { e.currentTarget.hidden = true; $("#more").hidden = false; });
+  $("#more-btn")?.addEventListener("click", (e) => { e.currentTarget.hidden = true; $("#more").hidden = false; track("quiz_more"); });
   $("#ask")?.addEventListener("click", askSeller);
   window.scrollTo(0, 0);
 }
@@ -577,6 +587,7 @@ function deliveryCost(k, total) {
 }
 function loadForm() { try { return JSON.parse(localStorage.getItem("form") || "{}"); } catch { return {}; } }
 function renderCheckout(total) {
+  if (!S.checkoutTracked) { S.checkoutTracked = true; track("checkout_open"); }
   const f = loadForm();
   const u = tgApp?.initDataUnsafe?.user;
   const dSel = S.delivery[f.delivery] ? f.delivery : "yandex";
@@ -630,7 +641,7 @@ function renderCheckout(total) {
       $("#view").innerHTML = `<div class="empty"><h2>Заказ №${order.id} отправлен 🍵</h2><p>Проверим наличие и напишем вам в чате с ботом. Как только подтвердим, придут сумма и реквизиты для оплаты.</p>
         <a class="btn" href="#orders">Мои заказы</a></div>`;
       try { tgApp?.HapticFeedback?.notificationOccurred("success"); } catch {}
-    } catch (err) { $("#err").textContent = err.message; $("#send").disabled = false; }
+    } catch (err) { $("#err").textContent = err.message; $("#send").disabled = false; track("order_error", err.message); }
   };
 }
 
@@ -708,6 +719,8 @@ function route() {
   document.querySelectorAll(".nav a").forEach((a) => a.classList.toggle("active", a.dataset.tab === tab));
   $("#view").onclick = null;
   if (tab !== "cart") { S.checkout = false; S.undo = null; }
+  if (tab !== "checkout" && tab !== "cart") S.checkoutTracked = false;
+  if (S.lastTab !== tab) { S.lastTab = tab; if (tab === "sets") track("sets_open"); if (tab === "cart") track("cart_open"); }
   if (tab === "quiz") renderQuiz();
   else if (tab === "cart") renderCart();
   else if (tab === "orders") renderOrders();
@@ -738,5 +751,6 @@ window.addEventListener("hashchange", route);
   const tab = new URLSearchParams(location.search).get("tab");
   if (["quiz", "orders", "cart", "catalog", "sets"].includes(tab)) history.replaceState(null, "", `${location.pathname}#${tab}`);
   else if (!/^#(quiz|orders|cart|catalog|sets)$/.test(location.hash)) history.replaceState(null, "", `${location.pathname}${location.search}#catalog`);
+  track("app_open", tab || "");
   route();
 })();

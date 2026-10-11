@@ -10,6 +10,7 @@ startServer(PORT);
 const cleanup = () => {
   try {
     const n = store.anonymizeOldOrders(30);
+    store.cleanOldEvents(90);
     if (n) console.log(`Обезличено старых заказов: ${n}`);
   } catch (e) {
     console.error("[cleanup]", e);

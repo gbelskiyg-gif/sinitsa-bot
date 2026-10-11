@@ -44,6 +44,18 @@ db.exec(`
 `);
 
 db.exec(`
+  CREATE TABLE IF NOT EXISTS events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    data TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS events_time ON events(created_at);
+  CREATE TABLE IF NOT EXISTS reminders (
+    user_id INTEGER PRIMARY KEY,
+    sent_at TEXT NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -91,6 +103,77 @@ export function usersWithoutMenu(v) {
 }
 export function markMenu(id, v) {
   db.prepare("UPDATE users SET menu_v = ? WHERE id = ?").run(v, id);
+}
+
+// ---------- аналитика: что делают люди в приложении ----------
+export function logEvent(userId, name, data = "") {
+  db.prepare("INSERT INTO events (user_id, name, data) VALUES (?, ?, ?)").run(userId, name, String(data).slice(0, 200));
+}
+export function recentEventCount(userId, minutes) {
+  return db.prepare("SELECT COUNT(*) AS n FROM events WHERE user_id = ? AND created_at > datetime('now', ?)").get(userId, `-${minutes} minutes`).n;
+}
+/** Сколько разных людей дошло до каждого шага за последние days дней. */
+export function funnel(days) {
+  const rows = db.prepare(
+    "SELECT name, COUNT(DISTINCT user_id) AS n FROM events WHERE created_at > datetime('now', ?) GROUP BY name"
+  ).all(`-${days} days`);
+  return Object.fromEntries(rows.map((r) => [r.name, r.n]));
+}
+/** До какого вопроса подбора дошли люди, которые его не закончили. */
+export function quizDropoff(days) {
+  return db.prepare(
+    `SELECT max_step AS step, COUNT(*) AS n FROM (
+       SELECT user_id, MAX(CAST(data AS INTEGER)) AS max_step FROM events
+       WHERE name = 'quiz_step' AND created_at > datetime('now', ?) GROUP BY user_id
+     ) s WHERE user_id NOT IN (SELECT user_id FROM events WHERE name = 'quiz_done' AND created_at > datetime('now', ?))
+     GROUP BY max_step ORDER BY max_step`
+  ).all(`-${days} days`, `-${days} days`);
+}
+/** Чаще всего открываемые чаи. */
+export function topTeas(days, limit = 5) {
+  return db.prepare(
+    "SELECT data AS id, COUNT(DISTINCT user_id) AS n FROM events WHERE name = 'tea_open' AND created_at > datetime('now', ?) GROUP BY data ORDER BY n DESC LIMIT ?"
+  ).all(`-${days} days`, limit);
+}
+/** Брошенные корзины: добавили чай, но заказа после этого нет. */
+export function abandonedCarts(days) {
+  return db.prepare(
+    `SELECT e.user_id, u.first_name, u.username, MAX(e.created_at) AS last_at,
+            (SELECT GROUP_CONCAT(d, ' | ') FROM (SELECT DISTINCT data AS d FROM events x WHERE x.user_id = e.user_id AND x.name = 'cart_add' AND x.created_at > datetime('now', ?))) AS items,
+            MAX(CASE WHEN c.user_id IS NOT NULL THEN 1 ELSE 0 END) AS reached_checkout,
+            r.sent_at AS reminded_at
+     FROM events e
+     LEFT JOIN users u ON u.id = e.user_id
+     LEFT JOIN events c ON c.user_id = e.user_id AND c.name = 'checkout_open' AND c.created_at >= e.created_at
+     LEFT JOIN reminders r ON r.user_id = e.user_id
+     WHERE e.name = 'cart_add' AND e.created_at > datetime('now', ?)
+       AND NOT EXISTS (SELECT 1 FROM orders o WHERE o.user_id = e.user_id AND o.created_at >= e.created_at)
+     GROUP BY e.user_id ORDER BY last_at DESC LIMIT 20`
+  ).all(`-${days} days`, `-${days} days`);
+}
+/** Кому пора напомнить: положили в корзину от after до before часов назад, заказа нет, не напоминали 14 дней. */
+export function cartsToRemind(afterHours = 3, beforeHours = 72) {
+  return db.prepare(
+    `SELECT e.user_id, MAX(e.created_at) AS last_at,
+            (SELECT GROUP_CONCAT(d, ' | ') FROM (SELECT DISTINCT data AS d FROM events x WHERE x.user_id = e.user_id AND x.name = 'cart_add' AND x.created_at > datetime('now', ?))) AS items
+     FROM events e
+     WHERE e.name = 'cart_add'
+       AND e.created_at > datetime('now', ?)
+       AND NOT EXISTS (SELECT 1 FROM orders o WHERE o.user_id = e.user_id AND o.created_at >= e.created_at)
+       AND NOT EXISTS (SELECT 1 FROM reminders r WHERE r.user_id = e.user_id AND r.sent_at > datetime('now', '-14 days'))
+     GROUP BY e.user_id
+     HAVING MAX(e.created_at) < datetime('now', ?)`
+  ).all(`-${beforeHours} hours`, `-${beforeHours} hours`, `-${afterHours} hours`);
+}
+export function markReminded(userId) {
+  db.prepare("INSERT INTO reminders (user_id, sent_at) VALUES (?, datetime('now')) ON CONFLICT(user_id) DO UPDATE SET sent_at = excluded.sent_at").run(userId);
+}
+export function remindedRecently(userId, days) {
+  return !!db.prepare("SELECT 1 FROM reminders WHERE user_id = ? AND sent_at > datetime('now', ?)").get(userId, `-${days} days`);
+}
+/** Действия старше 90 дней не храним. */
+export function cleanOldEvents(days = 90) {
+  return db.prepare("DELETE FROM events WHERE created_at < datetime('now', ?)").run(`-${days} days`).changes;
 }
 
 // Настройки магазина (реквизиты для оплаты и т. п.)

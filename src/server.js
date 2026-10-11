@@ -55,12 +55,18 @@ function photoOf(tea, own, kinds) {
   return { photo: "", photoExample: false };
 }
 
+const EVENTS = new Set([
+  "app_open", "catalog_open", "tea_open", "sets_open", "builder_open", "quiz_start", "quiz_step", "quiz_done", "quiz_exit",
+  "quiz_more", "cart_add", "cart_open", "checkout_open", "order_error",
+]);
+
 function html(res, body) {
   res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" });
   res.end(body);
 }
 
 function send(res, status, data) {
+  if (status === 204) { res.writeHead(204); return res.end(); }
   const body = JSON.stringify(data);
   res.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
   res.end(body);
@@ -135,6 +141,14 @@ async function api(req, res, url) {
   if (!user) return send(res, 401, { error: "Откройте магазин через бота @sinitsa_chai_bot в Telegram." });
   store.upsertUser(user);
 
+  // Аналитика: шаги в приложении (какие разделы открыли, на каком вопросе ушли, что положили в корзину)
+  if (req.method === "POST" && url.pathname === "/api/event") {
+    const body = await readJson(req, 2000);
+    if (!EVENTS.has(body.name)) return send(res, 400, { error: "event" });
+    if (store.recentEventCount(user.id, 60) < 300) store.logEvent(user.id, body.name, body.data ?? "");
+    return send(res, 204, {});
+  }
+
   if (req.method === "GET" && url.pathname === "/api/orders") {
     return send(res, 200, { orders: store.userOrders(user.id).map(publicOrder) });
   }
@@ -154,6 +168,7 @@ async function api(req, res, url) {
     const body = await readJson(req);
     const draft = buildOrder(body, user, { isFirstOrder: store.isFirstOrder(user.id) });
     const order = store.createOrder(draft);
+    store.logEvent(user.id, "order_sent", order.id);
     await notifyAdminsNew(order, user.username);
     await tgSafe("sendMessage", {
       chat_id: user.id,

@@ -105,7 +105,8 @@ function serveStatic(req, res) {
     const ext = path.extname(file);
     res.writeHead(200, {
       "content-type": TYPES[ext] || "application/octet-stream",
-      "cache-control": ext === ".html" ? "no-cache" : "public, max-age=3600",
+      // Код приложения всегда проверяем на свежесть — иначе телефон может держать старую версию после обновления
+      "cache-control": [".html", ".js", ".css"].includes(ext) ? "no-cache" : "public, max-age=3600",
     });
     res.end(buf);
   });
@@ -156,7 +157,7 @@ async function api(req, res, url) {
     await notifyAdminsNew(order, user.username);
     await tgSafe("sendMessage", {
       chat_id: user.id,
-      text: `Заказ №${order.id} получили 🍵\nСобираем чай под заказ. Продавец подтвердит наличие, итоговую сумму с доставкой и сроки здесь, в чате. Оплата после подтверждения.`,
+      text: `Заказ №${order.id} получили 🍵\nПроверим наличие и напишем вам здесь. Как только подтвердим, бот пришлёт сумму и реквизиты для оплаты.`,
       reply_markup: menuKeyboard(user.id),
     });
     return send(res, 201, { order: publicOrder(order) });

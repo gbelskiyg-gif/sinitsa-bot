@@ -195,7 +195,7 @@ form label.consent a { color: var(--gold); }
 .status.accepted { color: var(--gold); }
 .status.paid { color: #9fd6a6; }
 
-.undo { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 14px; margin-bottom: 10px; border-radius: 12px; background: var(--card-2); border: 1px solid var(--line); font-size: 14px; }
+.undo { position: fixed; z-index: 30; left: 50%; transform: translateX(-50%); bottom: calc(84px + env(safe-area-inset-bottom)); width: min(calc(100% - 32px), 728px); box-shadow: 0 8px 24px #0008; display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 14px; margin-bottom: 10px; border-radius: 12px; background: var(--card-2); border: 1px solid var(--line); font-size: 14px; }
 .undo .link { padding: 0; font: inherit; font-weight: 600; color: var(--gold); white-space: nowrap; }
 .cart-set .set-items { list-style: none; padding: 0; margin: 8px 0 0; }
 .cart-set .set-items li { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; font-size: 14px; border-bottom: 1px dashed var(--line); }

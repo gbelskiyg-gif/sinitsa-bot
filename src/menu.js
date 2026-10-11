@@ -22,5 +22,5 @@ export function menuKeyboard(userId) {
     [{ text: BTN.about }],
   ];
   if (isAdmin(userId)) rows.push([{ text: BTN.active }, { text: BTN.stock }], [{ text: BTN.payment }]);
-  return { keyboard: rows, resize_keyboard: true, is_persistent: true, input_field_placeholder: "Напишите вопрос продавцу" };
+  return { keyboard: rows, resize_keyboard: true, is_persistent: true, input_field_placeholder: "Напишите нам вопрос" };
 }

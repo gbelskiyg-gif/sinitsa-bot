@@ -143,8 +143,8 @@ export const getPayment = () => store.getSetting("payment", null);
 export function paymentText(o) {
   const p = getPayment();
   const head = `Заказ №${o.id} принят 🍵\nК оплате: ${rub(o.total)}`;
-  if (!p) return `${head}\n\nРеквизиты для оплаты продавец пришлёт в этом чате.`;
-  return `${head}\n\nПереведите по СБП (по номеру телефона):\n📱 ${p.phone}\n🏦 ${p.bank}\n👤 ${p.name}\n\nВ комментарии к переводу укажите «Заказ ${o.id}». После перевода нажмите кнопку ниже — продавец проверит и подтвердит.`;
+  if (!p) return `${head}\n\nРеквизиты для оплаты пришлём в этом чате.`;
+  return `${head}\n\nПереведите по СБП (по номеру телефона):\n📱 ${p.phone}\n🏦 ${p.bank}\n👤 ${p.name}\n\nВ комментарии к переводу укажите «Заказ ${o.id}». После перевода нажмите кнопку ниже — мы проверим и подтвердим.`;
 }
 const payButton = (o) => ({ inline_keyboard: [[{ text: "✅ Я оплатил", callback_data: `paid:${o.id}` }]] });
 

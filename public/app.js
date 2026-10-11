@@ -442,7 +442,7 @@ function moreHTML(a, picks) {
 
 // Вопрос продавцу: в Telegram — закрыть приложение и вернуться в чат с ботом
 function askSeller() {
-  if (tgApp?.close && inTelegram()) { toast("Напишите в чат с ботом, что ищете — продавец ответит"); setTimeout(() => tgApp.close(), 1200); }
+  if (tgApp?.close && inTelegram()) { toast("Напишите в чат с ботом, что ищете — ответим"); setTimeout(() => tgApp.close(), 1200); }
   else location.href = BOT_LINK;
 }
 
@@ -525,10 +525,13 @@ function renderCart() {
       <p class="error" id="promo-err"></p></div>` : ""}
     <div class="total"><span>Итого</span><span>${rub(total)}</span></div>
     ${S.freeFrom ? `<p class="free-left">${total >= S.freeFrom ? "🎁 Доставка бесплатная — любой службой" : `🚚 До бесплатной доставки осталось ${rub(S.freeFrom - total)}`}</p>` : ""}
-    <p class="note">Доставку выберете на следующем шаге: ПВЗ Яндекса и Ozon — 290 ₽, СДЭК и Почта — 450 ₽. Чай собираем под заказ, продавец подтвердит наличие и сроки в чате. Оплата после подтверждения.</p>
+    <p class="note">Доставку выберете на следующем шаге: ПВЗ Яндекса и Ozon — 290 ₽, СДЭК и Почта — 450 ₽. Чай собираем под заказ: наличие и сроки подтвердим в чате, оплата после подтверждения.</p>
     ${S.deliveryInfo ? `<details class="dl-info"><summary>Доставка и возврат</summary><p>${esc(S.deliveryInfo.replace(/^🚚 Доставка\n\n/, "")).replace(/\n/g, "<br>")}</p></details>` : ""}
     ${off.length ? `<p class="error">Уберите чаи, которых нет в наличии, чтобы оформить заказ.</p>` : ""}
     <button class="btn wide" id="go" ${off.length ? "disabled" : ""}>Оформить заказ</button>`;
+  // «Вернуть» висит внизу экрана 8 секунд — на телефоне верх корзины после удаления может быть не виден
+  clearTimeout(S.undoTimer);
+  if (S.undo) { $("#toast").hidden = true; S.undoTimer = setTimeout(() => { S.undo = null; $(".undo")?.remove(); }, 8000); }
   $("#view").onclick = (e) => {
     if (e.target.closest("#undo")) {
       // Возвращаем убранное на прежние места
@@ -624,7 +627,7 @@ function renderCheckout(total) {
     try {
       const { order } = await api("/api/orders", { method: "POST", body: JSON.stringify({ ...data, items: S.cart, promo: S.promo?.code || "" }) });
       S.cart = []; saveCart(); S.checkout = false; S.promo = null; if (S.me) S.me.firstOrder = false;
-      $("#view").innerHTML = `<div class="empty"><h2>Заказ №${order.id} отправлен 🍵</h2><p>Продавец подтвердит наличие, сумму с доставкой и сроки в чате с ботом. Оплата после подтверждения.</p>
+      $("#view").innerHTML = `<div class="empty"><h2>Заказ №${order.id} отправлен 🍵</h2><p>Проверим наличие и напишем вам в чате с ботом. Как только подтвердим, придут сумма и реквизиты для оплаты.</p>
         <a class="btn" href="#orders">Мои заказы</a></div>`;
       try { tgApp?.HapticFeedback?.notificationOccurred("success"); } catch {}
     } catch (err) { $("#err").textContent = err.message; $("#send").disabled = false; }
@@ -635,14 +638,14 @@ function renderCheckout(total) {
 // Ждёт оплаты: реквизиты, копирование номера и кнопка «Я оплатил»
 function payHTML(o) {
   if (o.status !== "accepted") return "";
-  if (!o.payment) return `<p class="muted small" style="margin:8px 0 0">Реквизиты для оплаты продавец пришлёт в чате с ботом.</p>`;
+  if (!o.payment) return `<p class="muted small" style="margin:8px 0 0">Реквизиты для оплаты пришлём в чате с ботом.</p>`;
   const p = o.payment;
   return `<div class="pay"><div class="eyebrow">К оплате ${rub(o.total)}</div>
     <p class="small" style="margin:6px 0">Перевод по СБП по номеру телефона:</p>
     <button class="pay-row" data-copy="${esc(p.phone)}"><span>📱 ${esc(p.phone)}</span><small>скопировать</small></button>
     <p class="small" style="margin:6px 0 0">🏦 ${esc(p.bank)} · 👤 ${esc(p.name)}</p>
     <p class="muted small" style="margin:6px 0 10px">В комментарии к переводу: «Заказ ${o.id}»</p>
-    ${o.paidClaim ? `<p class="small" style="margin:0;color:var(--gold)">Вы отметили оплату — продавец проверит и подтвердит в чате.</p>` : `<button class="btn wide" data-paid="${o.id}">✅ Я оплатил</button>`}</div>`;
+    ${o.paidClaim ? `<p class="small" style="margin:0;color:var(--gold)">Вы отметили оплату — проверим и подтвердим в чате.</p>` : `<button class="btn wide" data-paid="${o.id}">✅ Я оплатил</button>`}</div>`;
 }
 async function renderOrders() {
   if (!inTelegram()) {
@@ -668,7 +671,7 @@ async function renderOrders() {
       const pd = e.target.closest("[data-paid]");
       if (pd) {
         pd.disabled = true;
-        try { await api(`/api/orders/${pd.dataset.paid}/paid`, { method: "POST" }); toast("Передали продавцу — он проверит перевод"); renderOrders(); }
+        try { await api(`/api/orders/${pd.dataset.paid}/paid`, { method: "POST" }); toast("Спасибо! Проверим перевод и подтвердим"); renderOrders(); }
         catch (err) { toast(err.message); pd.disabled = false; }
         return;
       }

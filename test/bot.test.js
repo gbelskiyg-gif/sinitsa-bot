@@ -107,3 +107,28 @@ test("кто оформил заказ после корзины — не пол
   await _test.autoRemind({ anyHour: true });
   assert.ok(!sent.some((x) => x.chat_id === 701));
 });
+
+test("слово «меню» присылает кнопки под сообщением; кнопки работают; покупателю админские не видны", async () => {
+  sent.length = 0;
+  await _test.onMessage(adminMsg("Меню"));
+  const kb = last().reply_markup.inline_keyboard.flat();
+  assert.ok(kb.some((b) => b.callback_data === "m:sheet"), "у нас есть «Таблица заказов»");
+  // Любой непонятный текст от нас — тоже кнопки
+  await _test.onMessage(adminMsg("О"));
+  assert.ok(last().reply_markup.inline_keyboard.flat().some((b) => b.callback_data === "m:stats"));
+  // Нажатие кнопки работает как кнопка внизу
+  sent.length = 0;
+  await _test.onCallback({ id: "m1", data: "m:sheet", from: { id: 1 }, message: { chat: { id: 1 }, message_id: 5 } });
+  assert.ok(sent.some((m) => /IMPORTDATA/.test(m.text || "")));
+
+  sent.length = 0;
+  const buyer = { chat: { id: 520, type: "private" }, from: { id: 520, first_name: "Аня" }, text: "/menu", message_id: 2 };
+  await _test.onMessage(buyer);
+  const bkb = last().reply_markup.inline_keyboard.flat();
+  assert.ok(bkb.some((b) => b.callback_data === "m:delivery"));
+  assert.ok(!bkb.some((b) => b.callback_data === "m:sheet"));
+  assert.ok(!sent.some((m) => m.chat_id === 1), "слово «меню» не уходит нам как вопрос");
+  sent.length = 0;
+  await _test.onCallback({ id: "m2", data: "m:sheet", from: { id: 520 }, message: { chat: { id: 520 }, message_id: 6 } });
+  assert.ok(!sent.some((m) => /IMPORTDATA/.test(m.text || "")));
+});

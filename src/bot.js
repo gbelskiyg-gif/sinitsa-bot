@@ -28,8 +28,8 @@ const ABOUT =
   "🧑‍💼 Покупаете оптом — для кофейни, магазина или подарков? Нажмите /opt или «Я оптовик» в приветствии, обсудим условия лично.";
 
 const ADMIN_HELP =
-  "<b>Для продавца</b>\n" +
-  "Внизу появились кнопки «🧾 Заказы в работе», «🫙 Наличие» и «💳 Реквизиты».\n" +
+  "<b>Панель магазина</b> 👇 кнопки прямо под этим сообщением.\n" +
+  "Если кнопки потерялись — напишите боту слово <b>меню</b>, и они придут заново.\n\n" +
   "В «Наличии» нажмите на чай, чтобы включить или выключить его в магазине.\n" +
   "В «Реквизитах» задайте номер для перевода по СБП — когда вы принимаете заказ, бот сам пришлёт покупателю сумму и реквизиты, а вам — уведомление, когда он нажмёт «Я оплатил».\n\n" +
   "Новые заказы приходят сюда с кнопками статусов. Сообщения покупателей тоже приходят сюда: чтобы ответить, сделайте «Ответить» на пересланное сообщение.";
@@ -57,6 +57,20 @@ function startKeyboard() {
   };
 }
 
+// Меню кнопками прямо под сообщением — их видно всегда, искать значок не нужно
+const MENU_HINT = "Нажмите на нужную кнопку 👇\nЕсли кнопки потерялись — просто напишите слово «меню».";
+function inlineMenu(userId) {
+  const cb = (key) => ({ text: BTN[key], callback_data: `m:${key}` });
+  const rows = [
+    [shopButton(BTN.quiz, "#quiz"), shopButton(BTN.shop)],
+    [cb("orders"), cb("delivery")],
+    [cb("about")],
+  ];
+  if (isAdmin(userId)) rows.push([cb("active"), cb("stock")], [cb("payment"), cb("stats")], [cb("sheet")]);
+  return { inline_keyboard: rows };
+}
+const isMenuWord = (text) => /^\/menu(@\w+)?$|^(меню|menu|кнопки|главное меню)[.!?]*$/i.test(text.trim());
+
 function stockKeyboard() {
   const avail = store.availability();
   return {
@@ -77,10 +91,10 @@ async function onStart(msg) {
   if (!photo) await tgSafe("sendMessage", { chat_id: chat, text: WELCOME, reply_markup: startKeyboard() });
   await tgSafe("sendMessage", {
     chat_id: chat,
-    text: isAdmin(msg.from.id) ? ADMIN_HELP : "Меню всегда под рукой, внизу чата 👇\nЕсли есть вопрос, просто напишите его сюда — ответим.",
-    parse_mode: "HTML",
+    text: "Кнопки меню — внизу чата 👇\nНе видно? Нажмите значок ⊞ справа в строке ввода или напишите слово «меню».\n\nЕсли есть вопрос, просто напишите его сюда — ответим.",
     reply_markup: menuKeyboard(msg.from.id),
   });
+  if (isAdmin(msg.from.id)) await tgSafe("sendMessage", { chat_id: chat, text: ADMIN_HELP, parse_mode: "HTML", reply_markup: inlineMenu(msg.from.id) });
   store.markMenu(msg.from.id, MENU_VERSION);
 }
 
@@ -250,6 +264,7 @@ async function onMessage(msg) {
   if (from) store.upsertUser(from);
 
   if (text.startsWith("/start")) return onStart(msg);
+  if (isMenuWord(text)) return tgSafe("sendMessage", { chat_id: msg.chat.id, text: MENU_HINT, reply_markup: inlineMenu(from.id) });
   if (text === BTN.quiz)
     return tgSafe("sendMessage", { chat_id: msg.chat.id, text: "Шесть коротких вопросов — и мы предложим три чая под ваш вкус, себе или в подарок.", reply_markup: openButton("🍵 Начать подбор", "#quiz") });
   if (text === BTN.shop)
@@ -293,8 +308,8 @@ async function onMessage(msg) {
     }
     return tgSafe("sendMessage", {
       chat_id: msg.chat.id,
-      text: "Меню продавца внизу 👇 Чтобы ответить покупателю, нажмите «Ответить» на его сообщение.",
-      reply_markup: menuKeyboard(from.id),
+      text: "Что сделать? Нажмите кнопку 👇\n\nЧтобы ответить покупателю, нажмите «Ответить» на его сообщение.",
+      reply_markup: inlineMenu(from.id),
     });
   }
 
@@ -307,6 +322,14 @@ async function onCallback(q) {
   const chat = q.message?.chat.id;
   const answer = (text) => tgSafe("answerCallbackQuery", { callback_query_id: q.id, text });
 
+  // Кнопки меню под сообщением работают так же, как кнопки внизу чата
+  if (data.startsWith("m:")) {
+    await answer();
+    const key = data.slice(2);
+    const customerKeys = ["quiz", "shop", "orders", "delivery", "about"];
+    if (!BTN[key] || (!customerKeys.includes(key) && !isAdmin(q.from.id))) return;
+    return onMessage({ chat: { id: chat, type: "private" }, from: q.from, text: BTN[key] });
+  }
   if (data === "about") {
     await answer();
     return tgSafe("sendMessage", { chat_id: chat, text: ABOUT, reply_markup: startKeyboard() });
@@ -452,7 +475,8 @@ export async function startBot() {
   await tgSafe("setChatMenuButton", { menu_button: { type: "web_app", text: "Магазин", web_app: { url: `${PUBLIC_URL}/` } } });
   await tgSafe("setMyCommands", {
     commands: [
-      { command: "start", description: "Главное меню" },
+      { command: "start", description: "Начать сначала" },
+      { command: "menu", description: "Показать кнопки меню" },
       { command: "help", description: "О магазине и как заказать" },
       { command: "delivery", description: "Доставка: службы, цены, сроки" },
       { command: "opt", description: "Я оптовик — обсудить опт лично" },

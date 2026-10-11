@@ -204,14 +204,18 @@ test("набор по 50 и 100 г тоже со скидкой 10%, смеша�
   assert.equal(r.body.order.total, full);
 });
 
-test("доставка: от порога бесплатно любой службой", async () => {
+test("доставка: фиксированная цена входит в итог, от порога бесплатно любой службой", async () => {
   const { deliveryCost, FREE_DELIVERY_FROM } = await import("../src/catalog.js");
   assert.equal(deliveryCost("yandex", FREE_DELIVERY_FROM).free, true);
-  assert.equal(deliveryCost("yandex", FREE_DELIVERY_FROM - 10).cost, 300);
   assert.equal(deliveryCost("cdek", FREE_DELIVERY_FROM).free, true);
+  assert.equal(deliveryCost("yandex", FREE_DELIVERY_FROM - 10).cost, 290);
   assert.equal(deliveryCost("post", FREE_DELIVERY_FROM - 10).cost, 450);
   assert.equal(deliveryCost("meet", 100).cost, 0);
-  const r = await call("/api/orders", { method: "POST", init: signInitData({ id: 801 }, TOKEN), body: JSON.stringify(withConsent({ items: [{ teaId: 13, pack: "50", qty: 1 }], name: "Д", phone: "89001234567", delivery: "ozon", address: "Москва, ул. Чайная, 1" })) });
+  const send = (id, items, delivery) => call("/api/orders", { method: "POST", init: signInitData({ id }, TOKEN), body: JSON.stringify(withConsent({ items, name: "Д", phone: "89001234567", delivery, address: "Москва, ул. Чайная, 1" })) });
+  let r = await send(801, [{ teaId: 13, pack: "50", qty: 1 }], "ozon");
   assert.equal(r.status, 201, JSON.stringify(r.body));
   assert.equal(r.body.order.delivery, "ozon");
+  assert.equal(r.body.order.total, 590 + 290);
+  r = await send(802, [{ teaId: 13, pack: "100", qty: 4 }], "cdek");
+  assert.equal(r.body.order.total, 990 * 4);
 });

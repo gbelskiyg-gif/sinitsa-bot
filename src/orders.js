@@ -82,6 +82,10 @@ export function buildOrder(body, user, { isFirstOrder = false } = {}) {
   if (!DELIVERY[delivery]) throw new OrderError("Выберите способ доставки.");
   const needAddress = !!DELIVERY[delivery].address;
   if (needAddress && address.length < 5) throw new OrderError("Укажите город и адрес пункта выдачи.");
+  // Доставка — отдельной строкой, входит в итог
+  const goods = Math.max(0, items.reduce((s, i) => s + i.sum, 0));
+  const dc = deliveryCost(delivery, goods);
+  if (dc.cost > 0) items.push({ teaId: 0, name: `Доставка: ${DELIVERY[delivery].label}`, pack: "", label: "", grams: 0, price: dc.cost, qty: 1, sum: dc.cost, set: "" });
   return {
     userId: user.id,
     name,
@@ -98,10 +102,11 @@ export function buildOrder(body, user, { isFirstOrder = false } = {}) {
 export function orderText(o, { forAdmin = false, username = "" } = {}) {
   const lines = [`<b>Заказ №${o.id}</b> · ${STATUS[o.status]}`, ""];
   for (const i of o.items)
-    lines.push(i.teaId ? `• ${esc(i.name)}, ${esc(i.label)} × ${i.qty} = ${rub(i.sum)}` : `• ${esc(i.name)}: −${rub(-i.sum)}`);
-  const d = deliveryCost(o.delivery, o.total);
+    lines.push(i.teaId ? `• ${esc(i.name)}, ${esc(i.label)} × ${i.qty} = ${rub(i.sum)}` : i.sum >= 0 ? `• ${esc(i.name)}: ${rub(i.sum)}` : `• ${esc(i.name)}: −${rub(-i.sum)}`);
   lines.push("", `<b>Итого: ${rub(o.total)}</b>`);
-  lines.push(d ? `🚚 ${DELIVERY[o.delivery].label}: ${d.free ? "доставка бесплатно" : d.text}` : "🚚 доставка по договорённости");
+  const dl = DELIVERY[o.delivery];
+  const paid = o.items.some((i) => !i.teaId && i.sum > 0);
+  lines.push(dl ? `🚚 ${dl.label}${dl.price && !paid ? " — бесплатно" : ""}` : "🚚 доставка по договорённости");
   if (forAdmin) {
     lines.push("", `👤 ${esc(o.name)}${username ? ` (@${esc(username)})` : ""}`, `📞 ${esc(o.phone)}`);
     if (o.address) lines.push(`📍 ${esc(o.address)}`);

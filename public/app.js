@@ -491,7 +491,7 @@ function renderCart() {
       <p class="error" id="promo-err"></p></div>` : ""}
     <div class="total"><span>Итого</span><span>${rub(total)}</span></div>
     ${S.freeFrom ? `<p class="free-left">${total >= S.freeFrom ? "🎁 Доставка бесплатная — любой службой" : `🚚 До бесплатной доставки осталось ${rub(S.freeFrom - total)}`}</p>` : ""}
-    <p class="note">Сумма без доставки. Чай собираем под заказ: продавец подтвердит наличие, доставку и сроки в чате с ботом. Оплата после подтверждения.</p>
+    <p class="note">Доставку выберете на следующем шаге: ПВЗ Яндекса и Ozon — 290 ₽, СДЭК и Почта — 450 ₽. Чай собираем под заказ, продавец подтвердит наличие и сроки в чате. Оплата после подтверждения.</p>
     ${S.deliveryInfo ? `<details class="dl-info"><summary>Доставка: службы, цены, сроки</summary><p>${esc(S.deliveryInfo.replace(/^🚚 Доставка\n\n/, "")).replace(/\n/g, "<br>")}</p></details>` : ""}
     ${off.length ? `<p class="error">Уберите чаи, которых нет в наличии, чтобы оформить заказ.</p>` : ""}
     <button class="btn wide" id="go" ${off.length ? "disabled" : ""}>Оформить заказ</button>`;
@@ -518,9 +518,9 @@ function renderCart() {
 // Доставка: то же правило, что на сервере (src/catalog.js → deliveryCost)
 function deliveryCost(k, total) {
   const d = S.delivery[k]; if (!d) return null;
-  if (!d.price) return { cost: 0, free: false, text: "" };
-  if (S.freeFrom && total >= S.freeFrom && d.free === "full") return { cost: 0, free: true, text: "бесплатно" };
-  return { cost: d.price, free: false, text: `≈${rub(d.price)}, точную сумму подтвердит продавец` };
+  if (!d.price) return { cost: 0, free: false };
+  if (S.freeFrom && total >= S.freeFrom) return { cost: 0, free: true };
+  return { cost: d.price, free: false };
 }
 function loadForm() { try { return JSON.parse(localStorage.getItem("form") || "{}"); } catch { return {}; } }
 function renderCheckout(total) {
@@ -535,12 +535,14 @@ function renderCheckout(total) {
       <label>Телефон<input id="f-phone" name="phone" type="tel" required maxlength="30" placeholder="+7 900 000-00-00" value="${esc(f.phone || "")}"></label>
       <fieldset class="dl"><legend>Доставка</legend>${Object.entries(S.delivery).map(([k, d]) => {
         const c = deliveryCost(k, total);
-        return `<label class="dl-opt"><input type="radio" name="delivery" value="${k}" ${k === dSel ? "checked" : ""}><span><b>${esc(d.label)}</b><small>${esc(d.note)}</small></span><span class="dl-price${c.free ? " free" : ""}">${c.free ? "бесплатно" : c.cost ? `≈${rub(c.cost)}` : "—"}</span></label>`;
+        return `<label class="dl-opt"><input type="radio" name="delivery" value="${k}" ${k === dSel ? "checked" : ""}><span><b>${esc(d.label)}</b><small>${esc(d.note)}</small></span><span class="dl-price${c.free || !c.cost ? " free" : ""}">${c.free || !c.cost ? "бесплатно" : rub(c.cost)}</span></label>`;
       }).join("")}</fieldset>
       <label id="addr-wrap"><span id="addr-label">Город и адрес</span><input id="f-address" name="address" maxlength="300" value="${esc(f.address || "")}"></label>
       <label>Комментарий (необязательно)<textarea id="f-comment" name="comment" rows="3" maxlength="500"></textarea></label>
       <label class="consent"><input type="checkbox" id="f-consent" name="consent"> <span>Даю <a href="/consent" data-doc>согласие на обработку персональных данных</a> и принимаю <a href="/privacy" data-doc>политику конфиденциальности</a></span></label>
-      <div class="total"><span>Итого за чай</span><span>${rub(total)}</span></div>
+      <div class="line" style="border:0;padding:4px 0"><div class="muted">Чай</div><div class="sum">${rub(total)}</div></div>
+      <div class="line" style="border:0;padding:4px 0"><div class="muted">Доставка</div><div class="sum" id="dl-sum"></div></div>
+      <div class="total"><span>Итого</span><span id="grand"></span></div>
       <p class="muted small" id="dl-note" style="margin:0 0 10px"></p>
       <p class="error" id="err"></p>
       <button class="btn wide" id="send" ${inTelegram() ? "" : "disabled"}>Отправить заказ</button>
@@ -552,7 +554,9 @@ function renderCheckout(total) {
     $("#addr-wrap").hidden = !d || !d.address;
     if (d?.address) $("#addr-label").textContent = d.address;
     const c = d && deliveryCost(k, total);
-    $("#dl-note").textContent = !c ? "" : c.free ? `Доставка бесплатно — заказ от ${rub(S.freeFrom)}.` : !c.cost ? "Место и время встречи согласуем в чате." : `Доставка ${c.text}. Оплатите её вместе с заказом после подтверждения.`;
+    $("#dl-sum").textContent = !c ? "—" : c.cost ? rub(c.cost) : "бесплатно";
+    $("#grand").textContent = rub(total + (c?.cost || 0));
+    $("#dl-note").textContent = !c ? "Выберите способ доставки." : c.free ? `Доставка бесплатная — заказ от ${rub(S.freeFrom)}.` : !c.cost ? "Место и время встречи согласуем в чате." : S.freeFrom ? `До бесплатной доставки не хватает ${rub(S.freeFrom - total)}.` : "";
   };
   $("#f").addEventListener("change", sync); sync();
   $("#back").onclick = () => { S.checkout = false; renderCart(); };
@@ -588,7 +592,7 @@ async function renderOrders() {
     }
     $("#view").innerHTML = `<h2 class="section-title">Мои заказы</h2>` + orders.map((o) => `
       <div class="line" style="display:block"><div style="display:flex;justify-content:space-between;gap:12px"><h3>Заказ №${o.id}</h3><span class="status ${o.status}">${esc(o.statusLabel)}</span></div>
-      <div class="muted small">${o.items.map((i) => i.teaId ? `${esc(i.name)}, ${esc(i.label)} × ${i.qty}` : `${esc(i.name)}: −${rub(-i.sum)}`).join("<br>")}</div>
+      <div class="muted small">${o.items.map((i) => i.teaId ? `${esc(i.name)}, ${esc(i.label)} × ${i.qty}` : (i.sum >= 0 ? `${esc(i.name)}: ${rub(i.sum)}` : `${esc(i.name)}: −${rub(-i.sum)}`)).join("<br>")}</div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px"><b class="sum" style="color:var(--gold)">${rub(o.total)}</b>
       <span style="display:flex;gap:16px">${o.canCancel ? `<button class="link" data-cancel="${o.id}">Отменить</button>` : ""}
       <button class="link" data-repeat="${o.id}">Повторить</button></span></div></div>`).join("");

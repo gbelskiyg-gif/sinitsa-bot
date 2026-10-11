@@ -174,7 +174,7 @@ function openTea(id) {
       <div class="row-actions"><div class="qty"><button data-q="-1" aria-label="Меньше">−</button><b>${qty}</b><button data-q="1" aria-label="Больше">+</button></div>
       <button class="btn" id="add">В корзину</button></div>` : `<p class="error">Сейчас нет в наличии. Напишите нам в бот, сообщим о поступлении.</p>`}
       <div class="block"><h4>Эффект и особенности</h4><p style="margin:0"><b>${esc(t.effect.state)}.</b> ${esc(t.effect.text)}</p>
-        <p class="small muted" style="margin:8px 0 0">Ощущения зависят от заваривания и от человека. Чай содержит кофеин.</p></div>
+        <p class="small muted" style="margin:8px 0 0">Ощущения зависят от заваривания и от человека.</p></div>
       <div class="block"><h4>Как заваривать</h4>
         ${r ? `<div class="recipe"><div><span>Проливами</span>${esc(r[0])} на ${esc(r[1])}</div><div><span>Вода</span>${esc(r[2])}</div><div><span>Первый пролив</span>${esc(r[3])}</div><div><span>В кружке</span>${esc(S.mugRecipes[t.kind])}</div></div>` : ""}
       </div>`;
@@ -231,7 +231,7 @@ const QUESTIONS = [
 const LIKE_TO_TASTE = { honey: ["honey", "bread"], fruit: ["fruity"], flowers: ["floral"], nuts: ["nutty"], fresh: ["herbal"], forest: ["woody"], spice: ["spicy"], any: [] };
 const DRINK_LIKE = {
   coffee: "Близок к кофе: плотный, с нотами обжарки.",
-  black: "Близок к привычному чёрному чаю, только мягче и глубже.",
+  black: "Понятный вкус, если привыкли к чёрному чаю.",
   green: "Близок к зелёному чаю: свежий и лёгкий.",
   herbal: "Мягкий и сладкий, как травяной сбор, без горечи.",
 };
@@ -352,19 +352,21 @@ function pickThree(a) {
   return picks;
 }
 
-function whyText(x, a) {
+// Почему этот чай: только то, что помогает выбрать. Без повторов и без лишних оговорок.
+function whyText(x, a, role) {
   const parts = [];
   const gift = isGift(a);
   if (x.matched.length) parts.push(`${gift ? "Есть то, что нравится получателю" : "Есть ноты, которые вы выбрали"}: ${x.matched.map((m) => S.tastes[m].toLowerCase()).join(", ")}.`);
   const fam = a.drink.find((d) => x.t.quiz.familiar.includes(d) && DRINK_LIKE[d]);
   if (fam) parts.push(DRINK_LIKE[fam]);
-  else if (!a.drink.includes("none")) parts.push(gift ? "Новый вкус в знакомых оттенках — хороший способ удивить." : (x.matched.length ? "По характеру дальше от выбранного напитка, зато в нём есть нужные ноты." : "Новый для вас вкус — попробуйте как открытие."));
+  else if (role === "Открытие" && !x.matched.length) parts.push(gift ? "Что-то новое — хороший способ удивить." : "Что-то новое — попробуйте как открытие.");
   const c = x.t.quiz.caffeine;
   const morning = a.time.includes("morning"), evening = a.time.includes("evening");
   if (morning && c === 3) parts.push(evening ? "Этот — для утра: хорошо бодрит." : "Хорошо бодрит утром.");
-  else if (evening && c === 3) parts.push("Вечером заваривайте коротко: так он бодрит мягче.");
-  else if (evening) parts.push(morning ? "Этот — для вечера: спокойный, но кофеин в нём есть." : "Подходит для спокойного вечера, но кофеин в нём есть.");
-  if (gift && x.t.quiz.mug) parts.push("Легко заварить даже в кружке.");
+  else if (evening && c === 3) parts.push("Вечером заваривайте коротко — так он мягче.");
+  else if (evening) parts.push(morning ? "Этот — для спокойного вечера." : "Подходит для спокойного вечера.");
+  if (a.time.includes("food") && ["shu", "dark_oolong", "puer"].includes(x.t.kind)) parts.push("Хорош после еды.");
+  if (!parts.length && gift && !x.t.quiz.bitter) parts.push("Мягкий, без горечи — беспроигрышный подарок.");
   return parts.join(" ");
 }
 
@@ -392,7 +394,7 @@ function renderResults() {
       const r = S.recipes[x.t.kind];
       return `<article class="result"><div class="role">${role}</div><h3>${esc(x.t.name)}</h3>
         <div class="type">${esc(S.kinds[x.t.kind].label)} · ${esc(x.t.effect.state.toLowerCase())}</div>
-        <p>${esc(x.t.notes)}</p><p>${esc(whyText(x, a))}</p>
+        <p>${esc(x.t.notes)}</p>${(() => { const w = whyText(x, a, role); return w ? `<p>${esc(w)}</p>` : ""; })()}
         <p class="mug">🫖 ${mug ? esc(S.mugRecipes[x.t.kind]) : `${esc(r[0])} на ${esc(r[1])}, ${esc(r[2])}, первый пролив ${esc(r[3])}`}</p>
         <div class="row-actions"><button class="btn ghost" data-tea="${x.t.id}">Подробнее · от ${rub(x.t.prices["20"])}</button></div></article>`;
     }).join("")}

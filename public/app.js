@@ -164,8 +164,10 @@ const QUESTIONS = [
     ["honey", "🍯", "Мёд и выпечка"], ["fruit", "🍑", "Фрукты и сухофрукты"], ["flowers", "🌸", "Цветы"], ["nuts", "🌰", "Орехи и карамель"],
     ["fresh", "🌿", "Свежая зелень"], ["forest", "🌲", "Лес и дерево"], ["spice", "🌶", "Пряности"], ["any", "🤷", "Не знаю, всё подряд"]],
     gift: { title: "Какие вкусы нравятся тому, кому дарите?", labels: { any: ["Не знаю"] } } },
-  { key: "dislikes", multi: true, exclusive: "none", title: "Что точно не нравится?", hint: "Такие чаи уберём из подбора совсем", options: [
+  { key: "dislikes", multi: true, exclusive: "none", title: "Что точно не нравится?", hint: "Можно выбрать несколько. Чаи, где это главное во вкусе, уберём, а где это лишь оттенок — опустим ниже", options: [
     ["bitter", "😖", "Горечь и терпкость"], ["earthy", "🍂", "«Земляной» вкус", "как у тёмного пуэра"], ["strong", "⚡", "Слишком бодрящее"],
+    ["flowers", "🌸", "Цветочный, «парфюмерный»"], ["honey", "🍯", "Сладкий, медовый"], ["fruit", "🍑", "Фруктовый, с кислинкой"],
+    ["fresh", "🌿", "Травянистый"], ["forest", "🌲", "Древесный"], ["spice", "🌶", "Пряный"],
     ["none", "👌", "Ничего, готов пробовать"]],
     gift: { title: "Что точно не понравится?", labels: { none: ["Не знаю"] } } },
   { key: "brew", title: "Как будете заваривать?", hint: "Некоторые чаи горчат, если долго стоят в кружке, — для кружки их не предложим", options: [
@@ -189,7 +191,7 @@ function renderQuiz() {
   if (step >= QUESTIONS.length) return renderResults();
   const q = QUESTIONS[step];
   const g = isGift(a) && q.gift ? q.gift : {};
-  const opts = q.options.map(([v, e, l, sub]) => (g.labels?.[v] ? [v, e, g.labels[v][0], g.labels[v][1]] : [v, e, l, sub]));
+  const opts = q.options.filter(([v]) => !(q.key === "dislikes" && a.likes.includes(v))).map(([v, e, l, sub]) => (g.labels?.[v] ? [v, e, g.labels[v][0], g.labels[v][1]] : [v, e, l, sub]));
   const sel = (v) => (q.multi ? a[q.key].includes(v) : a[q.key] === v);
   const ready = q.multi ? a[q.key].length > 0 : !!a[q.key];
   $("#view").innerHTML = `<div class="quiz-head"><div class="eyebrow">Подбор чая · вопрос ${step + 1} из ${QUESTIONS.length}</div>
@@ -204,7 +206,9 @@ function renderQuiz() {
       let arr = a[q.key];
       if (v === q.exclusive) arr = arr.includes(v) ? [] : [v];
       else arr = arr.includes(v) ? arr.filter((x) => x !== v) : [...arr.filter((x) => x !== q.exclusive), v];
-      a[q.key] = arr; renderQuiz();
+      a[q.key] = arr;
+      if (q.key === "likes") a.dislikes = a.dislikes.filter((d) => !arr.includes(d));
+      renderQuiz();
     } else { a[q.key] = v; S.quiz.step++; renderQuiz(); }
   };
   $("#back")?.addEventListener("click", () => { S.quiz.step--; renderQuiz(); });
@@ -241,10 +245,14 @@ function scoreTea(t, a) {
   if (!t.available) return null;
   if (a.dislikes.includes("bitter") && q.bitter >= 2) return null;
   if (a.dislikes.includes("earthy") && q.earthy) return null;
+  // Нелюбимые ноты: главная нота чая — убираем, второстепенная — штраф
+  const disliked = a.dislikes.flatMap((d) => LIKE_TO_TASTE[d] || []);
+  if (disliked.includes(t.tastes[0])) return null;
+  const minor = t.tastes.filter((x) => disliked.includes(x)).length;
   if (a.brew !== "gaiwan" && !q.mug) return null;
   const wanted = a.likes.flatMap((l) => LIKE_TO_TASTE[l]);
   const matched = [...new Set(t.tastes.filter((x) => wanted.includes(x)))];
-  let s = matched.length * 3 - (wanted.length && !matched.length ? 2 : 0);
+  let s = matched.length * 3 - (wanted.length && !matched.length ? 2 : 0) - minor * 3;
   if (a.drink.some((d) => q.familiar.includes(d))) s += 3;
   // Несколько вариантов времени: чай оцениваем по тому моменту, для которого он подходит лучше всего
   if (a.time.length) s += Math.max(...a.time.map((tm) => timeBonus(t, tm)));
@@ -269,7 +277,11 @@ function pickThree(a) {
   const group = (x) => S.kinds[x.t.kind].group;
   const bolder = scored.find((x) => !used.has(x.t.id) && group(x) !== group(safe)) || scored.find((x) => !used.has(x.t.id));
   if (bolder) used.add(bolder.t.id);
-  const discovery = scored.find((x) => !used.has(x.t.id) && !a.drink.some((d) => x.t.quiz.familiar.includes(d)) && x.matched.length) || scored.find((x) => !used.has(x.t.id));
+  // «Открытие» — другого вида, чем первые два, чтобы не было двух почти одинаковых чаёв
+  const kinds = new Set([safe, bolder].filter(Boolean).map((x) => x.t.kind));
+  const fresh = (x) => !used.has(x.t.id) && !kinds.has(x.t.kind);
+  const discovery = scored.find((x) => fresh(x) && !a.drink.some((d) => x.t.quiz.familiar.includes(d)) && x.matched.length)
+    || scored.find(fresh) || scored.find((x) => !used.has(x.t.id));
   const picks = [["Точно понравится", safe], ["Чуть смелее", bolder], ["Открытие", discovery]].filter(([, x]) => x);
   // Выбрали и утро, и вечер: в тройке должен быть и бодрый, и спокойный чай
   if (a.time.includes("morning") && a.time.includes("evening") && picks.length === 3) {

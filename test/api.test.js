@@ -22,10 +22,14 @@ const withConsent = (opts) => {
     const b = JSON.parse(opts.body);
     if (!("consent" in b)) b.consent = true;
     if (!("terms" in b)) b.terms = true;
+    // Личной встречи больше нет — в старых тестах заказ идёт в ПВЗ Яндекса
+    if (b.delivery === "pickup") { b.delivery = "yandex"; b.address ||= "Москва, ПВЗ"; }
     return { ...opts, body: JSON.stringify(b) };
   }
   return opts;
 };
+// Доставка 290 ₽ до порога бесплатной доставки
+const withDl = (t) => t + (t < 3000 ? 290 : 0);
 const call = (p, opts = {}) =>
   fetch(base + p, { ...withConsent(opts), headers: { "content-type": "application/json", "x-telegram-init-data": opts.init ?? init } }).then(async (r) => ({ status: r.status, body: await r.json() }));
 
@@ -59,7 +63,7 @@ test("сумма считается по каталогу, а не по клие
   const r = await call("/api/orders", { method: "POST", body: JSON.stringify({ items, name: "Тест", phone: "+7 900 123-45-67", delivery: "pickup" }) });
   assert.equal(r.status, 201, JSON.stringify(r.body));
   const sum = 690 + 290 + 290;
-  assert.equal(r.body.order.total, sum - Math.round(sum * 0.1 / 10) * 10);
+  assert.equal(r.body.order.total, withDl(sum - Math.round(sum * 0.1 / 10) * 10));
 });
 
 test("ошибки формы понятные", async () => {
@@ -109,7 +113,7 @@ test("готовый набор из 5 чаёв по 20 г получает ск
   assert.equal(r.status, 201, JSON.stringify(r.body));
   const cat = (await call("/api/catalog", { init: "" })).body;
   const sum = ids.reduce((s, id) => s + cat.teas.find((t) => t.id === id).prices["20"], 0);
-  assert.equal(r.body.order.total, sum - Math.round(sum * 0.1 / 10) * 10);
+  assert.equal(r.body.order.total, withDl(sum - Math.round(sum * 0.1 / 10) * 10));
   assert.ok(cat.sets.length >= 4);
 });
 
@@ -122,7 +126,7 @@ test("промокод: работает на первый заказ, не ра
   assert.equal(r.status, 400);
   r = await call("/api/orders", { method: "POST", init: u, body: body("sinitsa10") });
   assert.equal(r.status, 201);
-  assert.equal(r.body.order.total, 590 * 2 - 120);
+  assert.equal(r.body.order.total, withDl(590 * 2 - 120));
   r = await call("/api/orders", { method: "POST", init: u, body: body("SINITSA10") });
   assert.equal(r.status, 400);
   assert.match(r.body.error, /первый заказ/);
@@ -206,12 +210,12 @@ test("набор по 50 и 100 г тоже со скидкой 10%, смеша�
     const r = await call("/api/orders", { method: "POST", init: signInitData({ id: 600 + Number(pack) }, TOKEN), body: JSON.stringify(withConsent({ items, name: "Н", phone: "89001234567", delivery: "pickup" })) });
     assert.equal(r.status, 201, JSON.stringify(r.body));
     const sum = ids.reduce((s, id) => s + cat.teas.find((t) => t.id === id).prices[pack], 0);
-    assert.equal(r.body.order.total, sum - Math.round(sum * 0.1 / 10) * 10);
+    assert.equal(r.body.order.total, withDl(sum - Math.round(sum * 0.1 / 10) * 10));
   }
   const mixed = [["13", "20"], ["14", "50"], ["16", "50"]].map(([id, pack]) => ({ teaId: Number(id), pack, qty: 1, set: "mix" }));
   const r = await call("/api/orders", { method: "POST", init: signInitData({ id: 699 }, TOKEN), body: JSON.stringify(withConsent({ items: mixed, name: "Н", phone: "89001234567", delivery: "pickup" })) });
   const full = cat.teas.find((t) => t.id === 13).prices["20"] + cat.teas.find((t) => t.id === 14).prices["50"] + cat.teas.find((t) => t.id === 16).prices["50"];
-  assert.equal(r.body.order.total, full);
+  assert.equal(r.body.order.total, withDl(full));
 });
 
 test("доставка: фиксированная цена входит в итог, от порога бесплатно любой службой", async () => {
@@ -220,7 +224,7 @@ test("доставка: фиксированная цена входит в ит
   assert.equal(deliveryCost("cdek", FREE_DELIVERY_FROM).free, true);
   assert.equal(deliveryCost("yandex", FREE_DELIVERY_FROM - 10).cost, 290);
   assert.equal(deliveryCost("post", FREE_DELIVERY_FROM - 10).cost, 450);
-  assert.equal(deliveryCost("meet", 100).cost, 0);
+  assert.equal(deliveryCost("meet", 100), null, "личной встречи больше нет");
   const send = (id, items, delivery) => call("/api/orders", { method: "POST", init: signInitData({ id }, TOKEN), body: JSON.stringify(withConsent({ items, name: "Д", phone: "89001234567", delivery, address: "Москва, ул. Чайная, 1" })) });
   let r = await send(801, [{ teaId: 13, pack: "50", qty: 1 }], "ozon");
   assert.equal(r.status, 201, JSON.stringify(r.body));
@@ -252,4 +256,16 @@ test("оплата переводом: реквизиты в заказе, «Я 
   store.setStatus(id, "paid");
   r = await call("/api/orders", { init: u });
   assert.equal(r.body.orders.find((x) => x.id === id).payment, null);
+});
+
+test("опт не кладётся в корзину, «Я оптовик» принимает запрос", async () => {
+  let r = await call("/api/orders", { method: "POST", body: JSON.stringify({ items: [{ teaId: 1, pack: "wholesale", qty: 1 }], name: "О", phone: "89001234567", delivery: "yandex", address: "Москва" }) });
+  assert.equal(r.status, 400);
+  r = await call("/api/wholesale", { method: "POST", init: signInitData({ id: 4040, first_name: "Оптовик" }, TOKEN), body: JSON.stringify({ teaId: 3 }) });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.ok, true);
+  r = await call("/api/wholesale", { method: "POST", init: signInitData({ id: 4040, first_name: "Оптовик" }, TOKEN), body: JSON.stringify({}) });
+  assert.equal(r.body.repeat, true, "повторный запрос в течение суток не дублируем");
+  const cat = (await call("/api/catalog", { init: "" })).body;
+  assert.ok(!("meet" in cat.delivery));
 });

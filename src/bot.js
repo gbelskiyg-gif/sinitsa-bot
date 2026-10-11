@@ -4,6 +4,7 @@ import * as store from "./db.js";
 import { adminKeyboard, canMove, claimPaid, getPayment, notifyCustomer, orderText, refreshAdminMessages, rejectPaid } from "./orders.js";
 import { esc, poll, tg, tgSafe } from "./telegram.js";
 import { BTN, MENU_VERSION, menuKeyboard } from "./menu.js";
+import { requestWholesale } from "./wholesale.js";
 
 // Раздел передаём через ?tab=, потому что после # Telegram дописывает свои параметры запуска
 const shopButton = (text, hash = "") => ({
@@ -22,7 +23,8 @@ const ABOUT =
   "🐦 «Синица» — небольшой чайный магазин из Москвы. Мы собрали коллекцию китайского и тайваньского чая: улуны, ГАБА, красные чаи и пуэры.\n\n" +
   "🍵 Каждый чай можно взять по 20 г — попробовать, прежде чем брать больше.\n\n" +
   "📦 Чай собираем под ваш заказ. Сначала мы проверяем наличие и пишем вам здесь, затем бот присылает сумму и реквизиты для оплаты. Отправляем после оплаты.\n\n" +
-  "💬 Есть вопрос? Просто напишите сюда — ответим лично.";
+  "💬 Есть вопрос? Просто напишите сюда — ответим лично.\n\n" +
+  "🧑‍💼 Покупаете оптом — для кофейни, магазина или подарков? Нажмите /opt или «Я оптовик» в приветствии, обсудим условия лично.";
 
 const ADMIN_HELP =
   "<b>Для продавца</b>\n" +
@@ -49,6 +51,7 @@ function startKeyboard() {
       [shopButton("🛍 Открыть магазин")],
       [shopButton("🍵 Подобрать чай", "#quiz")],
       [{ text: "🐦 О Синице", callback_data: "about" }, { text: "💬 Задать вопрос", callback_data: "ask" }],
+      [{ text: "🧑‍💼 Я оптовик", callback_data: "wholesale" }],
     ],
   };
 }
@@ -159,6 +162,7 @@ export function statsText(days) {
   lines.push(`Положили в корзину — ${n("cart_add")}`);
   lines.push(`Начали оформление — ${n("checkout_open")}${pct(n("checkout_open"), n("cart_add"))}`);
   lines.push(`Отправили заказ — ${n("order_sent")}${pct(n("order_sent"), n("cart_add"))}`);
+  if (n("wholesale")) lines.push(`Нажали «Я оптовик» — ${n("wholesale")}`);
   if (n("order_error")) lines.push(`Ошибка при оформлении — ${n("order_error")} (стоит посмотреть, что не так)`);
   const drop = store.quizDropoff(days);
   if (drop.length) {
@@ -252,6 +256,7 @@ async function onMessage(msg) {
   if (text === BTN.orders) return myOrders(msg);
   if (text === BTN.delivery || text.startsWith("/delivery")) return tgSafe("sendMessage", { chat_id: msg.chat.id, text: DELIVERY_INFO, reply_markup: menuKeyboard(from.id) });
   if (text === BTN.about) return tgSafe("sendMessage", { chat_id: msg.chat.id, text: ABOUT, reply_markup: menuKeyboard(from.id) });
+  if (text.startsWith("/opt")) return requestWholesale(from);
   if (text.startsWith("/id")) return tgSafe("sendMessage", { chat_id: msg.chat.id, text: `Ваш Telegram ID: ${from.id}` });
   if (text.startsWith("/help")) return tgSafe("sendMessage", { chat_id: msg.chat.id, text: ABOUT, reply_markup: startKeyboard() });
 
@@ -292,6 +297,10 @@ async function onCallback(q) {
   if (data === "about") {
     await answer();
     return tgSafe("sendMessage", { chat_id: chat, text: ABOUT, reply_markup: startKeyboard() });
+  }
+  if (data === "wholesale") {
+    const r = await requestWholesale(q.from);
+    return answer(r.repeat ? "Мы уже получили ваш запрос — скоро напишем" : "Спасибо! Напишем вам здесь");
   }
   if (data === "ask") {
     await answer();
@@ -433,6 +442,7 @@ export async function startBot() {
       { command: "start", description: "Главное меню" },
       { command: "help", description: "О магазине и как заказать" },
       { command: "delivery", description: "Доставка: службы, цены, сроки" },
+      { command: "opt", description: "Я оптовик — обсудить опт лично" },
     ],
   });
   setInterval(() => askFeedback().catch((e) => console.error("[feedback]", e)), 30 * 60 * 1000);

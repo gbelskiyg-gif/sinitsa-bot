@@ -18,6 +18,7 @@ import {
 import { tgSafe } from "./telegram.js";
 import { consentPage, privacyPage, termsPage } from "./legal.js";
 import { menuKeyboard } from "./menu.js";
+import { requestWholesale } from "./wholesale.js";
 
 const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "public");
 const TYPES = {
@@ -147,6 +148,12 @@ async function api(req, res, url) {
     if (!EVENTS.has(body.name)) return send(res, 400, { error: "event" });
     if (store.recentEventCount(user.id, 60) < 300) store.logEvent(user.id, body.name, body.data ?? "");
     return send(res, 204, {});
+  }
+
+  // «Я оптовик»: дальше общаемся лично в чате
+  if (req.method === "POST" && url.pathname === "/api/wholesale") {
+    const body = await readJson(req, 500);
+    return send(res, 200, await requestWholesale(user, Number(body.teaId) || 0));
   }
 
   if (req.method === "GET" && url.pathname === "/api/orders") {

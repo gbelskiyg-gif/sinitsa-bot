@@ -109,6 +109,9 @@ export function markMenu(id, v) {
 export function logEvent(userId, name, data = "") {
   db.prepare("INSERT INTO events (user_id, name, data) VALUES (?, ?, ?)").run(userId, name, String(data).slice(0, 200));
 }
+export function hasRecentEvent(userId, name, minutes) {
+  return !!db.prepare("SELECT 1 FROM events WHERE user_id = ? AND name = ? AND created_at > datetime('now', ?)").get(userId, name, `-${minutes} minutes`);
+}
 export function recentEventCount(userId, minutes) {
   return db.prepare("SELECT COUNT(*) AS n FROM events WHERE user_id = ? AND created_at > datetime('now', ?)").get(userId, `-${minutes} minutes`).n;
 }

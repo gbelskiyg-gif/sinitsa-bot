@@ -72,8 +72,7 @@ export function buildOrder(body, user, { isFirstOrder = false } = {}) {
   }
   const name = clean(body.name, 80);
   const phoneDigits = String(body.phone ?? "").replace(/\D/g, "");
-  // «pickup» — старое название личной встречи
-  const delivery = body.delivery === "pickup" ? "meet" : String(body.delivery || "");
+  const delivery = String(body.delivery || "");
   const address = clean(body.address, 300);
   const comment = clean(body.comment, 500);
   if (body.terms !== true) throw new OrderError("Отметьте, что согласны с условиями доставки и возврата.");
@@ -120,7 +119,7 @@ export function orderText(o, { forAdmin = false, username = "" } = {}) {
 // Какие кнопки доступны продавцу в каждом статусе
 const NEXT = {
   new: [["accepted", "✅ Принять"], ["cancelled", "✖️ Отменить"]],
-  // «Отправлен» сразу из «Принят» — для личной встречи с оплатой на месте
+  // «Отправлен» сразу из «Принят» — если оплату получили не через бота
   accepted: [["paid", "💰 Оплата получена"], ["shipped", "📦 Отправлен"], ["cancelled", "✖️ Отменить"]],
   paid: [["shipped", "📦 Отправлен"], ["cancelled", "✖️ Отменить"]],
   shipped: [["done", "🏁 Завершён"]],
@@ -208,8 +207,6 @@ export async function refreshAdminMessages(order, username) {
 
 export async function notifyCustomer(order) {
   if (order.status === "accepted") {
-    // Личная встреча — оплата на месте, реквизиты не нужны
-    if (order.delivery === "meet") return tgSafe("sendMessage", { chat_id: order.user_id, text: `Заказ №${order.id} принят 🍵\nК оплате при встрече: ${rub(order.total)}. Место и время согласуем здесь, в чате.`, reply_markup: menuKeyboard(order.user_id) });
     return tgSafe("sendMessage", { chat_id: order.user_id, text: paymentText(order), reply_markup: getPayment() ? payButton(order) : menuKeyboard(order.user_id) });
   }
   const t = CUSTOMER_STATUS[order.status];
@@ -228,7 +225,7 @@ export function publicOrder(o) {
     delivery: o.delivery,
     canCancel: o.status === "new",
     // Ждёт оплаты: показываем реквизиты в «Моих заказах»
-    payment: o.status === "accepted" && o.delivery !== "meet" ? getPayment() : null,
+    payment: o.status === "accepted" ? getPayment() : null,
     paidClaim: !!o.paid_claim_at,
   };
 }

@@ -61,17 +61,13 @@ test("продавец задаёт реквизиты в боте, покупа
   assert.ok(sent.some((m) => m.chat_id === 500 && /Оплату по заказу/.test(m.text || "")));
 });
 
-test("личная встреча: при принятии без реквизитов, оплата на месте", async () => {
-  const draft = buildOrder(
-    { items: [{ teaId: 13, pack: "50", qty: 1 }], name: "П", phone: "89001234567", delivery: "meet", consent: true, terms: true },
-    { id: 501 },
-    { isFirstOrder: false }
-  );
-  const order = store.createOrder(draft);
+test("«Я оптовик» в боте: продавцу уведомление, на которое можно ответить", async () => {
   sent.length = 0;
-  await _test.onCallback({ id: "q4", data: `ord:${order.id}:accepted`, from: { id: 1 }, message: { chat: { id: 1 }, message_id: 12 } });
-  const m = sent.find((x) => x.chat_id === 501);
-  assert.match(m.text, /при встрече/);
+  await _test.onCallback({ id: "w1", data: "wholesale", from: { id: 510, first_name: "Кофейня", username: "coffee" }, message: { chat: { id: 510 }, message_id: 3 } });
+  const toSeller = sent.find((m) => m.chat_id === 1 && /Запрос на опт/.test(m.text || ""));
+  assert.ok(toSeller, "продавцу пришло");
+  assert.match(toSeller.text, /@coffee/);
+  assert.ok(sent.some((m) => m.chat_id === 510 && /оптовыми покупателями/.test(m.text || "")));
 });
 
 test("аналитика: брошенная корзина видна в статистике, бот один раз напоминает", async () => {
@@ -105,7 +101,7 @@ test("аналитика: брошенная корзина видна в ста
 test("кто оформил заказ после корзины — не получает напоминание", async () => {
   store.logEvent(701, "cart_add", "Габа Дундин · 50 г");
   store.db.prepare("UPDATE events SET created_at = datetime('now','-5 hours') WHERE user_id = 701").run();
-  const draft = buildOrder({ items: [{ teaId: 6, pack: "50", qty: 1 }], name: "Б", phone: "89001234567", delivery: "meet", consent: true, terms: true }, { id: 701 }, { isFirstOrder: true });
+  const draft = buildOrder({ items: [{ teaId: 6, pack: "50", qty: 1 }], name: "Б", phone: "89001234567", delivery: "yandex", address: "Москва, ПВЗ", consent: true, terms: true }, { id: 701 }, { isFirstOrder: true });
   store.createOrder(draft);
   sent.length = 0;
   await _test.autoRemind({ anyHour: true });

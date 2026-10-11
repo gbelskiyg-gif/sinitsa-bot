@@ -43,7 +43,6 @@ function track(name, data = "") {
 // ---------- помощники каталога ----------
 const tea = (id) => S.teas.find((t) => t.id === Number(id));
 function packInfo(t, pack) {
-  if (pack === "wholesale") return { price: t.wholesale.price, label: `опт ${t.wholesale.grams} г` };
   return { price: t.prices[pack], label: `${pack} г` };
 }
 // Одно фото на вид чая: каждому чаю показываем свой фрагмент, чтобы карточки не повторялись
@@ -72,7 +71,8 @@ function renderCatalog() {
       <button class="chip" id="sort">${{ pop: "По умолчанию", asc: "Сначала дешевле", desc: "Сначала дороже" }[S.sort]} ⇅</button></div>
     ${!S.query && S.group === "all" && S.sets.length ? setsBanner() : ""}
     <p class="note">${list.length} из ${S.teas.length} · цены за 50 г · собираем под заказ</p>
-    <div class="grid">${list.length ? list.map(cardHTML).join("") : `<p class="muted">Ничего не нашли. Попробуйте другое слово.</p>`}</div>`;
+    <div class="grid">${list.length ? list.map(cardHTML).join("") : `<p class="muted">Ничего не нашли. Попробуйте другое слово.</p>`}</div>
+    <div class="opt-box"><span>🧑‍💼</span><span><b>Покупаете оптом?</b><small>Для кофейни, магазина или подарков — обсудим цены лично, в Москве можно встретиться и попробовать.</small></span><button class="btn ghost" data-opt="0">Я оптовик</button></div>`;
   $("#q").addEventListener("input", (e) => { S.query = e.target.value.trim().toLowerCase(); const pos = e.target.selectionStart; renderCatalog(); const q = $("#q"); q.focus(); q.setSelectionRange(pos, pos); });
   $("#groups").addEventListener("click", (e) => {
     const b = e.target.closest("button"); if (!b) return;
@@ -176,10 +176,11 @@ function openTea(id) {
       <h2>${esc(t.name)}</h2><p class="muted">${esc(t.notes)}</p>
       <div class="tags"><span class="tag">Насыщенность: ${esc(t.strengthLabel.toLowerCase())}</span>${t.tastes.map((x) => `<span class="tag">${esc(S.tastes[x])}</span>`).join("")}</div>
       ${t.available ? `
-      <div class="sizes" role="group" aria-label="Фасовка">${["20", "50", "100", "wholesale"].map((k) => `<button class="chip" data-p="${k}" aria-pressed="${k === pack}">${k === "wholesale" ? `Опт ${t.wholesale.grams} г` : `${k} г`}</button>`).join("")}</div>
-      <div class="big-price">${rub(p.price * qty)} <small>${esc(p.label)}${qty > 1 ? ` × ${qty}` : ""}${pack === "wholesale" ? ` · ${rub(t.wholesale.perKg)}/кг` : ""}</small></div>
+      <div class="sizes" role="group" aria-label="Фасовка">${["20", "50", "100"].map((k) => `<button class="chip" data-p="${k}" aria-pressed="${k === pack}">${k} г</button>`).join("")}</div>
+      <div class="big-price">${rub(p.price * qty)} <small>${esc(p.label)}${qty > 1 ? ` × ${qty}` : ""}</small></div>
       <div class="row-actions"><div class="qty"><button data-q="-1" aria-label="Меньше">−</button><b>${qty}</b><button data-q="1" aria-label="Больше">+</button></div>
-      <button class="btn" id="add">В корзину</button></div>` : `<p class="error">Сейчас нет в наличии. Напишите нам в бот, сообщим о поступлении.</p>`}
+      <button class="btn" id="add">В корзину</button></div>
+      <p class="muted small" style="margin:10px 0 0">Нужно больше, оптом? <button class="link opt-link" data-opt="${t.id}">Я оптовик</button></p>` : `<p class="error">Сейчас нет в наличии. Напишите нам в бот, сообщим о поступлении.</p>`}
       <div class="block"><h4>Эффект и особенности</h4><p style="margin:0"><b>${esc(t.effect.state)}.</b> ${esc(t.effect.text)}</p>
         <p class="small muted" style="margin:8px 0 0">Ощущения зависят от заваривания и от человека.</p></div>
       <div class="block"><h4>Как заваривать</h4>
@@ -202,7 +203,18 @@ function addToCart(teaId, pack, qty, set = "") {
   const ex = S.cart.find((i) => i.teaId === teaId && i.pack === pack && (i.set || "") === set);
   if (ex) ex.qty = Math.min(20, ex.qty + qty); else S.cart.push({ teaId, pack, qty, set });
   saveCart(); toast("Добавлено в корзину");
-  track("cart_add", `${tea(teaId)?.name || teaId} · ${pack === "wholesale" ? "опт" : pack + " г"}`);
+  track("cart_add", `${tea(teaId)?.name || teaId} · ${pack} г`);
+}
+
+// «Я оптовик»: опт не через корзину — сообщаем нам, дальше общаемся лично в чате
+async function wholesale(teaId, btn) {
+  if (!inTelegram()) { location.href = BOT_LINK; return; }
+  btn.disabled = true;
+  try {
+    const r = await api("/api/wholesale", { method: "POST", body: JSON.stringify({ teaId }) });
+    toast(r.repeat ? "Запрос уже у нас — скоро напишем" : "Спасибо! Напишем вам в чате с ботом");
+    btn.textContent = "Запрос отправлен ✓";
+  } catch (err) { toast(err.message); btn.disabled = false; }
 }
 
 // ---------- подбор ----------
@@ -518,7 +530,7 @@ function cartBlocks(lines) {
 }
 
 function renderCart() {
-  S.cart = S.cart.filter((i) => tea(i.teaId));
+  S.cart = S.cart.filter((i) => tea(i.teaId) && ["20", "50", "100"].includes(i.pack));
   const { lines, discount, promoOff, total } = cartLines();
   if (!lines.length && !S.undo && S.cart.length) { S.cart = []; saveCart(); }
   if (!lines.length) {
@@ -750,6 +762,8 @@ function route() {
 document.addEventListener("click", (e) => {
   const doc = e.target.closest("a[data-doc]");
   if (doc && tgApp?.openLink) { e.preventDefault(); tgApp.openLink(location.origin + doc.getAttribute("href")); return; }
+  const op = e.target.closest("[data-opt]");
+  if (op) return wholesale(Number(op.dataset.opt), op);
   const c = e.target.closest("[data-tea]");
   if (c) return openTea(c.dataset.tea);
   const st = e.target.closest("[data-set]");

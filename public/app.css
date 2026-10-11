@@ -208,3 +208,11 @@ form label.consent a { color: var(--gold); }
 #err:not(:empty) { color: #ff5c5c; font-weight: 600; background: #ff5c5c1a; border-left: 3px solid #ff5c5c; border-radius: 8px; padding: 10px 12px; }
 form label.consent.need { color: #ff5c5c; }
 form label.consent.need input { outline: 2px solid #ff5c5c; outline-offset: 2px; border-radius: 4px; }
+
+.opt-box { display: flex; align-items: center; gap: 12px; margin: 20px 0 8px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+.opt-box > span:first-child { font-size: 26px; }
+.opt-box b { display: block; font-weight: 600; }
+.opt-box small { display: block; color: var(--muted); font-size: 12px; }
+.opt-box .btn { white-space: nowrap; padding: 10px 14px; }
+@media (max-width: 420px) { .opt-box { flex-wrap: wrap; } .opt-box .btn { width: 100%; } }
+.opt-link { padding: 0; font: inherit; }

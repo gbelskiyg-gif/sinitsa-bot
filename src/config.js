@@ -32,5 +32,6 @@ export const LEGAL = {
   name: process.env.OPERATOR_NAME || "",
   inn: process.env.OPERATOR_INN || "",
   email: process.env.OPERATOR_EMAIL || "",
+  address: process.env.OPERATOR_ADDRESS || "",
   date: process.env.LEGAL_DATE || "11.10.2026",
 };

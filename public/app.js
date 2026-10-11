@@ -645,8 +645,14 @@ function renderCheckout(total) {
     const data = Object.fromEntries(new FormData(e.target));
     data.consent = $("#f-consent").checked;
     data.terms = $("#f-terms").checked;
-    if (!data.terms) { $("#err").textContent = "Отметьте, что согласны с условиями доставки и возврата."; return; }
-    if (!data.consent) { $("#err").textContent = "Отметьте согласие на обработку персональных данных."; return; }
+    // Неотмеченную галочку подсвечиваем красным и показываем, чтобы не потерялась
+    const need = (id, text) => {
+      const l = $(id).closest("label"); l.classList.add("need");
+      $("#err").textContent = text; l.scrollIntoView({ behavior: "smooth", block: "center" });
+      $(id).addEventListener("change", () => { l.classList.remove("need"); $("#err").textContent = ""; }, { once: true });
+    };
+    if (!data.terms) return need("#f-terms", "Отметьте, что согласны с условиями доставки и возврата.");
+    if (!data.consent) return need("#f-consent", "Отметьте согласие на обработку персональных данных.");
     try { localStorage.setItem("form", JSON.stringify({ name: data.name, phone: data.phone, delivery: data.delivery, address: data.address })); } catch {}
     $("#send").disabled = true; $("#err").textContent = "";
     try {

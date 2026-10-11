@@ -203,3 +203,8 @@ form label.consent a { color: var(--gold); }
 
 .cart-set .set-items li.off s { color: var(--muted); text-decoration-color: #e0605a; text-decoration-thickness: 1.5px; }
 .cart-set .set-items li.off .back { color: var(--gold); }
+
+/* Ошибки формы заказа — ярко, чтобы не терялись на тёмном фоне */
+#err:not(:empty) { color: #ff5c5c; font-weight: 600; background: #ff5c5c1a; border-left: 3px solid #ff5c5c; border-radius: 8px; padding: 10px 12px; }
+form label.consent.need { color: #ff5c5c; }
+form label.consent.need input { outline: 2px solid #ff5c5c; outline-offset: 2px; border-radius: 4px; }

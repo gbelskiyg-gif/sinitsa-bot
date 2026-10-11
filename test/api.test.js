@@ -21,6 +21,7 @@ const withConsent = (opts) => {
   if (opts.method === "POST" && opts.body) {
     const b = JSON.parse(opts.body);
     if (!("consent" in b)) b.consent = true;
+    if (!("terms" in b)) b.terms = true;
     return { ...opts, body: JSON.stringify(b) };
   }
   return opts;
@@ -155,9 +156,18 @@ test("страницы политики и согласия открываютс
     assert.equal(r.status, 200);
     assert.match(await r.text(), /персональных данных/);
   }
+  const t = await (await fetch(base + "/terms")).text();
+  assert.match(t, /Вскрытую упаковку вернуть нельзя/);
+  assert.match(t, /290 ₽/);
 });
 
-test("через год персональные данные из завершённых заказов удаляются", async () => {
+test("без согласия с условиями возврата заказ не принимается", async () => {
+  const r = await call("/api/orders", { method: "POST", body: JSON.stringify({ items: [{ teaId: 1, pack: "50", qty: 1 }], name: "А", phone: "89001234567", delivery: "meet", terms: false }) });
+  assert.equal(r.status, 400);
+  assert.match(r.body.error, /условиями доставки и возврата/);
+});
+
+test("через 30 дней персональные данные из завершённых заказов удаляются", async () => {
   const id = store.userOrders(42)[0].id;
   store.setStatus(id, "done");
   store.db.prepare("UPDATE orders SET updated_at = datetime('now','-400 days') WHERE id = ?").run(id);

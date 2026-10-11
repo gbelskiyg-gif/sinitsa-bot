@@ -76,6 +76,7 @@ export function buildOrder(body, user, { isFirstOrder = false } = {}) {
   const delivery = body.delivery === "pickup" ? "meet" : String(body.delivery || "");
   const address = clean(body.address, 300);
   const comment = clean(body.comment, 500);
+  if (body.terms !== true) throw new OrderError("Отметьте, что согласны с условиями доставки и возврата.");
   if (body.consent !== true) throw new OrderError("Отметьте согласие на обработку персональных данных.");
   if (!name) throw new OrderError("Укажите имя.");
   if (phoneDigits.length < 10 || phoneDigits.length > 15) throw new OrderError("Проверьте телефон: нужно от 10 до 15 цифр.");

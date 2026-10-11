@@ -15,7 +15,7 @@ import {
   refreshAdminMessages,
 } from "./orders.js";
 import { tgSafe } from "./telegram.js";
-import { consentPage, privacyPage } from "./legal.js";
+import { consentPage, privacyPage, termsPage } from "./legal.js";
 import { menuKeyboard } from "./menu.js";
 
 const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "public");
@@ -183,6 +183,7 @@ export function startServer(port) {
       if (url.pathname.startsWith("/api/")) return await api(req, res, url);
       if (url.pathname === "/privacy") return html(res, privacyPage());
       if (url.pathname === "/consent") return html(res, consentPage());
+      if (url.pathname === "/terms") return html(res, termsPage());
       if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, { error: "method" });
       return serveStatic(req, res);
     } catch (e) {

@@ -492,7 +492,7 @@ function renderCart() {
     <div class="total"><span>Итого</span><span>${rub(total)}</span></div>
     ${S.freeFrom ? `<p class="free-left">${total >= S.freeFrom ? "🎁 Доставка бесплатная — любой службой" : `🚚 До бесплатной доставки осталось ${rub(S.freeFrom - total)}`}</p>` : ""}
     <p class="note">Доставку выберете на следующем шаге: ПВЗ Яндекса и Ozon — 290 ₽, СДЭК и Почта — 450 ₽. Чай собираем под заказ, продавец подтвердит наличие и сроки в чате. Оплата после подтверждения.</p>
-    ${S.deliveryInfo ? `<details class="dl-info"><summary>Доставка: службы, цены, сроки</summary><p>${esc(S.deliveryInfo.replace(/^🚚 Доставка\n\n/, "")).replace(/\n/g, "<br>")}</p></details>` : ""}
+    ${S.deliveryInfo ? `<details class="dl-info"><summary>Доставка и возврат</summary><p>${esc(S.deliveryInfo.replace(/^🚚 Доставка\n\n/, "")).replace(/\n/g, "<br>")}</p></details>` : ""}
     ${off.length ? `<p class="error">Уберите чаи, которых нет в наличии, чтобы оформить заказ.</p>` : ""}
     <button class="btn wide" id="go" ${off.length ? "disabled" : ""}>Оформить заказ</button>`;
   $("#view").onclick = (e) => {
@@ -539,6 +539,8 @@ function renderCheckout(total) {
       }).join("")}</fieldset>
       <label id="addr-wrap"><span id="addr-label">Город и адрес</span><input id="f-address" name="address" maxlength="300" value="${esc(f.address || "")}"></label>
       <label>Комментарий (необязательно)<textarea id="f-comment" name="comment" rows="3" maxlength="500"></textarea></label>
+      <p class="muted small" style="margin:4px 0 0">Вскрытую упаковку вернуть нельзя — поэтому каждый чай можно сначала взять по 20 г.</p>
+      <label class="consent"><input type="checkbox" id="f-terms" name="terms"> <span>Согласен с <a href="/terms" data-doc>условиями доставки и возврата</a></span></label>
       <label class="consent"><input type="checkbox" id="f-consent" name="consent"> <span>Даю <a href="/consent" data-doc>согласие на обработку персональных данных</a> и принимаю <a href="/privacy" data-doc>политику конфиденциальности</a></span></label>
       <div class="line" style="border:0;padding:4px 0"><div class="muted">Чай</div><div class="sum">${rub(total)}</div></div>
       <div class="line" style="border:0;padding:4px 0"><div class="muted">Доставка</div><div class="sum" id="dl-sum"></div></div>
@@ -564,6 +566,8 @@ function renderCheckout(total) {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(e.target));
     data.consent = $("#f-consent").checked;
+    data.terms = $("#f-terms").checked;
+    if (!data.terms) { $("#err").textContent = "Отметьте, что согласны с условиями доставки и возврата."; return; }
     if (!data.consent) { $("#err").textContent = "Отметьте согласие на обработку персональных данных."; return; }
     try { localStorage.setItem("form", JSON.stringify({ name: data.name, phone: data.phone, delivery: data.delivery, address: data.address })); } catch {}
     $("#send").disabled = true; $("#err").textContent = "";

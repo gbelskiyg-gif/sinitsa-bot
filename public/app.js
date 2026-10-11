@@ -273,8 +273,9 @@ function scoreTea(t, a) {
   return { t, s, matched };
 }
 
+const scoredTeas = (a) => S.teas.map((t) => scoreTea(t, a)).filter(Boolean).sort((x, y) => y.s - x.s || x.t.prices["50"] - y.t.prices["50"]);
 function pickThree(a) {
-  const scored = S.teas.map((t) => scoreTea(t, a)).filter(Boolean).sort((x, y) => y.s - x.s || x.t.prices["50"] - y.t.prices["50"]);
+  const scored = scoredTeas(a);
   if (!scored.length) return [];
   const safe = scored[0];
   const used = new Set([safe.t.id]);
@@ -341,6 +342,7 @@ function renderResults() {
       <p class="muted small">${isGift(a) ? "Три разных вкуса — пусть выберет свой. Скидка 10% на набор. Если нужна подарочная упаковка или открытка, напишите в комментарии к заказу." : "Попробуйте и поймите, какой ваш. Скидка 10% на набор."}</p>
       <div class="big-price">${rub(sum - disc)} <small><s>${rub(sum)}</s></small></div>
       <button class="btn wide" id="trial" style="margin-top:12px">Положить набор в корзину</button></div>` : ""}
+    ${moreHTML(a, picks)}
     <div class="quiz-end"><button class="btn ghost wide" id="home">В главное меню</button>
     <button class="link" id="again">Пройти подбор заново</button></div>`;
   $("#trial")?.addEventListener("click", () => {
@@ -350,7 +352,29 @@ function renderResults() {
   });
   $("#again").onclick = () => { newQuiz(); renderQuiz(); };
   $("#home").onclick = quitQuiz;
+  $("#more-btn")?.addEventListener("click", (e) => { e.currentTarget.hidden = true; $("#more").hidden = false; });
+  $("#ask")?.addEventListener("click", askSeller);
   window.scrollTo(0, 0);
+}
+
+// Ещё 5 подходящих чаёв — спрятаны за кнопкой, чтобы не перегружать выбор
+function moreHTML(a, picks) {
+  const ids = new Set(picks.map(([, x]) => x.t.id));
+  const more = scoredTeas(a).filter((x) => !ids.has(x.t.id)).slice(0, 5);
+  const ask = `<p class="muted small more-ask">Не нашли своё? <button class="link" id="ask">Напишите нам — подберём вручную</button></p>`;
+  if (!more.length) return ask;
+  return `<button class="btn ghost wide" id="more-btn">Показать ещё похожие на ваш вкус</button>
+    <div id="more" hidden><div class="eyebrow" style="margin:18px 0 8px">Ещё подходят</div>
+    ${more.map((x) => `<button class="more-row" data-tea="${x.t.id}"><span><b>${esc(x.t.name)}</b>
+      <small>${esc(S.kinds[x.t.kind].label)}${x.matched.length ? ` · ${esc(x.matched.map((m) => S.tastes[m].toLowerCase()).join(", "))}` : ""} · ${esc(x.t.effect.state.toLowerCase())}</small></span>
+      <span class="more-price">от ${rub(x.t.prices["20"])}</span></button>`).join("")}
+    ${ask}</div>`;
+}
+
+// Вопрос продавцу: в Telegram — закрыть приложение и вернуться в чат с ботом
+function askSeller() {
+  if (tgApp?.close && inTelegram()) { toast("Напишите в чат с ботом, что ищете — продавец ответит"); setTimeout(() => tgApp.close(), 1200); }
+  else location.href = BOT_LINK;
 }
 
 // ---------- корзина и оформление ----------

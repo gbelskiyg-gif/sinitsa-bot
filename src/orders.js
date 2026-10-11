@@ -111,6 +111,7 @@ export function orderText(o, { forAdmin = false, username = "" } = {}) {
   if (forAdmin) {
     lines.push("", `👤 ${esc(o.name)}${username ? ` (@${esc(username)})` : ""}`, `📞 ${esc(o.phone)}`);
     if (o.address) lines.push(`📍 ${esc(o.address)}`);
+    if (o.status === "accepted" && o.paid_claim_at) lines.push("💳 Покупатель сообщил, что оплатил — проверьте банк");
     if (o.comment) lines.push(`💬 ${esc(o.comment)}`);
   }
   return lines.join("\n");
@@ -119,7 +120,9 @@ export function orderText(o, { forAdmin = false, username = "" } = {}) {
 // Какие кнопки доступны продавцу в каждом статусе
 const NEXT = {
   new: [["accepted", "✅ Принять"], ["cancelled", "✖️ Отменить"]],
-  accepted: [["shipped", "📦 Отправлен"], ["cancelled", "✖️ Отменить"]],
+  // «Отправлен» сразу из «Принят» — для личной встречи с оплатой на месте
+  accepted: [["paid", "💰 Оплата получена"], ["shipped", "📦 Отправлен"], ["cancelled", "✖️ Отменить"]],
+  paid: [["shipped", "📦 Отправлен"], ["cancelled", "✖️ Отменить"]],
   shipped: [["done", "🏁 Завершён"]],
   done: [],
   cancelled: [],
@@ -127,12 +130,51 @@ const NEXT = {
 export const canMove = (from, to) => NEXT[from]?.some(([s]) => s === to);
 
 export function adminKeyboard(o) {
-  const row = NEXT[o.status].map(([s, label]) => ({ text: label, callback_data: `ord:${o.id}:${s}` }));
-  return row.length ? { inline_keyboard: [row] } : { inline_keyboard: [] };
+  const btns = NEXT[o.status].map(([s, label]) => ({ text: label, callback_data: `ord:${o.id}:${s}` }));
+  // По две кнопки в ряд, чтобы подписи не обрезались
+  const rows = [];
+  for (let i = 0; i < btns.length; i += 2) rows.push(btns.slice(i, i + 2));
+  return { inline_keyboard: rows };
+}
+
+// ---------- оплата переводом ----------
+/** Реквизиты: { phone, bank, name } — продавец задаёт их в боте кнопкой «💳 Реквизиты». */
+export const getPayment = () => store.getSetting("payment", null);
+export function paymentText(o) {
+  const p = getPayment();
+  const head = `Заказ №${o.id} принят 🍵\nК оплате: ${rub(o.total)}`;
+  if (!p) return `${head}\n\nРеквизиты для оплаты продавец пришлёт в этом чате.`;
+  return `${head}\n\nПереведите по СБП (по номеру телефона):\n📱 ${p.phone}\n🏦 ${p.bank}\n👤 ${p.name}\n\nВ комментарии к переводу укажите «Заказ ${o.id}». После перевода нажмите кнопку ниже — продавец проверит и подтвердит.`;
+}
+const payButton = (o) => ({ inline_keyboard: [[{ text: "✅ Я оплатил", callback_data: `paid:${o.id}` }]] });
+
+/** Покупатель сообщил об оплате: отмечаем и зовём продавца проверить. */
+export async function claimPaid(order, username = "") {
+  if (order.status !== "accepted") return { ok: false, error: order.status === "paid" ? "Оплата уже подтверждена." : "Этот заказ сейчас не ждёт оплаты." };
+  if (order.paid_claim_at) return { ok: true, order };
+  const updated = store.setPaidClaim(order.id, true);
+  await refreshAdminMessages(updated, username);
+  for (const chat of notifyChats())
+    await tgSafe("sendMessage", {
+      chat_id: chat,
+      text: `💳 Покупатель сообщил об оплате заказа №${order.id} на ${rub(order.total)}. Проверьте поступление в банке.`,
+      reply_markup: { inline_keyboard: [[{ text: "💰 Оплата получена", callback_data: `ord:${order.id}:paid` }, { text: "❌ Не вижу оплату", callback_data: `payno:${order.id}` }]] },
+    });
+  return { ok: true, order: updated };
+}
+/** Продавец не нашёл перевод: сбрасываем отметку и снова даём покупателю кнопку. */
+export async function rejectPaid(order) {
+  const updated = store.setPaidClaim(order.id, false);
+  await tgSafe("sendMessage", {
+    chat_id: order.user_id,
+    text: `Пока не видим перевод по заказу №${order.id} на ${rub(order.total)}. Проверьте, пожалуйста, реквизиты и сумму или пришлите сюда скриншот перевода.`,
+    reply_markup: payButton(order),
+  });
+  return updated;
 }
 
 const CUSTOMER_STATUS = {
-  accepted: "Заказ №{id} принят. Собираем чай и скоро сообщим про отправку 🍵",
+  paid: "Оплату по заказу №{id} получили, спасибо! Собираем чай и скоро отправим 📦",
   shipped: "Заказ №{id} отправлен. Спасибо, что выбрали «Синицу»!\n\n📦 Когда будете забирать, осмотрите посылку прямо в пункте выдачи. Если она повреждена — сфотографируйте и попросите сотрудника составить акт, не забирая её. Потом напишите нам сюда — заменим или вернём деньги.",
   done: "Заказ №{id} завершён. Приятного чаепития! Если захотите поделиться впечатлением, просто напишите сюда.",
   cancelled: "Заказ №{id} отменён. Если это ошибка или остались вопросы, напишите сюда.",
@@ -165,6 +207,11 @@ export async function refreshAdminMessages(order, username) {
 }
 
 export async function notifyCustomer(order) {
+  if (order.status === "accepted") {
+    // Личная встреча — оплата на месте, реквизиты не нужны
+    if (order.delivery === "meet") return tgSafe("sendMessage", { chat_id: order.user_id, text: `Заказ №${order.id} принят 🍵\nК оплате при встрече: ${rub(order.total)}. Место и время согласуем здесь, в чате.`, reply_markup: menuKeyboard(order.user_id) });
+    return tgSafe("sendMessage", { chat_id: order.user_id, text: paymentText(order), reply_markup: getPayment() ? payButton(order) : menuKeyboard(order.user_id) });
+  }
   const t = CUSTOMER_STATUS[order.status];
   if (t) await tgSafe("sendMessage", { chat_id: order.user_id, text: t.replace("{id}", order.id), reply_markup: menuKeyboard(order.user_id) });
 }
@@ -180,6 +227,9 @@ export function publicOrder(o) {
     total: o.total,
     delivery: o.delivery,
     canCancel: o.status === "new",
+    // Ждёт оплаты: показываем реквизиты в «Моих заказах»
+    payment: o.status === "accepted" && o.delivery !== "meet" ? getPayment() : null,
+    paidClaim: !!o.paid_claim_at,
   };
 }
 

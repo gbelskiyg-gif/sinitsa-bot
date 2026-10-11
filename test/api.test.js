@@ -229,3 +229,27 @@ test("доставка: фиксированная цена входит в ит
   r = await send(802, [{ teaId: 13, pack: "100", qty: 4 }], "cdek");
   assert.equal(r.body.order.total, 990 * 4);
 });
+
+test("оплата переводом: реквизиты в заказе, «Я оплатил», подтверждение продавцом", async () => {
+  store.setSetting("payment", { phone: "+7 900 123-45-67", bank: "Т-Банк", name: "Александр Б." });
+  const u = signInitData({ id: 901 }, TOKEN);
+  let r = await call("/api/orders", { method: "POST", init: u, body: JSON.stringify({ items: [{ teaId: 13, pack: "50", qty: 1 }], name: "О", phone: "89001234567", delivery: "yandex", address: "Москва, ПВЗ 1" }) });
+  const id = r.body.order.id;
+  r = await call(`/api/orders/${id}/paid`, { method: "POST", init: u });
+  assert.equal(r.status, 409, "новый заказ ещё не ждёт оплаты");
+  store.setStatus(id, "accepted");
+  r = await call("/api/orders", { init: u });
+  const o = r.body.orders.find((x) => x.id === id);
+  assert.equal(o.payment.bank, "Т-Банк");
+  assert.equal(o.paidClaim, false);
+  r = await call(`/api/orders/${id}/paid`, { method: "POST", init: u });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.order.paidClaim, true);
+  r = await call(`/api/orders/${id}/paid`, { method: "POST", init: signInitData({ id: 902 }, TOKEN) });
+  assert.equal(r.status, 404, "чужой заказ");
+  const { canMove } = await import("../src/orders.js");
+  assert.ok(canMove("accepted", "paid") && canMove("paid", "shipped") && canMove("accepted", "shipped"));
+  store.setStatus(id, "paid");
+  r = await call("/api/orders", { init: u });
+  assert.equal(r.body.orders.find((x) => x.id === id).payment, null);
+});

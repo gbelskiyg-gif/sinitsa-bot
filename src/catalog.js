@@ -139,7 +139,8 @@ export const DELIVERY_INFO =
 
 export const STATUS = {
   new: "Новый",
-  accepted: "Принят",
+  accepted: "Принят, ждёт оплаты",
+  paid: "Оплачен",
   shipped: "Отправлен",
   done: "Завершён",
   cancelled: "Отменён",

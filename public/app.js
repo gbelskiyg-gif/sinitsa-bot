@@ -582,6 +582,18 @@ function renderCheckout(total) {
 }
 
 // ---------- мои заказы ----------
+// Ждёт оплаты: реквизиты, копирование номера и кнопка «Я оплатил»
+function payHTML(o) {
+  if (o.status !== "accepted") return "";
+  if (!o.payment) return `<p class="muted small" style="margin:8px 0 0">Реквизиты для оплаты продавец пришлёт в чате с ботом.</p>`;
+  const p = o.payment;
+  return `<div class="pay"><div class="eyebrow">К оплате ${rub(o.total)}</div>
+    <p class="small" style="margin:6px 0">Перевод по СБП по номеру телефона:</p>
+    <button class="pay-row" data-copy="${esc(p.phone)}"><span>📱 ${esc(p.phone)}</span><small>скопировать</small></button>
+    <p class="small" style="margin:6px 0 0">🏦 ${esc(p.bank)} · 👤 ${esc(p.name)}</p>
+    <p class="muted small" style="margin:6px 0 10px">В комментарии к переводу: «Заказ ${o.id}»</p>
+    ${o.paidClaim ? `<p class="small" style="margin:0;color:var(--gold)">Вы отметили оплату — продавец проверит и подтвердит в чате.</p>` : `<button class="btn wide" data-paid="${o.id}">✅ Я оплатил</button>`}</div>`;
+}
 async function renderOrders() {
   if (!inTelegram()) {
     $("#view").innerHTML = `<div class="empty"><h2>Мои заказы</h2><p>Заказы видны, когда магазин открыт через бота.</p><a class="btn" href="${BOT_LINK}">Открыть @sinitsa_chai_bot</a></div>`;
@@ -598,10 +610,20 @@ async function renderOrders() {
       <div class="line" style="display:block"><div style="display:flex;justify-content:space-between;gap:12px"><h3>Заказ №${o.id}</h3><span class="status ${o.status}">${esc(o.statusLabel)}</span></div>
       <div class="muted small">${o.items.map((i) => i.teaId ? `${esc(i.name)}, ${esc(i.label)} × ${i.qty}` : (i.sum >= 0 ? `${esc(i.name)}: ${rub(i.sum)}` : `${esc(i.name)}: −${rub(-i.sum)}`)).join("<br>")}</div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px"><b class="sum" style="color:var(--gold)">${rub(o.total)}</b>
+      </div>${payHTML(o)}<div style="display:flex;justify-content:flex-end;margin-top:4px">
       <span style="display:flex;gap:16px">${o.canCancel ? `<button class="link" data-cancel="${o.id}">Отменить</button>` : ""}
       <button class="link" data-repeat="${o.id}">Повторить</button></span></div></div>`).join("");
     S.lastOrders = orders;
     $("#view").onclick = async (e) => {
+      const pd = e.target.closest("[data-paid]");
+      if (pd) {
+        pd.disabled = true;
+        try { await api(`/api/orders/${pd.dataset.paid}/paid`, { method: "POST" }); toast("Передали продавцу — он проверит перевод"); renderOrders(); }
+        catch (err) { toast(err.message); pd.disabled = false; }
+        return;
+      }
+      const cp = e.target.closest("[data-copy]");
+      if (cp) { try { await navigator.clipboard.writeText(cp.dataset.copy); toast("Скопировано"); } catch { toast(cp.dataset.copy); } return; }
       const rp = e.target.closest("[data-repeat]");
       if (rp) {
         const o = S.lastOrders.find((x) => x.id === Number(rp.dataset.repeat));

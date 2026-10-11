@@ -44,6 +44,10 @@ db.exec(`
 `);
 
 db.exec(`
+  CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS feedback (
     order_id INTEGER PRIMARY KEY,
     user_id INTEGER NOT NULL,
@@ -59,6 +63,7 @@ for (const sql of [
   "ALTER TABLE orders ADD COLUMN promo TEXT",
   "ALTER TABLE orders ADD COLUMN consent_at TEXT",
   "ALTER TABLE users ADD COLUMN menu_v INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE orders ADD COLUMN paid_claim_at TEXT",
 ]) {
   try {
     db.exec(sql);
@@ -86,6 +91,20 @@ export function usersWithoutMenu(v) {
 }
 export function markMenu(id, v) {
   db.prepare("UPDATE users SET menu_v = ? WHERE id = ?").run(v, id);
+}
+
+// Настройки магазина (реквизиты для оплаты и т. п.)
+export function getSetting(key, fallback = null) {
+  const r = db.prepare("SELECT value FROM settings WHERE key = ?").get(key);
+  return r ? JSON.parse(r.value) : fallback;
+}
+export function setSetting(key, value) {
+  db.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(key, JSON.stringify(value));
+}
+/** Покупатель нажал «Я оплатил» (или сброс, если продавец не нашёл перевод). */
+export function setPaidClaim(id, on) {
+  db.prepare("UPDATE orders SET paid_claim_at = CASE WHEN ? THEN datetime('now') ELSE NULL END, updated_at = datetime('now') WHERE id = ?").run(on ? 1 : 0, id);
+  return getOrder(id);
 }
 
 export function upsertUser(u) {
@@ -117,7 +136,7 @@ export function userOrders(userId) {
 }
 export function activeOrders() {
   return db
-    .prepare("SELECT * FROM orders WHERE status IN ('new','accepted','shipped') ORDER BY id")
+    .prepare("SELECT * FROM orders WHERE status IN ('new','accepted','paid','shipped') ORDER BY id")
     .all()
     .map(rowToOrder);
 }

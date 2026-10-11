@@ -188,3 +188,9 @@ form label.consent a { color: var(--gold); }
 .dl-info { margin: 8px 0 16px; border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; }
 .dl-info summary { cursor: pointer; color: var(--lilac); font-size: 14px; }
 .dl-info p { margin: 10px 0 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
+
+.pay { margin-top: 10px; padding: 12px 14px; border: 1px solid var(--gold); border-radius: 12px; background: #efbf7e0d; }
+.pay-row { display: flex; width: 100%; justify-content: space-between; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink); font: inherit; cursor: pointer; }
+.pay-row small { color: var(--lilac); font-size: 12px; }
+.status.accepted { color: var(--gold); }
+.status.paid { color: #9fd6a6; }

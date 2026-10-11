@@ -9,6 +9,7 @@ import * as store from "./db.js";
 import {
   OrderError,
   buildOrder,
+  claimPaid,
   checkPromo,
   notifyAdminsNew,
   publicOrder,
@@ -159,6 +160,15 @@ async function api(req, res, url) {
       reply_markup: menuKeyboard(user.id),
     });
     return send(res, 201, { order: publicOrder(order) });
+  }
+
+  const pm = url.pathname.match(/^\/api\/orders\/(\d+)\/paid$/);
+  if (req.method === "POST" && pm) {
+    const order = store.getOrder(Number(pm[1]));
+    if (!order || order.user_id !== user.id) return send(res, 404, { error: "Заказ не найден." });
+    const r = await claimPaid(order, user.username);
+    if (!r.ok) return send(res, 409, { error: r.error });
+    return send(res, 200, { order: publicOrder(r.order) });
   }
 
   const m = url.pathname.match(/^\/api\/orders\/(\d+)\/cancel$/);

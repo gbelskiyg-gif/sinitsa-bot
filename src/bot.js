@@ -1,7 +1,7 @@
 import { ADMIN_IDS, ORDERS_CHAT_ID, PUBLIC_URL, isAdmin, notifyChats } from "./config.js";
 import { DELIVERY_INFO, STATUS, TEAS, findTea, rub } from "./catalog.js";
 import * as store from "./db.js";
-import { adminKeyboard, canMove, notifyCustomer, orderText, refreshAdminMessages } from "./orders.js";
+import { adminKeyboard, canMove, claimPaid, getPayment, notifyCustomer, orderText, refreshAdminMessages, rejectPaid } from "./orders.js";
 import { esc, poll, tg, tgSafe } from "./telegram.js";
 import { BTN, MENU_VERSION, menuKeyboard } from "./menu.js";
 
@@ -25,8 +25,9 @@ const ABOUT =
 
 const ADMIN_HELP =
   "<b>Для продавца</b>\n" +
-  "Внизу появились кнопки «🧾 Заказы в работе» и «🫙 Наличие».\n" +
-  "В «Наличии» нажмите на чай, чтобы включить или выключить его в магазине.\n\n" +
+  "Внизу появились кнопки «🧾 Заказы в работе», «🫙 Наличие» и «💳 Реквизиты».\n" +
+  "В «Наличии» нажмите на чай, чтобы включить или выключить его в магазине.\n" +
+  "В «Реквизитах» задайте номер для перевода по СБП — когда вы принимаете заказ, бот сам пришлёт покупателю сумму и реквизиты, а вам — уведомление, когда он нажмёт «Я оплатил».\n\n" +
   "Новые заказы приходят сюда с кнопками статусов. Сообщения покупателей тоже приходят сюда: чтобы ответить, сделайте «Ответить» на пересланное сообщение.";
 
 const openButton = (text, hash) => ({ inline_keyboard: [[shopButton(text, hash)]] });
@@ -89,6 +90,29 @@ async function sendMenuToOldUsers() {
     store.markMenu(id, MENU_VERSION);
     await new Promise((r) => setTimeout(r, 100));
   }
+}
+
+// ---------- реквизиты для оплаты (только продавец) ----------
+const awaitingPayment = new Set();
+function paymentInfo() {
+  const p = getPayment();
+  return p ? `Сейчас покупатели видят:\n📱 ${p.phone}\n🏦 ${p.bank}\n👤 ${p.name}` : "Реквизиты ещё не заданы — покупателям пишется, что продавец пришлёт их в чате.";
+}
+async function askPayment(msg) {
+  awaitingPayment.add(msg.from.id);
+  return tgSafe("sendMessage", {
+    chat_id: msg.chat.id,
+    text: `💳 Реквизиты для оплаты переводом\n\n${paymentInfo()}\n\nЧтобы изменить, отправьте одним сообщением три строки:\n1) номер телефона для СБП\n2) банк\n3) получатель (имя и первая буква фамилии)\n\nНапример:\n+7 900 123-45-67\nТ-Банк\nАлександр Б.\n\nОтмена — /cancel`,
+  });
+}
+async function savePayment(msg) {
+  const [phone, bank, name] = msg.text.split("\n").map((s) => s.trim()).filter(Boolean);
+  const digits = (phone || "").replace(/\D/g, "");
+  if (!bank || !name || digits.length < 10 || digits.length > 12)
+    return tgSafe("sendMessage", { chat_id: msg.chat.id, text: "Не получилось разобрать. Нужно три строки: телефон, банк, получатель. Попробуйте ещё раз или /cancel." });
+  store.setSetting("payment", { phone: phone.slice(0, 30), bank: bank.slice(0, 60), name: name.slice(0, 60) });
+  awaitingPayment.delete(msg.from.id);
+  return tgSafe("sendMessage", { chat_id: msg.chat.id, text: `Сохранили ✅\n\n${paymentInfo()}\n\nТеперь, когда вы принимаете заказ, бот сам отправит покупателю сумму и реквизиты с кнопкой «Я оплатил».`, reply_markup: menuKeyboard(msg.from.id) });
 }
 
 async function onActive(msg) {
@@ -161,6 +185,9 @@ async function onMessage(msg) {
   if (text.startsWith("/help")) return tgSafe("sendMessage", { chat_id: msg.chat.id, text: ABOUT, reply_markup: startKeyboard() });
 
   if (isAdmin(from.id)) {
+    if (text.startsWith("/cancel") && awaitingPayment.delete(from.id)) return tgSafe("sendMessage", { chat_id: msg.chat.id, text: "Отменили, реквизиты не изменились.", reply_markup: menuKeyboard(from.id) });
+    if (text.startsWith("/pay") || text === BTN.payment) return askPayment(msg);
+    if (awaitingPayment.has(from.id) && text && !text.startsWith("/")) return savePayment(msg);
     if (text.startsWith("/active") || text === BTN.active) return onActive(msg);
     if (text.startsWith("/stock") || text === BTN.stock)
       return tgSafe("sendMessage", { chat_id: msg.chat.id, text: "Наличие чаёв. Нажмите, чтобы переключить:", reply_markup: stockKeyboard() });
@@ -239,7 +266,27 @@ async function onCallback(q) {
     return answer();
   }
 
+  // Покупатель: «Я оплатил»
+  if (data.startsWith("paid:")) {
+    const order = store.getOrder(Number(data.split(":")[1]));
+    if (!order || order.user_id !== q.from.id) return answer();
+    const r = await claimPaid(order, q.from.username);
+    if (!r.ok) return answer(r.error);
+    await tgSafe("editMessageReplyMarkup", { chat_id: chat, message_id: q.message.message_id, reply_markup: { inline_keyboard: [] } });
+    await tgSafe("sendMessage", { chat_id: chat, text: "Спасибо! Передали продавцу — он проверит перевод и подтвердит здесь 🙏" });
+    return answer("Отметили");
+  }
+
   if (!isAdmin(q.from.id)) return answer("Недоступно");
+
+  if (data.startsWith("payno:")) {
+    const order = store.getOrder(Number(data.split(":")[1]));
+    if (!order || order.status !== "accepted") return answer("Статус уже изменён");
+    const updated = await rejectPaid(order);
+    await refreshAdminMessages(updated);
+    await tgSafe("editMessageReplyMarkup", { chat_id: chat, message_id: q.message.message_id, reply_markup: { inline_keyboard: [] } });
+    return answer("Написали покупателю");
+  }
 
   if (data.startsWith("stock:")) {
     const tea = findTea(data.split(":")[1]);

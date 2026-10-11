@@ -56,7 +56,7 @@ button { font: inherit; color: inherit; }
 .price { display: flex; justify-content: space-between; align-items: baseline; margin-top: auto; padding-top: 8px; border-top: 1px solid var(--line); color: var(--gold); font-weight: 600; font-variant-numeric: tabular-nums; }
 .price small { color: var(--muted); font-weight: 400; font-size: 11px; }
 
-.nav { position: fixed; z-index: 20; left: 50%; bottom: 0; transform: translateX(-50%); width: min(100%, 760px); display: grid; grid-template-columns: repeat(4, 1fr);
+.nav { position: fixed; z-index: 20; left: 50%; bottom: 0; transform: translateX(-50%); width: min(100%, 760px); display: grid; grid-template-columns: repeat(5, 1fr);
   padding: 8px 8px calc(8px + env(safe-area-inset-bottom)); background: rgba(24, 21, 31, .97); border-top: 1px solid var(--line); border-radius: 18px 18px 0 0; }
 .nav a { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 0; text-decoration: none; color: #aaa2ae; font-size: 11px; font-weight: 600; border-radius: 10px; }
 .nav a.active { color: var(--gold); background: #efbf7e10; }
@@ -153,3 +153,14 @@ form label.consent a { color: var(--gold); }
 .more-ask { text-align: center; margin: 14px 0 0; }
 .more-ask .link { padding: 0; font: inherit; }
 #more-btn { margin-top: 4px; }
+
+.sets-banner { display: flex; align-items: center; gap: 12px; padding: 14px 16px; margin: 14px 0 6px; border: 1px solid var(--gold); border-radius: 12px; text-decoration: none; color: var(--ink); background: radial-gradient(circle at 100% 0, #c88abb22, transparent 60%), var(--card); }
+.sets-banner > span:first-child { font-size: 26px; }
+.sets-banner b { display: block; font-weight: 600; }
+.sets-banner small { display: block; color: var(--muted); font-size: 12px; }
+.sets-banner .more-price { margin-left: auto; }
+.sets-list { display: grid; gap: 12px; margin-bottom: 16px; }
+@media (min-width: 640px) { .sets-list { grid-template-columns: 1fr 1fr; } }
+.set-teas { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.set-tea { border: 1px solid var(--line); background: transparent; color: var(--ink); border-radius: 8px; padding: 5px 9px; font: inherit; font-size: 12px; cursor: pointer; text-align: left; }
+.set .sizes { margin: 6px 0 8px; }

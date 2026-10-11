@@ -65,7 +65,7 @@ function renderCatalog() {
     <label class="search"><span aria-hidden="true">⌕</span><input id="q" type="search" placeholder="Найти свой чай" value="${esc(S.query)}" autocomplete="off"></label>
     <div class="chips scroll" id="groups">${GROUPS.map(([k, l]) => `<button class="chip" data-g="${k}" aria-pressed="${S.group === k}">${l}</button>`).join("")}
       <button class="chip" id="sort">${{ pop: "По умолчанию", asc: "Сначала дешевле", desc: "Сначала дороже" }[S.sort]} ⇅</button></div>
-    ${!S.query && S.group === "all" && S.sets.length ? setsHTML() : ""}
+    ${!S.query && S.group === "all" && S.sets.length ? setsBanner() : ""}
     <p class="note">${list.length} из ${S.teas.length} · цены за 50 г · собираем под заказ</p>
     <div class="grid">${list.length ? list.map(cardHTML).join("") : `<p class="muted">Ничего не нашли. Попробуйте другое слово.</p>`}</div>`;
   $("#q").addEventListener("input", (e) => { S.query = e.target.value.trim().toLowerCase(); const pos = e.target.selectionStart; renderCatalog(); const q = $("#q"); q.focus(); q.setSelectionRange(pos, pos); });
@@ -75,26 +75,41 @@ function renderCatalog() {
     renderCatalog();
   });
 }
-function setPrice(set) {
-  const sum = set.teas.reduce((s, id) => s + (tea(id)?.prices["20"] || 0), 0);
+const SET_PACKS = ["20", "50", "100"];
+function setPrice(set, pack = "20") {
+  const sum = set.teas.reduce((s, id) => s + (tea(id)?.prices[pack] || 0), 0);
   return { sum, final: sum - Math.round((sum * SET_DISCOUNT) / 10) * 10 };
 }
-function setsHTML() {
-  return `<h2 class="section-title" style="padding-top:8px">Наборы по 20 г</h2>
-    <p class="note" style="margin-top:0">Готовые сочетания со скидкой 10%. Каждый чай по 20 г.</p>
-    <div class="sets">${S.sets.map((set) => {
-      const p = setPrice(set);
+// Короткий баннер в каталоге — сами наборы во вкладке «Наборы»
+function setsBanner() {
+  const from = Math.min(...S.sets.map((x) => setPrice(x).final));
+  return `<a class="sets-banner" href="#sets"><span>🎁</span><span><b>Наборы чая</b><small>ГАБА, пуэры, улуны — по 20, 50 или 100 г, скидка 10%</small></span><span class="more-price">от ${rub(from)} →</span></a>`;
+}
+function renderSets() {
+  S.setPack ||= {};
+  $("#view").innerHTML = `<h2 class="section-title">Наборы</h2>
+    <p class="note" style="margin-top:0">Готовые сочетания из 3–5 разных чаёв. Выберите фасовку — скидка 10% на любую.</p>
+    ${S.sets.length ? `<div class="sets-list">${S.sets.map((set) => {
+      const pack = S.setPack[set.key] || "20";
+      const p = setPrice(set, pack);
       return `<div class="set"><div class="set-e">${set.emoji}</div><h3>${esc(set.title)}</h3><p class="muted small">${esc(set.text)}</p>
-        <p class="small">${set.teas.map((id) => esc(tea(id)?.name || "")).join(" · ")}</p>
+        <div class="set-teas">${set.teas.map((id) => `<button class="set-tea" data-tea="${id}">${esc(tea(id)?.name || "")}</button>`).join("")}</div>
+        <div class="chips sizes" data-set-packs="${set.key}">${SET_PACKS.map((x) => `<button class="chip" data-p="${x}" aria-pressed="${x === pack}">по ${x} г</button>`).join("")}</div>
         <div class="big-price" style="font-size:22px">${rub(p.final)} <small><s>${rub(p.sum)}</s></small></div>
-        <button class="btn wide" data-set="${set.key}">В корзину</button></div>`;
-    }).join("")}</div>`;
+        <button class="btn wide" data-set="${set.key}">В корзину · ${set.teas.length} × ${pack} г</button></div>`;
+    }).join("")}</div>` : `<p class="muted">Сейчас наборы собрать не из чего — часть чаёв закончилась. Загляните в каталог.</p>`}`;
+  $("#view").onclick = (e) => {
+    const b = e.target.closest("[data-set-packs] [data-p]"); if (!b) return;
+    S.setPack[b.parentElement.dataset.setPacks] = b.dataset.p;
+    const y = scrollY; renderSets(); scrollTo(0, y);
+  };
 }
 function addSet(key) {
   const set = S.sets.find((s) => s.key === key); if (!set) return;
+  const pack = S.setPack?.[key] || "20";
   const id = `${key}-${Date.now().toString(36)}`;
-  set.teas.forEach((teaId) => S.cart.push({ teaId, pack: "20", qty: 1, set: id }));
-  saveCart(); toast(`Набор «${set.title}» в корзине`);
+  set.teas.forEach((teaId) => S.cart.push({ teaId, pack, qty: 1, set: id }));
+  saveCart(); toast(`Набор «${set.title}» по ${pack} г в корзине`);
 }
 function cardHTML(t) {
   return `<button class="card${t.available ? "" : " off"}" data-tea="${t.id}">${art(t)}
@@ -551,6 +566,7 @@ function route() {
   if (tab === "quiz") renderQuiz();
   else if (tab === "cart") renderCart();
   else if (tab === "orders") renderOrders();
+  else if (tab === "sets") renderSets();
   else renderCatalog();
 }
 document.addEventListener("click", (e) => {
@@ -575,7 +591,7 @@ window.addEventListener("hashchange", route);
   }
   // Раздел, с которого открыли приложение из бота: ?tab=quiz | orders | cart
   const tab = new URLSearchParams(location.search).get("tab");
-  if (["quiz", "orders", "cart", "catalog"].includes(tab)) history.replaceState(null, "", `${location.pathname}#${tab}`);
-  else if (!/^#(quiz|orders|cart|catalog)$/.test(location.hash)) history.replaceState(null, "", `${location.pathname}${location.search}#catalog`);
+  if (["quiz", "orders", "cart", "catalog", "sets"].includes(tab)) history.replaceState(null, "", `${location.pathname}#${tab}`);
+  else if (!/^#(quiz|orders|cart|catalog|sets)$/.test(location.hash)) history.replaceState(null, "", `${location.pathname}${location.search}#catalog`);
   route();
 })();

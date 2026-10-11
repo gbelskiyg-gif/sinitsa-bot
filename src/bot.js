@@ -3,6 +3,7 @@ import { STATUS, TEAS, findTea, rub } from "./catalog.js";
 import * as store from "./db.js";
 import { adminKeyboard, canMove, notifyCustomer, orderText, refreshAdminMessages } from "./orders.js";
 import { esc, poll, tg, tgSafe } from "./telegram.js";
+import { BTN, MENU_VERSION, menuKeyboard } from "./menu.js";
 
 // Раздел передаём через ?tab=, потому что после # Telegram дописывает свои параметры запуска
 const shopButton = (text, hash = "") => ({
@@ -28,23 +29,6 @@ const ADMIN_HELP =
   "В «Наличии» нажмите на чай, чтобы включить или выключить его в магазине.\n\n" +
   "Новые заказы приходят сюда с кнопками статусов. Сообщения покупателей тоже приходят сюда: чтобы ответить, сделайте «Ответить» на пересланное сообщение.";
 
-// Кнопки постоянного меню внизу чата
-const BTN = {
-  quiz: "🍵 Подобрать чай",
-  shop: "🛍 Каталог",
-  orders: "📦 Мои заказы",
-  about: "🐦 О Синице",
-  active: "🧾 Заказы в работе",
-  stock: "🫙 Наличие",
-};
-function menuKeyboard(userId) {
-  const rows = [
-    [{ text: BTN.quiz }, { text: BTN.shop }],
-    [{ text: BTN.orders }, { text: BTN.about }],
-  ];
-  if (isAdmin(userId)) rows.push([{ text: BTN.active }, { text: BTN.stock }]);
-  return { keyboard: rows, resize_keyboard: true, is_persistent: true, input_field_placeholder: "Напишите вопрос продавцу" };
-}
 const openButton = (text, hash) => ({ inline_keyboard: [[shopButton(text, hash)]] });
 
 async function myOrders(msg) {
@@ -91,6 +75,20 @@ async function onStart(msg) {
     parse_mode: "HTML",
     reply_markup: menuKeyboard(msg.from.id),
   });
+  store.markMenu(msg.from.id, MENU_VERSION);
+}
+
+// Тем, кто запускал бота до появления меню, один раз присылаем кнопки внизу чата
+async function sendMenuToOldUsers() {
+  for (const id of store.usersWithoutMenu(MENU_VERSION)) {
+    await tgSafe("sendMessage", {
+      chat_id: id,
+      text: "Обновили бота 🍵 Теперь разделы всегда внизу чата: подбор чая, каталог, заказы 👇",
+      reply_markup: menuKeyboard(id),
+    });
+    store.markMenu(id, MENU_VERSION);
+    await new Promise((r) => setTimeout(r, 100));
+  }
 }
 
 async function onActive(msg) {
@@ -305,6 +303,7 @@ export async function startBot() {
   });
   setInterval(() => askFeedback().catch((e) => console.error("[feedback]", e)), 30 * 60 * 1000);
   askFeedback().catch((e) => console.error("[feedback]", e));
+  sendMenuToOldUsers().catch((e) => console.error("[menu]", e));
   if (ORDERS_CHAT_ID) console.log(`Заказы и вопросы идут в группу ${ORDERS_CHAT_ID}`);
   if (!ADMIN_IDS.length) console.warn("ADMIN_IDS не задан: заказы некому будет получать. Напишите боту /id и добавьте ID.");
   poll(async (u) => {

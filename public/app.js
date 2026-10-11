@@ -194,7 +194,7 @@ function renderQuiz() {
   const opts = q.options.filter(([v]) => !(q.key === "dislikes" && a.likes.includes(v))).map(([v, e, l, sub]) => (g.labels?.[v] ? [v, e, g.labels[v][0], g.labels[v][1]] : [v, e, l, sub]));
   const sel = (v) => (q.multi ? a[q.key].includes(v) : a[q.key] === v);
   const ready = q.multi ? a[q.key].length > 0 : !!a[q.key];
-  $("#view").innerHTML = `<div class="quiz-head"><div class="eyebrow">Подбор чая · вопрос ${step + 1} из ${QUESTIONS.length}</div>
+  $("#view").innerHTML = `<div class="quiz-head"><div class="quiz-top"><div class="eyebrow">Подбор чая · вопрос ${step + 1} из ${QUESTIONS.length}</div><button class="link quit" id="quit">Выйти</button></div>
     <div class="progress"><i style="width:${(step / QUESTIONS.length) * 100}%"></i></div>
     <h2 class="q-title">${g.title || q.title}</h2><p class="muted small" style="margin:0">${g.hint || q.hint}</p></div>
     <div class="options" id="opts">${opts.map(([v, e, l, sub]) => `<button class="option" data-v="${v}" aria-pressed="${sel(v)}"><span class="e">${e}</span><span>${l}${sub ? `<small>${sub}</small>` : ""}</span></button>`).join("")}</div>
@@ -213,8 +213,12 @@ function renderQuiz() {
   };
   $("#back")?.addEventListener("click", () => { S.quiz.step--; renderQuiz(); });
   $("#next")?.addEventListener("click", () => { S.quiz.step++; renderQuiz(); });
-  window.scrollTo(0, 0);
+  $("#quit").onclick = quitQuiz;
+  // Наверх — только при переходе к новому вопросу, а не при каждом нажатии
+  if (S.quiz.shown !== step) { S.quiz.shown = step; window.scrollTo(0, 0); }
 }
+
+function quitQuiz() { newQuiz(); location.hash = "#catalog"; }
 
 // Отзывы покупателя: «не моё» убирает чай, пожелания сдвигают подбор
 function lastWish() { return S.me?.feedback?.find((f) => f.wish)?.wish || ""; }
@@ -314,8 +318,9 @@ function renderResults() {
   const picks = pickThree(a);
   if (!picks.length) {
     $("#view").innerHTML = `<div class="empty"><h2>Не нашли точного совпадения</h2><p>Попробуйте убрать одно из ограничений или напишите нам в бот, подберём вручную.</p>
-      <button class="btn" id="again">Пройти заново</button></div>`;
+      <button class="btn" id="again">Пройти заново</button> <button class="btn ghost" id="home">В главное меню</button></div>`;
     $("#again").onclick = () => { newQuiz(); renderQuiz(); };
+    $("#home").onclick = quitQuiz;
     return;
   }
   const mug = a.brew !== "gaiwan";
@@ -336,13 +341,15 @@ function renderResults() {
       <p class="muted small">${isGift(a) ? "Три разных вкуса — пусть выберет свой. Скидка 10% на набор. Если нужна подарочная упаковка или открытка, напишите в комментарии к заказу." : "Попробуйте и поймите, какой ваш. Скидка 10% на набор."}</p>
       <div class="big-price">${rub(sum - disc)} <small><s>${rub(sum)}</s></small></div>
       <button class="btn wide" id="trial" style="margin-top:12px">Положить набор в корзину</button></div>` : ""}
-    <button class="link" id="again">Пройти подбор заново</button>`;
+    <div class="quiz-end"><button class="btn ghost wide" id="home">В главное меню</button>
+    <button class="link" id="again">Пройти подбор заново</button></div>`;
   $("#trial")?.addEventListener("click", () => {
     const set = "quiz-" + Date.now().toString(36);
     picks.forEach(([, x]) => S.cart.push({ teaId: x.t.id, pack: "20", qty: 1, set }));
     saveCart(); toast("Набор в корзине"); location.hash = "#cart";
   });
   $("#again").onclick = () => { newQuiz(); renderQuiz(); };
+  $("#home").onclick = quitQuiz;
   window.scrollTo(0, 0);
 }
 

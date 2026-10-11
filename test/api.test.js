@@ -177,3 +177,11 @@ test("фото чая подхватывается из public/teas", async () =
     assert.equal(cat.teas.find((t) => t.id === 1).photoExample, false);
   } finally { fs.unlinkSync(f); }
 });
+
+test("меню рассылается старым пользователям один раз", async () => {
+  const store = await import("../src/db.js");
+  store.upsertUser({ id: 777001, first_name: "Old" });
+  assert.ok(store.usersWithoutMenu(1).includes(777001));
+  store.markMenu(777001, 1);
+  assert.ok(!store.usersWithoutMenu(1).includes(777001));
+});

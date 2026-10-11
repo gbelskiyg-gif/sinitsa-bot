@@ -58,6 +58,7 @@ for (const sql of [
   "ALTER TABLE orders ADD COLUMN feedback_asked INTEGER NOT NULL DEFAULT 0",
   "ALTER TABLE orders ADD COLUMN promo TEXT",
   "ALTER TABLE orders ADD COLUMN consent_at TEXT",
+  "ALTER TABLE users ADD COLUMN menu_v INTEGER NOT NULL DEFAULT 0",
 ]) {
   try {
     db.exec(sql);
@@ -80,6 +81,13 @@ export function setAvailable(teaId, on) {
 }
 
 // ---------- покупатели ----------
+export function usersWithoutMenu(v) {
+  return db.prepare("SELECT id FROM users WHERE menu_v < ? AND id > 0").all(v).map((r) => r.id);
+}
+export function markMenu(id, v) {
+  db.prepare("UPDATE users SET menu_v = ? WHERE id = ?").run(v, id);
+}
+
 export function upsertUser(u) {
   db.prepare(
     `INSERT INTO users (id, first_name, username) VALUES (?, ?, ?)

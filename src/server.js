@@ -16,6 +16,7 @@ import {
 } from "./orders.js";
 import { tgSafe } from "./telegram.js";
 import { consentPage, privacyPage } from "./legal.js";
+import { menuKeyboard } from "./menu.js";
 
 const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "public");
 const TYPES = {
@@ -152,6 +153,7 @@ async function api(req, res, url) {
     await tgSafe("sendMessage", {
       chat_id: user.id,
       text: `Заказ №${order.id} получили 🍵\nСобираем чай под заказ. Продавец подтвердит наличие, итоговую сумму с доставкой и сроки здесь, в чате. Оплата после подтверждения.`,
+      reply_markup: menuKeyboard(user.id),
     });
     return send(res, 201, { order: publicOrder(order) });
   }

@@ -140,3 +140,7 @@ form input, form textarea, form select { display: block; width: 100%; margin-top
 form label.consent { display: flex; gap: 10px; align-items: flex-start; color: var(--ink); font-size: 13px; line-height: 1.5; }
 form label.consent input { width: 20px; height: 20px; margin: 1px 0 0; flex: none; accent-color: var(--gold); }
 form label.consent a { color: var(--gold); }
+
+.quiz-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.quiz-top .quit { margin: 0; padding: 4px 0; font-size: 13px; }
+.quiz-end { display: grid; gap: 4px; margin-top: 18px; justify-items: center; }

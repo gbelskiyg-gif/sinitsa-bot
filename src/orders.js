@@ -2,6 +2,7 @@ import { notifyChats } from "./config.js";
 import { KINDS, PACKS, PROMOS, STATUS, findTea, normalizePromo, packInfo, rub } from "./catalog.js";
 import * as store from "./db.js";
 import { esc, tgSafe } from "./telegram.js";
+import { menuKeyboard } from "./menu.js";
 
 export class OrderError extends Error {}
 
@@ -152,7 +153,7 @@ export async function refreshAdminMessages(order, username) {
 
 export async function notifyCustomer(order) {
   const t = CUSTOMER_STATUS[order.status];
-  if (t) await tgSafe("sendMessage", { chat_id: order.user_id, text: t.replace("{id}", order.id) });
+  if (t) await tgSafe("sendMessage", { chat_id: order.user_id, text: t.replace("{id}", order.id), reply_markup: menuKeyboard(order.user_id) });
 }
 
 /** Публичное представление заказа для мини-приложения. */

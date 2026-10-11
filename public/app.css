@@ -194,3 +194,9 @@ form label.consent a { color: var(--gold); }
 .pay-row small { color: var(--lilac); font-size: 12px; }
 .status.accepted { color: var(--gold); }
 .status.paid { color: #9fd6a6; }
+
+.undo { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 14px; margin-bottom: 10px; border-radius: 12px; background: var(--card-2); border: 1px solid var(--line); font-size: 14px; }
+.undo .link { padding: 0; font: inherit; font-weight: 600; color: var(--gold); white-space: nowrap; }
+.cart-set .set-items { list-style: none; padding: 0; margin: 8px 0 0; }
+.cart-set .set-items li { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; font-size: 14px; border-bottom: 1px dashed var(--line); }
+.cart-set .set-items .link { padding: 0; font-size: 12px; color: var(--muted); }

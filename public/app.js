@@ -467,6 +467,41 @@ function cartLines() {
   return { lines, discount, promoOff, total };
 }
 
+// ---------- корзина: наборы блоком, удаление с «Вернуть» ----------
+function setTitle(id) {
+  const key = id.replace(/-[a-z0-9]+$/, "");
+  const ready = S.sets.find((x) => x.key === key);
+  if (ready) return `Набор «${ready.title}»`;
+  return key === "own" ? "Свой набор" : key === "quiz" ? "Набор из подбора" : "Набор";
+}
+function removeFromCart(idxs) {
+  const items = idxs.sort((a, b) => b - a).map((at) => ({ at, item: S.cart.splice(at, 1)[0] })).filter((x) => x.item);
+  if (!items.length) return;
+  const names = items.map((x) => tea(x.item.teaId)?.name || "чай");
+  S.undo = { items, label: items.length > 1 ? `${items.length} чая из набора` : `«${names[0]}»` };
+  saveCart();
+}
+function cartBlocks(lines) {
+  const done = new Set();
+  return lines.map((l) => {
+    if (!l.i.set) return `<div class="line"><div><h3>${esc(l.t.name)}</h3><div class="muted small">${esc(l.label)}${l.t.available ? "" : " · <span class=error>нет в наличии</span>"}</div>
+      <div class="qty" style="margin-top:8px"><button data-d="-1" data-i="${l.idx}" aria-label="Меньше">−</button><b>${l.i.qty}</b><button data-d="1" data-i="${l.idx}" aria-label="Больше">+</button></div></div>
+      <div class="sum">${rub(l.sum)}</div></div>`;
+    if (done.has(l.i.set)) return "";
+    done.add(l.i.set);
+    const g = lines.filter((x) => x.i.set === l.i.set);
+    const sum = g.reduce((s, x) => s + x.sum, 0);
+    const ok = g.every((x) => x.inSet);
+    return `<div class="line cart-set"><div style="flex:1"><h3>${esc(setTitle(l.i.set))}</h3>
+      <div class="muted small">${g.length} ${g.length >= 5 ? "чаёв" : g.length === 1 ? "чай" : "чая"} по ${esc(g[0].label)}${ok ? " · скидка 10%" : ""}</div>
+      <ul class="set-items">${g.map((x) => `<li><span>${esc(x.t.name)}${x.t.available ? "" : " · <span class=error>нет в наличии</span>"}</span><button class="link" data-rm="${x.idx}" aria-label="Убрать из набора">убрать</button></li>`).join("")}</ul>
+      ${ok ? "" : `<p class="small" style="color:var(--gold);margin:6px 0 0">В наборе нужно от 3 разных чаёв одной фасовки и количества — сейчас скидка не действует.</p>`}
+      <div style="display:flex;align-items:center;gap:14px;margin-top:8px"><div class="qty"><button data-sq="-1" data-set="${esc(l.i.set)}" aria-label="Меньше наборов">−</button><b>${g[0].i.qty}</b><button data-sq="1" data-set="${esc(l.i.set)}" aria-label="Больше наборов">+</button></div>
+      <button class="link" data-rm="${g.map((x) => x.idx).join(",")}">Убрать набор</button></div></div>
+      <div class="sum">${rub(sum)}</div></div>`;
+  }).join("");
+}
+
 function renderCart() {
   S.cart = S.cart.filter((i) => tea(i.teaId));
   const { lines, discount, promoOff, total } = cartLines();
@@ -478,9 +513,8 @@ function renderCart() {
   if (S.checkout) return renderCheckout(total);
   const off = lines.filter((l) => !l.t.available);
   $("#view").innerHTML = `<h2 class="section-title">Корзина</h2>
-    ${lines.map((l) => `<div class="line"><div><h3>${esc(l.t.name)}</h3><div class="muted small">${esc(l.label)}${l.i.set ? " · в наборе" : ""}${l.t.available ? "" : " · <span class=error>нет в наличии</span>"}</div>
-      <div class="qty" style="margin-top:8px"><button data-d="-1" data-i="${l.idx}" aria-label="Меньше">−</button><b>${l.i.qty}</b><button data-d="1" data-i="${l.idx}" aria-label="Больше">+</button></div></div>
-      <div class="sum">${rub(l.sum)}</div></div>`).join("")}
+    ${S.undo ? `<div class="undo"><span>Убрали ${esc(S.undo.label)}</span><button class="link" id="undo">↩︎ Вернуть</button></div>` : ""}
+    ${cartBlocks(lines)}
     ${discount ? `<div class="line"><div class="muted">Скидка на набор</div><div class="sum">−${rub(discount)}</div></div>` : ""}
     ${inTelegram() ? `<div class="promo">${S.promo
       ? (promoOff
@@ -496,12 +530,28 @@ function renderCart() {
     ${off.length ? `<p class="error">Уберите чаи, которых нет в наличии, чтобы оформить заказ.</p>` : ""}
     <button class="btn wide" id="go" ${off.length ? "disabled" : ""}>Оформить заказ</button>`;
   $("#view").onclick = (e) => {
+    if (e.target.closest("#undo")) {
+      // Возвращаем убранное на прежние места
+      for (const { at, item } of [...S.undo.items].sort((x, y) => x.at - y.at)) S.cart.splice(Math.min(at, S.cart.length), 0, item);
+      S.undo = null; saveCart(); toast("Вернули"); return renderCart();
+    }
+    const rm = e.target.closest("[data-rm]");
+    if (rm) { removeFromCart(rm.dataset.rm.split(",").map(Number)); return renderCart(); }
+    const sq = e.target.closest("[data-sq]");
+    if (sq) {
+      // Количество набора меняем сразу у всех чаёв, чтобы скидка не слетела
+      const g = S.cart.filter((i) => i.set === sq.dataset.set);
+      const q = g[0].qty + Number(sq.dataset.sq);
+      if (q < 1) { removeFromCart(g.map((i) => S.cart.indexOf(i))); return renderCart(); }
+      g.forEach((i) => (i.qty = Math.min(q, 20)));
+      S.undo = null; saveCart(); return renderCart();
+    }
     const b = e.target.closest("button[data-d]"); if (!b) return;
-    const it = S.cart[Number(b.dataset.i)];
-    it.qty += Number(b.dataset.d);
-    if (it.qty < 1) S.cart.splice(Number(b.dataset.i), 1);
-    else if (it.qty > 20) it.qty = 20;
-    saveCart(); renderCart();
+    const idx = Number(b.dataset.i);
+    const it = S.cart[idx];
+    if (it.qty + Number(b.dataset.d) < 1) { removeFromCart([idx]); return renderCart(); }
+    it.qty = Math.min(it.qty + Number(b.dataset.d), 20);
+    S.undo = null; saveCart(); renderCart();
   };
   $("#go").onclick = () => { S.checkout = true; renderCart(); };
   $("#promo-off")?.addEventListener("click", () => { S.promo = null; renderCart(); });
@@ -654,7 +704,7 @@ function route() {
   const tab = (location.hash || "#catalog").slice(1) || "catalog";
   document.querySelectorAll(".nav a").forEach((a) => a.classList.toggle("active", a.dataset.tab === tab));
   $("#view").onclick = null;
-  if (tab !== "cart") S.checkout = false;
+  if (tab !== "cart") { S.checkout = false; S.undo = null; }
   if (tab === "quiz") renderQuiz();
   else if (tab === "cart") renderCart();
   else if (tab === "orders") renderOrders();

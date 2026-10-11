@@ -28,10 +28,12 @@ export const ORDERS_CHAT_ID = Number(process.env.ORDERS_CHAT_ID || 0);
 export const notifyChats = () => (ORDERS_CHAT_ID ? [ORDERS_CHAT_ID] : ADMIN_IDS);
 
 // Данные продавца для политики конфиденциальности и согласия (страницы /privacy и /consent)
+// Данные оператора персональных данных для страниц /consent и /privacy.
+// Значения из .env (OPERATOR_*) важнее этих.
 export const LEGAL = {
-  name: process.env.OPERATOR_NAME || "",
+  name: process.env.OPERATOR_NAME || "Бельский Александр Георгиевич",
   inn: process.env.OPERATOR_INN || "",
-  email: process.env.OPERATOR_EMAIL || "",
-  address: process.env.OPERATOR_ADDRESS || "",
+  email: process.env.OPERATOR_EMAIL || "belsciy@list.ru",
+  address: process.env.OPERATOR_ADDRESS || "г. Москва",
   date: process.env.LEGAL_DATE || "11.10.2026",
 };

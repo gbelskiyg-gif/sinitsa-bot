@@ -9,7 +9,7 @@ startServer(PORT);
 // Раз в сутки удаляем персональные данные из старых заказов (см. политику конфиденциальности)
 const cleanup = () => {
   try {
-    const n = store.anonymizeOldOrders(365);
+    const n = store.anonymizeOldOrders(30);
     if (n) console.log(`Обезличено старых заказов: ${n}`);
   } catch (e) {
     console.error("[cleanup]", e);

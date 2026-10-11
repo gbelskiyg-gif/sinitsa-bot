@@ -132,8 +132,8 @@ export function setStatus(id, status) {
   ).run(status, status, id);
   return getOrder(id);
 }
-/** Через 12 месяцев после выполнения или отмены удаляем имя, телефон, адрес и комментарий. */
-export function anonymizeOldOrders(days = 365) {
+/** Через 30 дней после выполнения или отмены удаляем имя, телефон, адрес и комментарий. */
+export function anonymizeOldOrders(days = 30) {
   return db
     .prepare(
       `UPDATE orders SET name = '', phone = '', address = '', comment = ''

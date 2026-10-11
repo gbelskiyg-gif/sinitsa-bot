@@ -144,37 +144,48 @@ function addToCart(teaId, pack, qty, set = "") {
 }
 
 // ---------- подбор ----------
+// Вопрос может иметь вариант текста для подарка: gift = { title, hint, labels: {значение: подпись} }
 const QUESTIONS = [
-  { key: "drink", title: "Что вы обычно пьёте?", hint: "Отталкиваемся от привычного вкуса", options: [
+  { key: "who", title: "Для кого подбираем чай?", hint: "Подарок подберём так, чтобы понравился даже тому, кто раньше не пил китайский чай", options: [
+    ["self", "🙋", "Себе"], ["gift", "🎁", "В подарок"]] },
+  { key: "drink", multi: true, exclusive: "none", title: "Что вы обычно пьёте?", hint: "Можно выбрать несколько. Отталкиваемся от привычного вкуса", options: [
     ["black", "☕", "Чёрный чай в пакетиках"], ["coffee", "🫘", "Кофе"], ["green", "🍃", "Зелёный чай"],
-    ["herbal", "🌼", "Травяной или фруктовый"], ["none", "✨", "Ничего особенного", "хочу попробовать новое"]] },
-  { key: "time", title: "Когда будете пить?", hint: "От этого зависит, насколько бодрым подобрать чай", options: [
-    ["morning", "🌅", "Утром, чтобы проснуться"], ["day", "💻", "Днём, за делами"], ["evening", "🌙", "Вечером, без спешки"], ["food", "🍽", "После еды"]] },
-  { key: "likes", multi: true, title: "Что вам нравится?", hint: "Можно выбрать несколько", options: [
+    ["herbal", "🌼", "Травяной или фруктовый"], ["none", "✨", "Ничего особенного", "хочу попробовать новое"]],
+    gift: { title: "Что обычно пьёт тот, кому дарите?", labels: { none: ["Не знаю", "подберём универсальный вкус"] } } },
+  { key: "time", multi: true, title: "Когда будете пить?", hint: "Можно выбрать несколько. От этого зависит, насколько бодрым подобрать чай", options: [
+    ["morning", "🌅", "Утром, чтобы проснуться"], ["day", "💻", "Днём, за делами"], ["evening", "🌙", "Вечером, без спешки"], ["food", "🍽", "После еды"]],
+    gift: { title: "Когда этот человек обычно пьёт чай?" } },
+  { key: "likes", multi: true, exclusive: "any", title: "Что вам нравится?", hint: "Можно выбрать несколько", options: [
     ["honey", "🍯", "Мёд и выпечка"], ["fruit", "🍑", "Фрукты и сухофрукты"], ["flowers", "🌸", "Цветы"], ["nuts", "🌰", "Орехи и карамель"],
-    ["fresh", "🌿", "Свежая зелень"], ["forest", "🌲", "Лес и дерево"], ["spice", "🌶", "Пряности"]] },
+    ["fresh", "🌿", "Свежая зелень"], ["forest", "🌲", "Лес и дерево"], ["spice", "🌶", "Пряности"], ["any", "🤷", "Не знаю, всё подряд"]],
+    gift: { title: "Что нравится тому, кому дарите?", labels: { any: ["Не знаю"] } } },
   { key: "dislikes", multi: true, exclusive: "none", title: "Что точно не нравится?", hint: "Уберём такие чаи из подбора", options: [
     ["bitter", "😖", "Горечь и терпкость"], ["earthy", "🍂", "«Земляной» вкус", "как у тёмного пуэра"], ["strong", "⚡", "Слишком бодрящее"],
-    ["none", "👌", "Ничего, готов пробовать"]] },
+    ["none", "👌", "Ничего, готов пробовать"]],
+    gift: { title: "Что точно не понравится?", labels: { none: ["Не знаю"] } } },
   { key: "brew", title: "Как будете заваривать?", hint: "Некоторые чаи горчат, если долго стоят в кружке", options: [
-    ["mug", "🫖", "В кружке или заварочном чайнике"], ["gaiwan", "🍶", "В гайвани, проливами", "маленький сосуд, много коротких заварок"], ["unknown", "🤔", "Пока не знаю"]] },
+    ["mug", "🫖", "В кружке или заварочном чайнике"], ["gaiwan", "🍶", "В гайвани, проливами", "маленький сосуд, много коротких заварок"], ["unknown", "🤔", "Пока не знаю"]],
+    gift: { title: "Как будут заваривать?" } },
 ];
-const LIKE_TO_TASTE = { honey: ["honey", "bread"], fruit: ["fruity"], flowers: ["floral"], nuts: ["nutty"], fresh: ["herbal"], forest: ["woody"], spice: ["spicy"] };
+const LIKE_TO_TASTE = { honey: ["honey", "bread"], fruit: ["fruity"], flowers: ["floral"], nuts: ["nutty"], fresh: ["herbal"], forest: ["woody"], spice: ["spicy"], any: [] };
 const DRINK_LABEL = { black: "чёрный чай", coffee: "кофе", green: "зелёный чай", herbal: "травяной чай" };
+const isGift = (a) => a.who === "gift";
 
-function newQuiz() { S.quiz = { step: 0, a: { drink: "", time: "", likes: [], dislikes: [], brew: "" } }; }
+function newQuiz() { S.quiz = { step: 0, a: { who: "", drink: [], time: [], likes: [], dislikes: [], brew: "" } }; }
 
 function renderQuiz() {
   if (!S.quiz) newQuiz();
   const { step, a } = S.quiz;
   if (step >= QUESTIONS.length) return renderResults();
   const q = QUESTIONS[step];
+  const g = isGift(a) && q.gift ? q.gift : {};
+  const opts = q.options.map(([v, e, l, sub]) => (g.labels?.[v] ? [v, e, g.labels[v][0], g.labels[v][1]] : [v, e, l, sub]));
   const sel = (v) => (q.multi ? a[q.key].includes(v) : a[q.key] === v);
   const ready = q.multi ? a[q.key].length > 0 : !!a[q.key];
   $("#view").innerHTML = `<div class="quiz-head"><div class="eyebrow">Подбор чая · вопрос ${step + 1} из ${QUESTIONS.length}</div>
     <div class="progress"><i style="width:${(step / QUESTIONS.length) * 100}%"></i></div>
-    <h2 class="q-title">${q.title}</h2><p class="muted small" style="margin:0">${q.hint}</p></div>
-    <div class="options" id="opts">${q.options.map(([v, e, l, s]) => `<button class="option" data-v="${v}" aria-pressed="${sel(v)}"><span class="e">${e}</span><span>${l}${s ? `<small>${s}</small>` : ""}</span></button>`).join("")}</div>
+    <h2 class="q-title">${g.title || q.title}</h2><p class="muted small" style="margin:0">${g.hint || q.hint}</p></div>
+    <div class="options" id="opts">${opts.map(([v, e, l, sub]) => `<button class="option" data-v="${v}" aria-pressed="${sel(v)}"><span class="e">${e}</span><span>${l}${sub ? `<small>${sub}</small>` : ""}</span></button>`).join("")}</div>
     <div class="quiz-nav">${step ? `<button class="btn ghost" id="back">Назад</button>` : ""}${q.multi ? `<button class="btn" id="next" ${ready ? "" : "disabled"}>Дальше</button>` : ""}</div>`;
   $("#opts").onclick = (e) => {
     const b = e.target.closest(".option"); if (!b) return;
@@ -208,6 +219,13 @@ function feedbackBonus(t) {
   return b;
 }
 const WISH_LABEL = { stronger: "покрепче", softer: "помягче", sweeter: "послаще", aroma: "ароматнее", same: "так же, как в прошлый раз" };
+function timeBonus(t, tm) {
+  const c = t.quiz.caffeine;
+  if (tm === "morning") return c === 3 ? 2 : 0;
+  if (tm === "evening") return c === 3 ? -3 : t.kind === "gaba" || t.kind === "light_oolong" ? 1 : 0;
+  if (tm === "food") return ["shu", "dark_oolong", "puer"].includes(t.kind) ? 2 : 0;
+  return 0;
+}
 function scoreTea(t, a) {
   const q = t.quiz;
   if (!t.available) return null;
@@ -217,14 +235,18 @@ function scoreTea(t, a) {
   const wanted = a.likes.flatMap((l) => LIKE_TO_TASTE[l]);
   const matched = [...new Set(t.tastes.filter((x) => wanted.includes(x)))];
   let s = matched.length * 3 - (wanted.length && !matched.length ? 2 : 0);
-  if (q.familiar.includes(a.drink)) s += 3;
-  if (a.time === "morning" && q.caffeine === 3) s += 2;
-  if (a.time === "evening") s += q.caffeine === 3 ? -3 : t.kind === "gaba" || t.kind === "light_oolong" ? 1 : 0;
-  if (a.time === "food" && ["shu", "dark_oolong", "puer"].includes(t.kind)) s += 2;
+  if (a.drink.some((d) => q.familiar.includes(d))) s += 3;
+  // Несколько вариантов времени: чай оцениваем по тому моменту, для которого он подходит лучше всего
+  if (a.time.length) s += Math.max(...a.time.map((tm) => timeBonus(t, tm)));
   if (a.dislikes.includes("bitter") && q.bitter === 1) s -= 2;
   if (a.dislikes.includes("strong") && q.caffeine === 3) s -= 2;
   if (t.kind === "puer") s -= 2; // тип пуэра не уточнён у поставщика: не ставим его первым
-  s += feedbackBonus(t);
+  if (isGift(a)) {
+    // подарок: вкус получателя неизвестен точно, поэтому без резких и спорных чаёв
+    if (q.bitter >= 2) s -= 3;
+    if (q.earthy && !a.likes.includes("forest")) s -= 2;
+    if (["gaba", "red", "light_oolong"].includes(t.kind)) s += 1;
+  } else s += feedbackBonus(t);
   if (s === -Infinity) return null;
   return { t, s, matched };
 }
@@ -237,17 +259,31 @@ function pickThree(a) {
   const group = (x) => S.kinds[x.t.kind].group;
   const bolder = scored.find((x) => !used.has(x.t.id) && group(x) !== group(safe)) || scored.find((x) => !used.has(x.t.id));
   if (bolder) used.add(bolder.t.id);
-  const discovery = scored.find((x) => !used.has(x.t.id) && !x.t.quiz.familiar.includes(a.drink) && x.matched.length) || scored.find((x) => !used.has(x.t.id));
-  return [["Точно понравится", safe], ["Чуть смелее", bolder], ["Открытие", discovery]].filter(([, x]) => x);
+  const discovery = scored.find((x) => !used.has(x.t.id) && !a.drink.some((d) => x.t.quiz.familiar.includes(d)) && x.matched.length) || scored.find((x) => !used.has(x.t.id));
+  const picks = [["Точно понравится", safe], ["Чуть смелее", bolder], ["Открытие", discovery]].filter(([, x]) => x);
+  // Выбрали и утро, и вечер: в тройке должен быть и бодрый, и спокойный чай
+  if (a.time.includes("morning") && a.time.includes("evening") && picks.length === 3) {
+    const bold = (x) => x.t.quiz.caffeine === 3;
+    const ids = new Set(picks.map(([, x]) => x.t.id));
+    if (picks.every(([, x]) => bold(x))) { const calm = scored.find((x) => !bold(x) && !ids.has(x.t.id)); if (calm) picks[2][1] = calm; }
+    else if (!picks.some(([, x]) => bold(x))) { const b = scored.find((x) => bold(x) && !ids.has(x.t.id)); if (b) picks[2][1] = b; }
+  }
+  return picks;
 }
 
 function whyText(x, a) {
   const parts = [];
-  if (x.matched.length) parts.push(`Есть то, что вы любите: ${x.matched.map((m) => S.tastes[m].toLowerCase()).join(", ")}.`);
-  if (x.t.quiz.familiar.includes(a.drink) && DRINK_LABEL[a.drink]) parts.push(`Понятный вкус для тех, кто пьёт ${DRINK_LABEL[a.drink]}.`);
-  else if (a.drink !== "none") parts.push("Новый для вас вкус, но в знакомых оттенках.");
-  if (a.time === "evening") parts.push(x.t.quiz.caffeine === 3 ? "Вечером заваривайте коротко: так он бодрит мягче." : "Подходит для спокойного вечера, но кофеин в нём есть.");
-  if (a.time === "morning" && x.t.quiz.caffeine === 3) parts.push("Хорошо бодрит утром.");
+  const gift = isGift(a);
+  if (x.matched.length) parts.push(`${gift ? "Есть то, что нравится получателю" : "Есть то, что вы любите"}: ${x.matched.map((m) => S.tastes[m].toLowerCase()).join(", ")}.`);
+  const fam = a.drink.filter((d) => x.t.quiz.familiar.includes(d) && DRINK_LABEL[d]);
+  if (fam.length) parts.push(`Понятный вкус для тех, кто пьёт ${fam.map((d) => DRINK_LABEL[d]).join(" или ")}.`);
+  else if (!a.drink.includes("none")) parts.push(gift ? "Новый вкус в знакомых оттенках — хороший способ удивить." : "Новый для вас вкус, но в знакомых оттенках.");
+  const c = x.t.quiz.caffeine;
+  const morning = a.time.includes("morning"), evening = a.time.includes("evening");
+  if (morning && c === 3) parts.push(evening ? "Этот — для утра: хорошо бодрит." : "Хорошо бодрит утром.");
+  else if (evening && c === 3) parts.push("Вечером заваривайте коротко: так он бодрит мягче.");
+  else if (evening) parts.push(morning ? "Этот — для вечера: спокойный, но кофеин в нём есть." : "Подходит для спокойного вечера, но кофеин в нём есть.");
+  if (gift && x.t.quiz.mug) parts.push("Легко заварить даже в кружке.");
   return parts.join(" ");
 }
 
@@ -264,8 +300,8 @@ function renderResults() {
   const sum = picks.reduce((s, [, x]) => s + x.t.prices["20"], 0);
   const disc = Math.round((sum * SET_DISCOUNT) / 10) * 10;
   $("#view").innerHTML = `<div class="quiz-head"><div class="eyebrow">Ваш подбор</div>
-    <div class="progress"><i style="width:100%"></i></div><h2 class="q-title">Три чая для вас</h2>
-    ${S.me?.feedback?.length ? `<p class="muted small" style="margin:6px 0 0">Учли ваши прошлые отзывы${lastWish() ? `: хотелось ${WISH_LABEL[lastWish()]}` : ""}.</p>` : ""}</div>
+    <div class="progress"><i style="width:100%"></i></div><h2 class="q-title">${isGift(a) ? "Три чая в подарок" : "Три чая для вас"}</h2>
+    ${!isGift(a) && S.me?.feedback?.length ? `<p class="muted small" style="margin:6px 0 0">Учли ваши прошлые отзывы${lastWish() ? `: хотелось ${WISH_LABEL[lastWish()]}` : ""}.</p>` : ""}</div>
     ${picks.map(([role, x]) => {
       const r = S.recipes[x.t.kind];
       return `<article class="result"><div class="role">${role}</div><h3>${esc(x.t.name)}</h3>
@@ -274,8 +310,8 @@ function renderResults() {
         <p class="mug">🫖 ${mug ? esc(S.mugRecipes[x.t.kind]) : `${esc(r[0])} на ${esc(r[1])}, ${esc(r[2])}, первый пролив ${esc(r[3])}`}</p>
         <div class="row-actions"><button class="btn ghost" data-tea="${x.t.id}">Подробнее · от ${rub(x.t.prices["20"])}</button></div></article>`;
     }).join("")}
-    ${picks.length === 3 ? `<div class="trial"><div class="eyebrow">Пробный набор</div><h3>Все три по 20 г</h3>
-      <p class="muted small">Попробуйте и поймите, какой ваш. Скидка 10% на набор.</p>
+    ${picks.length === 3 ? `<div class="trial"><div class="eyebrow">${isGift(a) ? "Подарочный набор" : "Пробный набор"}</div><h3>Все три по 20 г</h3>
+      <p class="muted small">${isGift(a) ? "Три разных вкуса — пусть выберет свой. Скидка 10% на набор. Если нужна подарочная упаковка или открытка, напишите в комментарии к заказу." : "Попробуйте и поймите, какой ваш. Скидка 10% на набор."}</p>
       <div class="big-price">${rub(sum - disc)} <small><s>${rub(sum)}</s></small></div>
       <button class="btn wide" id="trial" style="margin-top:12px">Положить набор в корзину</button></div>` : ""}
     <button class="link" id="again">Пройти подбор заново</button>`;

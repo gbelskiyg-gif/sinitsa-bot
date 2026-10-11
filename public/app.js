@@ -488,7 +488,7 @@ function renderCart() {
       : `<label class="search"><input id="promo" placeholder="Промокод" autocomplete="off"></label><button class="btn ghost" id="promo-go">Применить</button>`}
       <p class="error" id="promo-err"></p></div>` : ""}
     <div class="total"><span>Итого</span><span>${rub(total)}</span></div>
-    ${S.freeFrom ? `<p class="free-left">${total >= S.freeFrom ? "🎁 Доставка до ПВЗ Яндекса и Ozon — бесплатно" : `🚚 До бесплатной доставки осталось ${rub(S.freeFrom - total)}`}</p>` : ""}
+    ${S.freeFrom ? `<p class="free-left">${total >= S.freeFrom ? "🎁 Доставка бесплатная — любой службой" : `🚚 До бесплатной доставки осталось ${rub(S.freeFrom - total)}`}</p>` : ""}
     <p class="note">Сумма без доставки. Чай собираем под заказ: продавец подтвердит наличие, доставку и сроки в чате с ботом. Оплата после подтверждения.</p>
     ${S.deliveryInfo ? `<details class="dl-info"><summary>Доставка: службы, цены, сроки</summary><p>${esc(S.deliveryInfo.replace(/^🚚 Доставка\n\n/, "")).replace(/\n/g, "<br>")}</p></details>` : ""}
     ${off.length ? `<p class="error">Уберите чаи, которых нет в наличии, чтобы оформить заказ.</p>` : ""}
@@ -518,7 +518,6 @@ function deliveryCost(k, total) {
   const d = S.delivery[k]; if (!d) return null;
   if (!d.price) return { cost: 0, free: false, text: "" };
   if (S.freeFrom && total >= S.freeFrom && d.free === "full") return { cost: 0, free: true, text: "бесплатно" };
-  if (S.freeFrom && total >= S.freeFrom && d.free === "part") return { cost: d.price - 300, free: false, text: `≈${rub(d.price - 300)} (−300 ₽ от тарифа)` };
   return { cost: d.price, free: false, text: `≈${rub(d.price)}, точную сумму подтвердит продавец` };
 }
 function loadForm() { try { return JSON.parse(localStorage.getItem("form") || "{}"); } catch { return {}; } }

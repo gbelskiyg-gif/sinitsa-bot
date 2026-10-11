@@ -204,11 +204,12 @@ test("набор по 50 и 100 г тоже со скидкой 10%, смеша�
   assert.equal(r.body.order.total, full);
 });
 
-test("доставка: бесплатно от порога для ПВЗ, скидка 300 ₽ для СДЭК", async () => {
+test("доставка: от порога бесплатно любой службой", async () => {
   const { deliveryCost, FREE_DELIVERY_FROM } = await import("../src/catalog.js");
   assert.equal(deliveryCost("yandex", FREE_DELIVERY_FROM).free, true);
   assert.equal(deliveryCost("yandex", FREE_DELIVERY_FROM - 10).cost, 300);
-  assert.equal(deliveryCost("cdek", FREE_DELIVERY_FROM).cost, 150);
+  assert.equal(deliveryCost("cdek", FREE_DELIVERY_FROM).free, true);
+  assert.equal(deliveryCost("post", FREE_DELIVERY_FROM - 10).cost, 450);
   assert.equal(deliveryCost("meet", 100).cost, 0);
   const r = await call("/api/orders", { method: "POST", init: signInitData({ id: 801 }, TOKEN), body: JSON.stringify(withConsent({ items: [{ teaId: 13, pack: "50", qty: 1 }], name: "Д", phone: "89001234567", delivery: "ozon", address: "Москва, ул. Чайная, 1" })) });
   assert.equal(r.status, 201, JSON.stringify(r.body));

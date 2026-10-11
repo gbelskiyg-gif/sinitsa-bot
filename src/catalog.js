@@ -100,23 +100,22 @@ export function normalizePromo(code) {
 export const PACKS = ["20", "50", "100", "wholesale"];
 
 // Доставка. price — ориентир для покупателя, точную сумму продавец подтверждает в чате.
-// Порог бесплатной доставки: средняя наценка ~45%, доставка до ПВЗ ~300 ₽ —
-// с 3 000 ₽ она съедает около 20% прибыли с заказа (с 2 000 ₽ было бы ~32%).
+// Порог бесплатной доставки — для всех служб одинаковый, чтобы обещание «бесплатно» было без оговорок.
+// Средняя наценка ~45%: на заказе 3 000 ₽ доставка до ПВЗ (~300 ₽) съедает ~20% прибыли, СДЭК/Почта (~450 ₽) — ~30%.
 export const FREE_DELIVERY_FROM = 3000;
 export const DELIVERY = {
   yandex: { label: "ПВЗ Яндекс Маркета", price: 300, note: "обычно быстрее и дешевле всего", address: "Город и адрес пункта выдачи Яндекс Маркета", free: "full" },
   ozon: { label: "ПВЗ Ozon", price: 300, note: "недорого, пунктов много", address: "Город и адрес пункта выдачи Ozon", free: "full" },
-  cdek: { label: "СДЭК", price: 450, note: "пункт выдачи или курьер", address: "Город и адрес пункта СДЭК или адрес для курьера", free: "part" },
-  post: { label: "Почта России", price: 450, note: "если в городе нет других пунктов выдачи", address: "Индекс, город и адрес", free: "part" },
+  cdek: { label: "СДЭК", price: 450, note: "пункт выдачи или курьер", address: "Город и адрес пункта СДЭК или адрес для курьера", free: "full" },
+  post: { label: "Почта России", price: 450, note: "если в городе нет других пунктов выдачи", address: "Индекс, город и адрес", free: "full" },
   meet: { label: "Личная встреча", price: 0, note: "договоримся о месте и времени в чате", address: "" },
 };
-/** Стоимость доставки для покупателя: { cost, free, text }. Скидка «part» — минус 300 ₽ от тарифа. */
+/** Стоимость доставки для покупателя: { cost, free, text }. */
 export function deliveryCost(method, goodsTotal) {
   const d = DELIVERY[method];
   if (!d) return null;
   if (!d.price) return { cost: 0, free: false, text: "без доставки" };
   if (goodsTotal >= FREE_DELIVERY_FROM && d.free === "full") return { cost: 0, free: true, text: "бесплатно" };
-  if (goodsTotal >= FREE_DELIVERY_FROM && d.free === "part") return { cost: d.price - 300, free: false, text: `≈${rub(d.price - 300)} (−300 ₽ от тарифа)` };
   return { cost: d.price, free: false, text: `≈${rub(d.price)}, точную сумму подтвердит продавец` };
 }
 export const DELIVERY_INFO =
@@ -127,7 +126,7 @@ export const DELIVERY_INFO =
   "• СДЭК — около 450 ₽, можно курьером\n" +
   "• Почта России — около 450 ₽, для небольших городов и сёл\n" +
   "• Личная встреча — договоримся в чате\n\n" +
-  `🎁 От ${FREE_DELIVERY_FROM.toLocaleString("ru-RU")} ₽ доставка до ПВЗ Яндекса и Ozon бесплатно, для СДЭК и Почты — минус 300 ₽.\n\n` +
+  `🎁 От ${FREE_DELIVERY_FROM.toLocaleString("ru-RU")} ₽ доставка бесплатная — любой службой.\n\n` +
   "⏱ В пути: Москва, Петербург и центральная Россия — обычно 2–4 рабочих дня, другие регионы — 5–10.\n" +
   "Чай собираем под заказ, поэтому дату отправки и точную стоимость доставки продавец подтвердит в чате. Оплата после подтверждения.";
 

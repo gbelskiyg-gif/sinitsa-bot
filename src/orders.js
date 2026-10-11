@@ -11,13 +11,15 @@ export const SET_DISCOUNT = 0.1;
 const clean = (s, max) => String(s ?? "").replace(/\s+/g, " ").trim().slice(0, max);
 
 /** Проверяет заказ из мини-приложения и считает сумму по ценам каталога (цены клиента не используются). */
+// Набор: 3–6 разных чаёв одной фасовки (20, 50 или 100 г) в одинаковом количестве
 export function isValidSet(group, get = (i) => i) {
   const g = group.map(get);
   return (
     g.length >= 3 &&
     g.length <= 6 &&
     new Set(g.map((i) => i.teaId)).size === g.length &&
-    g.every((i) => i.pack === "20" && i.qty === g[0].qty)
+    ["20", "50", "100"].includes(g[0].pack) &&
+    g.every((i) => i.pack === g[0].pack && i.qty === g[0].qty)
   );
 }
 const discountLine = (name, label, discount) => ({ teaId: 0, name, pack: "", label, grams: 0, price: -discount, qty: 1, sum: -discount, set: "" });

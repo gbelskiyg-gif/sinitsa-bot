@@ -73,6 +73,7 @@ dialog::backdrop { background: rgba(8, 6, 11, .85); }
 .tag { font-size: 12px; border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; color: var(--muted); }
 .sizes { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 10px; }
 .sizes .chip { font-size: 14px; color: var(--ink); }
+.sizes .chip[aria-pressed="true"] { color: var(--on-gold); }
 .big-price { font: 28px var(--display); color: var(--gold); font-variant-numeric: tabular-nums; }
 .big-price small { font: 13px var(--body); color: var(--muted); }
 .block { border-top: 1px solid var(--line); margin-top: 16px; padding-top: 14px; }

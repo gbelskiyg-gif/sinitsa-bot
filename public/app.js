@@ -325,8 +325,12 @@ function renderResults() {
     return;
   }
   const mug = a.brew !== "gaiwan";
-  const sum = picks.reduce((s, [, x]) => s + x.t.prices["20"], 0);
-  const disc = Math.round((sum * SET_DISCOUNT) / 10) * 10;
+  let setPack = "20";
+  const setPrice = (pack) => {
+    const sum = picks.reduce((s, [, x]) => s + x.t.prices[pack], 0);
+    return { sum, total: sum - Math.round((sum * SET_DISCOUNT) / 10) * 10 };
+  };
+  const { sum, total } = setPrice(setPack);
   $("#view").innerHTML = `<div class="quiz-head"><div class="eyebrow">Ваш подбор</div>
     <div class="progress"><i style="width:100%"></i></div><h2 class="q-title">${isGift(a) ? "Три чая в подарок" : "Три чая для вас"}</h2>
     ${!isGift(a) && S.me?.feedback?.length ? `<p class="muted small" style="margin:6px 0 0">Учли ваши прошлые отзывы${lastWish() ? `: хотелось ${WISH_LABEL[lastWish()]}` : ""}.</p>` : ""}</div>
@@ -338,16 +342,25 @@ function renderResults() {
         <p class="mug">🫖 ${mug ? esc(S.mugRecipes[x.t.kind]) : `${esc(r[0])} на ${esc(r[1])}, ${esc(r[2])}, первый пролив ${esc(r[3])}`}</p>
         <div class="row-actions"><button class="btn ghost" data-tea="${x.t.id}">Подробнее · от ${rub(x.t.prices["20"])}</button></div></article>`;
     }).join("")}
-    ${picks.length === 3 ? `<div class="trial"><div class="eyebrow">${isGift(a) ? "Подарочный набор" : "Пробный набор"}</div><h3>Все три по 20 г</h3>
+    ${picks.length === 3 ? `<div class="trial"><div class="eyebrow">${isGift(a) ? "Подарочный набор" : "Пробный набор"}</div><h3 id="trial-title">Все три по 20 г</h3>
       <p class="muted small">${isGift(a) ? "Три разных вкуса — пусть выберет свой. Скидка 10% на набор. Если нужна подарочная упаковка или открытка, напишите в комментарии к заказу." : "Попробуйте и поймите, какой ваш. Скидка 10% на набор."}</p>
-      <div class="big-price">${rub(sum - disc)} <small><s>${rub(sum)}</s></small></div>
+      <div class="chips sizes" id="trial-packs" style="margin:12px 0 4px">${["20", "50", "100"].map((p) => `<button class="chip" data-p="${p}" aria-pressed="${p === setPack}">по ${p} г</button>`).join("")}</div>
+      <div class="big-price" id="trial-price">${rub(total)} <small><s>${rub(sum)}</s></small></div>
       <button class="btn wide" id="trial" style="margin-top:12px">Положить набор в корзину</button></div>` : ""}
     ${moreHTML(a, picks)}
     <div class="quiz-end"><button class="btn ghost wide" id="home">В главное меню</button>
     <button class="link" id="again">Пройти подбор заново</button></div>`;
+  $("#trial-packs")?.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-p]"); if (!b) return;
+    setPack = b.dataset.p;
+    $("#trial-packs").querySelectorAll("[data-p]").forEach((x) => x.setAttribute("aria-pressed", x.dataset.p === setPack));
+    const pr = setPrice(setPack);
+    $("#trial-title").textContent = `Все три по ${setPack} г`;
+    $("#trial-price").innerHTML = `${rub(pr.total)} <small><s>${rub(pr.sum)}</s></small>`;
+  });
   $("#trial")?.addEventListener("click", () => {
     const set = "quiz-" + Date.now().toString(36);
-    picks.forEach(([, x]) => S.cart.push({ teaId: x.t.id, pack: "20", qty: 1, set }));
+    picks.forEach(([, x]) => S.cart.push({ teaId: x.t.id, pack: setPack, qty: 1, set }));
     saveCart(); toast("Набор в корзине"); location.hash = "#cart";
   });
   $("#again").onclick = () => { newQuiz(); renderQuiz(); };
@@ -388,7 +401,7 @@ function cartLines() {
   for (const l of lines) if (l.i.set) (sets[l.i.set] ||= []).push(l);
   let discount = 0;
   for (const g of Object.values(sets))
-    if (g.length >= 3 && g.length <= 6 && new Set(g.map((l) => l.t.id)).size === g.length && g.every((l) => l.i.pack === "20" && l.i.qty === g[0].i.qty)) {
+    if (g.length >= 3 && g.length <= 6 && new Set(g.map((l) => l.t.id)).size === g.length && ["20", "50", "100"].includes(g[0].i.pack) && g.every((l) => l.i.pack === g[0].i.pack && l.i.qty === g[0].i.qty)) {
       discount += Math.round((g.reduce((s, l) => s + l.sum, 0) * SET_DISCOUNT) / 10) * 10;
       g.forEach((l) => (l.inSet = true));
     }

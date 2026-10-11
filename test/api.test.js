@@ -185,3 +185,19 @@ test("меню рассылается старым пользователям о
   store.markMenu(777001, 1);
   assert.ok(!store.usersWithoutMenu(1).includes(777001));
 });
+
+test("набор по 50 и 100 г тоже со скидкой 10%, смешанные фасовки — без скидки", async () => {
+  const cat = (await call("/api/catalog", { init: "" })).body;
+  const ids = [13, 14, 16];
+  for (const pack of ["50", "100"]) {
+    const items = ids.map((id) => ({ teaId: id, pack, qty: 1, set: "quiz-" + pack }));
+    const r = await call("/api/orders", { method: "POST", init: signInitData({ id: 600 + Number(pack) }, TOKEN), body: JSON.stringify(withConsent({ items, name: "Н", phone: "89001234567", delivery: "pickup" })) });
+    assert.equal(r.status, 201, JSON.stringify(r.body));
+    const sum = ids.reduce((s, id) => s + cat.teas.find((t) => t.id === id).prices[pack], 0);
+    assert.equal(r.body.order.total, sum - Math.round(sum * 0.1 / 10) * 10);
+  }
+  const mixed = [["13", "20"], ["14", "50"], ["16", "50"]].map(([id, pack]) => ({ teaId: Number(id), pack, qty: 1, set: "mix" }));
+  const r = await call("/api/orders", { method: "POST", init: signInitData({ id: 699 }, TOKEN), body: JSON.stringify(withConsent({ items: mixed, name: "Н", phone: "89001234567", delivery: "pickup" })) });
+  const full = cat.teas.find((t) => t.id === 13).prices["20"] + cat.teas.find((t) => t.id === 14).prices["50"] + cat.teas.find((t) => t.id === 16).prices["50"];
+  assert.equal(r.body.order.total, full);
+});

@@ -6,6 +6,7 @@ export const BTN = {
   shop: "🛍 Каталог",
   orders: "📦 Мои заказы",
   about: "🐦 О Синице",
+  delivery: "🚚 Доставка",
   active: "🧾 Заказы в работе",
   stock: "🫙 Наличие",
 };
@@ -16,7 +17,8 @@ export const MENU_VERSION = 1;
 export function menuKeyboard(userId) {
   const rows = [
     [{ text: BTN.quiz }, { text: BTN.shop }],
-    [{ text: BTN.orders }, { text: BTN.about }],
+    [{ text: BTN.orders }, { text: BTN.delivery }],
+    [{ text: BTN.about }],
   ];
   if (isAdmin(userId)) rows.push([{ text: BTN.active }, { text: BTN.stock }]);
   return { keyboard: rows, resize_keyboard: true, is_persistent: true, input_field_placeholder: "Напишите вопрос продавцу" };

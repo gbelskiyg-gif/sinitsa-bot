@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { verifyInitData } from "./auth.js";
 import { BOT_TOKEN } from "./config.js";
-import { KINDS, MUG_RECIPES, RECIPES, SETS, TASTES, TEAS, quizOf } from "./catalog.js";
+import { DELIVERY, DELIVERY_INFO, FREE_DELIVERY_FROM, KINDS, MUG_RECIPES, RECIPES, SETS, TASTES, TEAS, quizOf } from "./catalog.js";
 import * as store from "./db.js";
 import {
   OrderError,
@@ -123,6 +123,9 @@ async function api(req, res, url) {
       mugRecipes: MUG_RECIPES,
       sets: SETS.filter((s) => s.teas.every((id) => avail[id] !== false)),
       tastes: TASTES,
+      delivery: DELIVERY,
+      freeDeliveryFrom: FREE_DELIVERY_FROM,
+      deliveryInfo: DELIVERY_INFO,
     });
   }
 

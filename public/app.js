@@ -488,7 +488,9 @@ function renderCart() {
       : `<label class="search"><input id="promo" placeholder="Промокод" autocomplete="off"></label><button class="btn ghost" id="promo-go">Применить</button>`}
       <p class="error" id="promo-err"></p></div>` : ""}
     <div class="total"><span>Итого</span><span>${rub(total)}</span></div>
-    <p class="note">Без доставки. Чай собираем под заказ: продавец подтвердит наличие, сумму с доставкой и сроки в чате с ботом. Оплата после подтверждения.</p>
+    ${S.freeFrom ? `<p class="free-left">${total >= S.freeFrom ? "🎁 Доставка до ПВЗ Яндекса и Ozon — бесплатно" : `🚚 До бесплатной доставки осталось ${rub(S.freeFrom - total)}`}</p>` : ""}
+    <p class="note">Сумма без доставки. Чай собираем под заказ: продавец подтвердит наличие, доставку и сроки в чате с ботом. Оплата после подтверждения.</p>
+    ${S.deliveryInfo ? `<details class="dl-info"><summary>Доставка: службы, цены, сроки</summary><p>${esc(S.deliveryInfo.replace(/^🚚 Доставка\n\n/, "")).replace(/\n/g, "<br>")}</p></details>` : ""}
     ${off.length ? `<p class="error">Уберите чаи, которых нет в наличии, чтобы оформить заказ.</p>` : ""}
     <button class="btn wide" id="go" ${off.length ? "disabled" : ""}>Оформить заказ</button>`;
   $("#view").onclick = (e) => {
@@ -511,27 +513,47 @@ function renderCart() {
   });
 }
 
+// Доставка: то же правило, что на сервере (src/catalog.js → deliveryCost)
+function deliveryCost(k, total) {
+  const d = S.delivery[k]; if (!d) return null;
+  if (!d.price) return { cost: 0, free: false, text: "" };
+  if (S.freeFrom && total >= S.freeFrom && d.free === "full") return { cost: 0, free: true, text: "бесплатно" };
+  if (S.freeFrom && total >= S.freeFrom && d.free === "part") return { cost: d.price - 300, free: false, text: `≈${rub(d.price - 300)} (−300 ₽ от тарифа)` };
+  return { cost: d.price, free: false, text: `≈${rub(d.price)}, точную сумму подтвердит продавец` };
+}
 function loadForm() { try { return JSON.parse(localStorage.getItem("form") || "{}"); } catch { return {}; } }
 function renderCheckout(total) {
   const f = loadForm();
   const u = tgApp?.initDataUnsafe?.user;
+  const dSel = S.delivery[f.delivery] ? f.delivery : "yandex";
   $("#view").onclick = null;
   $("#view").innerHTML = `<h2 class="section-title">Оформление</h2>
     ${inTelegram() ? "" : `<p class="error">Оформить заказ можно только из Telegram. <a href="${BOT_LINK}">Откройте магазин через бота</a>.</p>`}
     <form id="f" novalidate>
       <label>Имя<input id="f-name" name="name" required maxlength="80" value="${esc(f.name || u?.first_name || "")}"></label>
       <label>Телефон<input id="f-phone" name="phone" type="tel" required maxlength="30" placeholder="+7 900 000-00-00" value="${esc(f.phone || "")}"></label>
-      <label>Способ получения<select id="f-delivery" name="delivery"><option value="delivery">Доставка</option><option value="pickup" ${f.delivery === "pickup" ? "selected" : ""}>Самовывоз</option></select></label>
-      <label id="addr-wrap">Город и адрес<input id="f-address" name="address" maxlength="300" value="${esc(f.address || "")}"></label>
+      <fieldset class="dl"><legend>Доставка</legend>${Object.entries(S.delivery).map(([k, d]) => {
+        const c = deliveryCost(k, total);
+        return `<label class="dl-opt"><input type="radio" name="delivery" value="${k}" ${k === dSel ? "checked" : ""}><span><b>${esc(d.label)}</b><small>${esc(d.note)}</small></span><span class="dl-price${c.free ? " free" : ""}">${c.free ? "бесплатно" : c.cost ? `≈${rub(c.cost)}` : "—"}</span></label>`;
+      }).join("")}</fieldset>
+      <label id="addr-wrap"><span id="addr-label">Город и адрес</span><input id="f-address" name="address" maxlength="300" value="${esc(f.address || "")}"></label>
       <label>Комментарий (необязательно)<textarea id="f-comment" name="comment" rows="3" maxlength="500"></textarea></label>
       <label class="consent"><input type="checkbox" id="f-consent" name="consent"> <span>Даю <a href="/consent" data-doc>согласие на обработку персональных данных</a> и принимаю <a href="/privacy" data-doc>политику конфиденциальности</a></span></label>
-      <div class="total"><span>Итого</span><span>${rub(total)}</span></div>
+      <div class="total"><span>Итого за чай</span><span>${rub(total)}</span></div>
+      <p class="muted small" id="dl-note" style="margin:0 0 10px"></p>
       <p class="error" id="err"></p>
       <button class="btn wide" id="send" ${inTelegram() ? "" : "disabled"}>Отправить заказ</button>
       <button class="link" type="button" id="back">← Вернуться в корзину</button>
     </form>`;
-  const sync = () => ($("#addr-wrap").hidden = $("#f-delivery").value === "pickup");
-  $("#f-delivery").onchange = sync; sync();
+  const sync = () => {
+    const k = $("#f input[name=delivery]:checked")?.value || "";
+    const d = S.delivery[k];
+    $("#addr-wrap").hidden = !d || !d.address;
+    if (d?.address) $("#addr-label").textContent = d.address;
+    const c = d && deliveryCost(k, total);
+    $("#dl-note").textContent = !c ? "" : c.free ? `Доставка бесплатно — заказ от ${rub(S.freeFrom)}.` : !c.cost ? "Место и время встречи согласуем в чате." : `Доставка ${c.text}. Оплатите её вместе с заказом после подтверждения.`;
+  };
+  $("#f").addEventListener("change", sync); sync();
   $("#back").onclick = () => { S.checkout = false; renderCart(); };
   $("#f").onsubmit = async (e) => {
     e.preventDefault();
@@ -622,7 +644,7 @@ window.addEventListener("hashchange", route);
   loadCart(); updateBadge();
   try {
     const data = await api("/api/catalog");
-    Object.assign(S, { teas: data.teas, kinds: data.kinds, recipes: data.recipes, mugRecipes: data.mugRecipes, tastes: data.tastes, sets: data.sets || [] });
+    Object.assign(S, { teas: data.teas, kinds: data.kinds, recipes: data.recipes, mugRecipes: data.mugRecipes, tastes: data.tastes, sets: data.sets || [], delivery: data.delivery || {}, freeFrom: data.freeDeliveryFrom || 0, deliveryInfo: data.deliveryInfo || "" });
     if (inTelegram()) api("/api/me").then((me) => (S.me = me)).catch(() => {});
   } catch {
     $("#view").innerHTML = `<div class="empty"><h2>Не удалось загрузить каталог</h2><p>Проверьте интернет и откройте магазин ещё раз.</p></div>`;

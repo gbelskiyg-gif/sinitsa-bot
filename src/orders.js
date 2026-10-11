@@ -1,5 +1,5 @@
 import { notifyChats } from "./config.js";
-import { KINDS, PACKS, PROMOS, STATUS, findTea, normalizePromo, packInfo, rub } from "./catalog.js";
+import { DELIVERY, KINDS, PACKS, PROMOS, STATUS, deliveryCost, findTea, normalizePromo, packInfo, rub } from "./catalog.js";
 import * as store from "./db.js";
 import { esc, tgSafe } from "./telegram.js";
 import { menuKeyboard } from "./menu.js";
@@ -72,19 +72,22 @@ export function buildOrder(body, user, { isFirstOrder = false } = {}) {
   }
   const name = clean(body.name, 80);
   const phoneDigits = String(body.phone ?? "").replace(/\D/g, "");
-  const delivery = body.delivery === "pickup" ? "pickup" : "delivery";
+  // «pickup» — старое название личной встречи
+  const delivery = body.delivery === "pickup" ? "meet" : String(body.delivery || "");
   const address = clean(body.address, 300);
   const comment = clean(body.comment, 500);
   if (body.consent !== true) throw new OrderError("Отметьте согласие на обработку персональных данных.");
   if (!name) throw new OrderError("Укажите имя.");
   if (phoneDigits.length < 10 || phoneDigits.length > 15) throw new OrderError("Проверьте телефон: нужно от 10 до 15 цифр.");
-  if (delivery === "delivery" && address.length < 5) throw new OrderError("Укажите город и адрес доставки.");
+  if (!DELIVERY[delivery]) throw new OrderError("Выберите способ доставки.");
+  const needAddress = !!DELIVERY[delivery].address;
+  if (needAddress && address.length < 5) throw new OrderError("Укажите город и адрес пункта выдачи.");
   return {
     userId: user.id,
     name,
     phone: clean(body.phone, 30),
     delivery,
-    address: delivery === "delivery" ? address : "",
+    address: needAddress ? address : "",
     comment,
     items,
     total: Math.max(0, items.reduce((s, i) => s + i.sum, 0)),
@@ -96,10 +99,12 @@ export function orderText(o, { forAdmin = false, username = "" } = {}) {
   const lines = [`<b>Заказ №${o.id}</b> · ${STATUS[o.status]}`, ""];
   for (const i of o.items)
     lines.push(i.teaId ? `• ${esc(i.name)}, ${esc(i.label)} × ${i.qty} = ${rub(i.sum)}` : `• ${esc(i.name)}: −${rub(-i.sum)}`);
-  lines.push("", `<b>Итого: ${rub(o.total)}</b> (без доставки)`);
+  const d = deliveryCost(o.delivery, o.total);
+  lines.push("", `<b>Итого: ${rub(o.total)}</b>`);
+  lines.push(d ? `🚚 ${DELIVERY[o.delivery].label}: ${d.free ? "доставка бесплатно" : d.text}` : "🚚 доставка по договорённости");
   if (forAdmin) {
     lines.push("", `👤 ${esc(o.name)}${username ? ` (@${esc(username)})` : ""}`, `📞 ${esc(o.phone)}`);
-    lines.push(o.delivery === "pickup" ? "🏠 Самовывоз" : `🚚 ${esc(o.address)}`);
+    if (o.address) lines.push(`📍 ${esc(o.address)}`);
     if (o.comment) lines.push(`💬 ${esc(o.comment)}`);
   }
   return lines.join("\n");

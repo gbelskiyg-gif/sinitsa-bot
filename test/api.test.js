@@ -65,8 +65,10 @@ test("ошибки формы понятные", async () => {
   const items = [{ teaId: 1, pack: "50", qty: 1 }];
   let r = await call("/api/orders", { method: "POST", body: JSON.stringify({ items, name: "", phone: "1", delivery: "delivery" }) });
   assert.equal(r.status, 400); assert.match(r.body.error, /имя/);
-  r = await call("/api/orders", { method: "POST", body: JSON.stringify({ items, name: "А", phone: "89001234567", delivery: "delivery", address: "" }) });
+  r = await call("/api/orders", { method: "POST", body: JSON.stringify({ items, name: "А", phone: "89001234567", delivery: "yandex", address: "" }) });
   assert.match(r.body.error, /адрес/);
+  r = await call("/api/orders", { method: "POST", body: JSON.stringify({ items, name: "А", phone: "89001234567", delivery: "drone" }) });
+  assert.match(r.body.error, /способ доставки/);
   r = await call("/api/orders", { method: "POST", body: JSON.stringify({ items: [{ teaId: 999, pack: "50", qty: 1 }], name: "А", phone: "89001234567", delivery: "pickup" }) });
   assert.equal(r.status, 400);
 });
@@ -200,4 +202,15 @@ test("набор по 50 и 100 г тоже со скидкой 10%, смеша�
   const r = await call("/api/orders", { method: "POST", init: signInitData({ id: 699 }, TOKEN), body: JSON.stringify(withConsent({ items: mixed, name: "Н", phone: "89001234567", delivery: "pickup" })) });
   const full = cat.teas.find((t) => t.id === 13).prices["20"] + cat.teas.find((t) => t.id === 14).prices["50"] + cat.teas.find((t) => t.id === 16).prices["50"];
   assert.equal(r.body.order.total, full);
+});
+
+test("доставка: бесплатно от порога для ПВЗ, скидка 300 ₽ для СДЭК", async () => {
+  const { deliveryCost, FREE_DELIVERY_FROM } = await import("../src/catalog.js");
+  assert.equal(deliveryCost("yandex", FREE_DELIVERY_FROM).free, true);
+  assert.equal(deliveryCost("yandex", FREE_DELIVERY_FROM - 10).cost, 300);
+  assert.equal(deliveryCost("cdek", FREE_DELIVERY_FROM).cost, 150);
+  assert.equal(deliveryCost("meet", 100).cost, 0);
+  const r = await call("/api/orders", { method: "POST", init: signInitData({ id: 801 }, TOKEN), body: JSON.stringify(withConsent({ items: [{ teaId: 13, pack: "50", qty: 1 }], name: "Д", phone: "89001234567", delivery: "ozon", address: "Москва, ул. Чайная, 1" })) });
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  assert.equal(r.body.order.delivery, "ozon");
 });

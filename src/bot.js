@@ -1,5 +1,5 @@
 import { ADMIN_IDS, ORDERS_CHAT_ID, PUBLIC_URL, isAdmin, notifyChats } from "./config.js";
-import { STATUS, TEAS, findTea, rub } from "./catalog.js";
+import { DELIVERY_INFO, STATUS, TEAS, findTea, rub } from "./catalog.js";
 import * as store from "./db.js";
 import { adminKeyboard, canMove, notifyCustomer, orderText, refreshAdminMessages } from "./orders.js";
 import { esc, poll, tg, tgSafe } from "./telegram.js";
@@ -151,10 +151,11 @@ async function onMessage(msg) {
 
   if (text.startsWith("/start")) return onStart(msg);
   if (text === BTN.quiz)
-    return tgSafe("sendMessage", { chat_id: msg.chat.id, text: "Пять коротких вопросов, и мы предложим три чая под ваш вкус и способ заваривания.", reply_markup: openButton("🍵 Начать подбор", "#quiz") });
+    return tgSafe("sendMessage", { chat_id: msg.chat.id, text: "Шесть коротких вопросов — и мы предложим три чая под ваш вкус, себе или в подарок.", reply_markup: openButton("🍵 Начать подбор", "#quiz") });
   if (text === BTN.shop)
-    return tgSafe("sendMessage", { chat_id: msg.chat.id, text: "29 чаёв и готовые наборы по 20 г. Каждый можно взять на пробу.", reply_markup: openButton("🛍 Открыть каталог", "") });
+    return tgSafe("sendMessage", { chat_id: msg.chat.id, text: "29 чаёв и наборы по 20, 50 и 100 г. Каждый чай можно взять на пробу.", reply_markup: openButton("🛍 Открыть каталог", "") });
   if (text === BTN.orders) return myOrders(msg);
+  if (text === BTN.delivery || text.startsWith("/delivery")) return tgSafe("sendMessage", { chat_id: msg.chat.id, text: DELIVERY_INFO, reply_markup: menuKeyboard(from.id) });
   if (text === BTN.about) return tgSafe("sendMessage", { chat_id: msg.chat.id, text: ABOUT, reply_markup: menuKeyboard(from.id) });
   if (text.startsWith("/id")) return tgSafe("sendMessage", { chat_id: msg.chat.id, text: `Ваш Telegram ID: ${from.id}` });
   if (text.startsWith("/help")) return tgSafe("sendMessage", { chat_id: msg.chat.id, text: ABOUT, reply_markup: startKeyboard() });
@@ -299,6 +300,7 @@ export async function startBot() {
     commands: [
       { command: "start", description: "Главное меню" },
       { command: "help", description: "О магазине и как заказать" },
+      { command: "delivery", description: "Доставка: службы, цены, сроки" },
     ],
   });
   setInterval(() => askFeedback().catch((e) => console.error("[feedback]", e)), 30 * 60 * 1000);

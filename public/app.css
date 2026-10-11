@@ -172,3 +172,19 @@ form label.consent a { color: var(--gold); }
 .build-row > span:nth-child(2) { flex: 1; }
 .build-row:disabled { opacity: .45; cursor: default; }
 .build-bar { position: sticky; bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; padding: 12px 14px; border: 1px solid var(--gold); border-radius: 12px; background: var(--card-2); }
+
+.dl { border: 0; padding: 0; margin: 0 0 12px; display: grid; gap: 8px; }
+.dl legend { font-size: 13px; color: var(--muted); margin-bottom: 6px; padding: 0; }
+.dl-opt { display: flex !important; align-items: center; gap: 10px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); cursor: pointer; margin: 0 !important; }
+.dl-opt:has(input:checked) { border-color: var(--gold); background: #efbf7e12; }
+.dl-opt input { accent-color: var(--gold); width: 18px; height: 18px; margin: 0; flex: none; }
+.dl-opt > span:nth-of-type(1) { flex: 1; }
+.dl-opt b { display: block; font-weight: 600; font-size: 14px; color: var(--ink); }
+.dl-opt small { display: block; color: var(--muted); font-size: 12px; }
+.dl-price { white-space: nowrap; font-size: 13px; color: var(--ink); }
+.dl-price.free { color: var(--gold); font-weight: 600; }
+
+.free-left { margin: 10px 0 0; padding: 10px 12px; border-radius: 10px; background: #efbf7e14; color: var(--gold); font-size: 13px; }
+.dl-info { margin: 8px 0 16px; border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; }
+.dl-info summary { cursor: pointer; color: var(--lilac); font-size: 14px; }
+.dl-info p { margin: 10px 0 0; color: var(--muted); font-size: 13px; line-height: 1.55; }

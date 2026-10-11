@@ -133,11 +133,10 @@ form input, form textarea, form select { display: block; width: 100%; margin-top
 .promo .error { flex-basis: 100%; margin: 0; }
 
 /* фото чаёв и согласие */
-.art.photo { background: #1b1720; overflow: hidden; }
+.art.photo { background: #1b1720; overflow: hidden; height: 140px; }
 .art.photo::after { display: none; }
 .art.photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.sheet .art.photo { height: 220px; }
+.sheet .art.photo { height: 280px; }
 form label.consent { display: flex; gap: 10px; align-items: flex-start; color: var(--ink); font-size: 13px; line-height: 1.5; }
 form label.consent input { width: 20px; height: 20px; margin: 1px 0 0; flex: none; accent-color: var(--gold); }
 form label.consent a { color: var(--gold); }
-.art.photo .ex { position: absolute; left: 6px; bottom: 6px; font: 600 9px/1 var(--body); letter-spacing: .04em; color: #f4ede3cc; background: #100f15b3; padding: 4px 6px; border-radius: 6px; }

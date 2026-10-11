@@ -42,10 +42,8 @@ function packInfo(t, pack) {
   return { price: t.prices[pack], label: `${pack} г` };
 }
 // Одно фото на вид чая: каждому чаю показываем свой фрагмент, чтобы карточки не повторялись
-const EX_POS = ["50% 50%", "15% 20%", "85% 80%", "80% 15%", "20% 85%", "50% 10%", "10% 55%", "90% 50%"];
-const examplePos = (id) => `object-position:${EX_POS[id % EX_POS.length]};transform:scale(${1.35 + (id % 3) * 0.15});transform-origin:${EX_POS[id % EX_POS.length]}`;
 const art = (t) => t.photo
-  ? `<div class="art photo"><img src="${esc(t.photo)}" alt="${esc(t.name)}" loading="lazy"${t.photoExample ? ` style="${examplePos(t.id)}"` : ""}>${t.photoExample ? `<span class="ex">фото для примера</span>` : ""}</div>`
+  ? `<div class="art photo"><img src="${esc(t.photo)}" alt="${esc(t.name)}" loading="lazy"></div>`
   : `<div class="art"><span aria-hidden="true">${S.kinds[t.kind].glyph}</span></div>`;
 
 // ---------- каталог ----------

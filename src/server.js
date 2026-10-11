@@ -31,7 +31,7 @@ const TYPES = {
 
 // Фото чаёв:
 //   public/teas/<id>.webp|jpg|png       — настоящее фото конкретного чая;
-//   public/teas/kinds/<вид>.webp|jpg|png — фото для примера по виду чая (gaba, red, shu…).
+//   public/teas/kinds/<вид>.webp|jpg|png — общее фото вида чая (gaba, red, shu…).
 // Нет ни того ни другого — показывается иероглиф.
 function scanPhotos(dir, re) {
   const map = {};

@@ -87,8 +87,10 @@ function setsBanner() {
 }
 function renderSets() {
   S.setPack ||= {};
+  if (S.builder) return renderBuilder();
   $("#view").innerHTML = `<h2 class="section-title">Наборы</h2>
-    <p class="note" style="margin-top:0">Готовые сочетания из 3–5 разных чаёв. Выберите фасовку — скидка 10% на любую.</p>
+    <p class="note" style="margin-top:0">Три разных чая одной фасовки — 20, 50 или 100 г. Скидка 10% на любой набор.</p>
+    <button class="sets-banner build-start" id="build"><span>✋</span><span><b>Собрать свой набор</b><small>Выберите от 3 до 6 любых чаёв — скидка та же, 10%</small></span><span class="more-price">→</span></button>
     ${S.sets.length ? `<div class="sets-list">${S.sets.map((set) => {
       const pack = S.setPack[set.key] || "20";
       const p = setPrice(set, pack);
@@ -98,12 +100,49 @@ function renderSets() {
         <div class="big-price" style="font-size:22px">${rub(p.final)} <small><s>${rub(p.sum)}</s></small></div>
         <button class="btn wide" data-set="${set.key}">В корзину · ${set.teas.length} × ${pack} г</button></div>`;
     }).join("")}</div>` : `<p class="muted">Сейчас наборы собрать не из чего — часть чаёв закончилась. Загляните в каталог.</p>`}`;
+  $("#build").onclick = () => { S.builder = { ids: [], pack: "20" }; renderSets(); scrollTo(0, 0); };
   $("#view").onclick = (e) => {
     const b = e.target.closest("[data-set-packs] [data-p]"); if (!b) return;
     S.setPack[b.parentElement.dataset.setPacks] = b.dataset.p;
     const y = scrollY; renderSets(); scrollTo(0, y);
   };
 }
+// Свой набор: 3–6 разных чаёв, одна фасовка, скидка как у готовых
+const BUILD_MIN = 3, BUILD_MAX = 6;
+function renderBuilder() {
+  const B = S.builder;
+  const teas = S.teas.filter((t) => t.available && t.prices[B.pack] != null);
+  B.ids = B.ids.filter((id) => teas.some((t) => t.id === id));
+  const sum = B.ids.reduce((s, id) => s + tea(id).prices[B.pack], 0);
+  const ok = B.ids.length >= BUILD_MIN && B.ids.length <= BUILD_MAX;
+  const final = ok ? sum - Math.round((sum * SET_DISCOUNT) / 10) * 10 : sum;
+  const groups = GROUPS.filter(([k]) => k !== "all").map(([k, l]) => [l, teas.filter((t) => S.kinds[t.kind].group === k)]).filter(([, l]) => l.length);
+  const hint = B.ids.length < BUILD_MIN ? `Выберите ещё ${BUILD_MIN - B.ids.length} — и скидка 10% включится` : B.ids.length === BUILD_MAX ? "Максимум 6 чаёв в наборе" : "Скидка 10% включена";
+  $("#view").innerHTML = `<button class="link" id="build-back">← Все наборы</button>
+    <h2 class="section-title" style="padding-top:4px">Свой набор</h2>
+    <p class="note" style="margin-top:0">От 3 до 6 разных чаёв, все одной фасовки.</p>
+    <div class="chips sizes" id="build-packs">${SET_PACKS.map((x) => `<button class="chip" data-p="${x}" aria-pressed="${x === B.pack}">по ${x} г</button>`).join("")}</div>
+    ${groups.map(([label, list]) => `<div class="eyebrow" style="margin:16px 0 8px">${esc(label)}</div>
+      ${list.map((t) => { const on = B.ids.includes(t.id); return `<button class="more-row build-row" data-pick="${t.id}" aria-pressed="${on}" ${!on && B.ids.length >= BUILD_MAX ? "disabled" : ""}>
+        <span class="tick">${on ? "✓" : ""}</span><span><b>${esc(t.name)}</b><small>${esc(t.notes)}</small></span><span class="more-price">${rub(t.prices[B.pack])}</span></button>`; }).join("")}`).join("")}
+    <div class="build-bar"><div><div class="muted small">${B.ids.length} из ${BUILD_MIN}–${BUILD_MAX} · ${hint}</div>
+      <div class="big-price" style="font-size:22px">${rub(final)}${ok && sum !== final ? ` <small><s>${rub(sum)}</s></small>` : ""}</div></div>
+      <button class="btn" id="build-add" ${ok ? "" : "disabled"}>В корзину</button></div>`;
+  $("#build-back").onclick = () => { S.builder = null; renderSets(); };
+  $("#build-packs").onclick = (e) => { const b = e.target.closest("[data-p]"); if (!b) return; B.pack = b.dataset.p; const y = scrollY; renderBuilder(); scrollTo(0, y); };
+  $("#view").onclick = (e) => {
+    const r = e.target.closest("[data-pick]"); if (!r || r.disabled) return;
+    const id = Number(r.dataset.pick);
+    B.ids = B.ids.includes(id) ? B.ids.filter((x) => x !== id) : [...B.ids, id];
+    const y = scrollY; renderBuilder(); scrollTo(0, y);
+  };
+  $("#build-add").onclick = () => {
+    const set = "own-" + Date.now().toString(36);
+    B.ids.forEach((teaId) => S.cart.push({ teaId, pack: B.pack, qty: 1, set }));
+    saveCart(); toast(`Ваш набор (${B.ids.length} × ${B.pack} г) в корзине`); S.builder = null; location.hash = "#cart";
+  };
+}
+
 function addSet(key) {
   const set = S.sets.find((s) => s.key === key); if (!set) return;
   const pack = S.setPack?.[key] || "20";

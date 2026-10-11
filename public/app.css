@@ -164,3 +164,11 @@ form label.consent a { color: var(--gold); }
 .set-teas { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
 .set-tea { border: 1px solid var(--line); background: transparent; color: var(--ink); border-radius: 8px; padding: 5px 9px; font: inherit; font-size: 12px; cursor: pointer; text-align: left; }
 .set .sizes { margin: 6px 0 8px; }
+
+.build-start { width: 100%; font: inherit; cursor: pointer; text-align: left; margin-bottom: 14px; }
+.build-row .tick { width: 22px; height: 22px; flex: none; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 6px; color: var(--on-gold); font-weight: 700; font-size: 13px; }
+.build-row[aria-pressed="true"] { border-color: var(--gold); background: #efbf7e12; }
+.build-row[aria-pressed="true"] .tick { background: var(--gold); border-color: var(--gold); }
+.build-row > span:nth-child(2) { flex: 1; }
+.build-row:disabled { opacity: .45; cursor: default; }
+.build-bar { position: sticky; bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; padding: 12px 14px; border: 1px solid var(--gold); border-radius: 12px; background: var(--card-2); }

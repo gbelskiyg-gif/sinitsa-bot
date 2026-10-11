@@ -200,3 +200,6 @@ form label.consent a { color: var(--gold); }
 .cart-set .set-items { list-style: none; padding: 0; margin: 8px 0 0; }
 .cart-set .set-items li { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; font-size: 14px; border-bottom: 1px dashed var(--line); }
 .cart-set .set-items .link { padding: 0; font-size: 12px; color: var(--muted); }
+
+.cart-set .set-items li.off s { color: var(--muted); text-decoration-color: #e0605a; text-decoration-thickness: 1.5px; }
+.cart-set .set-items li.off .back { color: var(--gold); }

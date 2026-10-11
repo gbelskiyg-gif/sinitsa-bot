@@ -14,7 +14,7 @@ const S = { teas: [], kinds: {}, recipes: {}, mugRecipes: {}, tastes: {}, sets: 
 function loadCart() { try { S.cart = JSON.parse(localStorage.getItem("cart") || "[]"); } catch { S.cart = []; } }
 function saveCart() { try { localStorage.setItem("cart", JSON.stringify(S.cart)); } catch {} updateBadge(); }
 function updateBadge() {
-  const n = S.cart.reduce((s, i) => s + i.qty, 0);
+  const n = S.cart.reduce((s, i) => s + (i.removed ? 0 : i.qty), 0);
   const b = $("#cart-count"); b.hidden = !n; b.textContent = n;
 }
 function toast(text) {
@@ -458,7 +458,9 @@ function askSeller() {
 
 // ---------- корзина и оформление ----------
 function cartLines() {
+  // Зачёркнутые чаи из набора (removed) остаются в списке, но не считаются
   const lines = S.cart.map((i, idx) => {
+    if (i.removed) return null;
     const t = tea(i.teaId); if (!t) return null;
     const p = packInfo(t, i.pack);
     return { idx, t, i, label: p.label, sum: p.price * i.qty };
@@ -501,13 +503,16 @@ function cartBlocks(lines) {
     done.add(l.i.set);
     const g = lines.filter((x) => x.i.set === l.i.set);
     const sum = g.reduce((s, x) => s + x.sum, 0);
+    const all = S.cart.map((i, idx) => ({ i, idx, t: tea(i.teaId) })).filter((x) => x.i.set === l.i.set && x.t);
     const ok = g.every((x) => x.inSet);
     return `<div class="line cart-set"><div style="flex:1"><h3>${esc(setTitle(l.i.set))}</h3>
       <div class="muted small">${g.length} ${g.length >= 5 ? "чаёв" : g.length === 1 ? "чай" : "чая"} по ${esc(g[0].label)}${ok ? " · скидка 10%" : ""}</div>
-      <ul class="set-items">${g.map((x) => `<li><span>${esc(x.t.name)}${x.t.available ? "" : " · <span class=error>нет в наличии</span>"}</span><button class="link" data-rm="${x.idx}" aria-label="Убрать из набора">убрать</button></li>`).join("")}</ul>
+      <ul class="set-items">${all.map((x) => x.i.removed
+        ? `<li class="off"><s>${esc(x.t.name)}</s><button class="link back" data-toggle="${x.idx}">вернуть</button></li>`
+        : `<li><span>${esc(x.t.name)}${x.t.available ? "" : " · <span class=error>нет в наличии</span>"}</span><button class="link" data-toggle="${x.idx}" aria-label="Убрать из набора">убрать</button></li>`).join("")}</ul>
       ${ok ? "" : `<p class="small" style="color:var(--gold);margin:6px 0 0">В наборе нужно от 3 разных чаёв одной фасовки и количества — сейчас скидка не действует.</p>`}
       <div style="display:flex;align-items:center;gap:14px;margin-top:8px"><div class="qty"><button data-sq="-1" data-set="${esc(l.i.set)}" aria-label="Меньше наборов">−</button><b>${g[0].i.qty}</b><button data-sq="1" data-set="${esc(l.i.set)}" aria-label="Больше наборов">+</button></div>
-      <button class="link" data-rm="${g.map((x) => x.idx).join(",")}">Убрать набор</button></div></div>
+      <button class="link" data-rm="${all.map((x) => x.idx).join(",")}">Убрать набор</button></div></div>
       <div class="sum">${rub(sum)}</div></div>`;
   }).join("");
 }
@@ -515,6 +520,7 @@ function cartBlocks(lines) {
 function renderCart() {
   S.cart = S.cart.filter((i) => tea(i.teaId));
   const { lines, discount, promoOff, total } = cartLines();
+  if (!lines.length && !S.undo && S.cart.length) { S.cart = []; saveCart(); }
   if (!lines.length) {
     $("#view").innerHTML = `<div class="empty"><h2>Корзина пуста</h2><p>Откройте чай в каталоге или пройдите подбор.</p>
       <a class="btn" href="#quiz">🍵 Подобрать чай</a></div>`;
@@ -547,6 +553,14 @@ function renderCart() {
       // Возвращаем убранное на прежние места
       for (const { at, item } of [...S.undo.items].sort((x, y) => x.at - y.at)) S.cart.splice(Math.min(at, S.cart.length), 0, item);
       S.undo = null; saveCart(); toast("Вернули"); return renderCart();
+    }
+    // Чай в наборе: зачёркиваем или возвращаем на место
+    const tg = e.target.closest("[data-toggle]");
+    if (tg) {
+      const it = S.cart[Number(tg.dataset.toggle)];
+      it.removed = !it.removed;
+      if (!S.cart.some((x) => x.set === it.set && !x.removed)) S.cart = S.cart.filter((x) => x.set !== it.set);
+      S.undo = null; saveCart(); return renderCart();
     }
     const rm = e.target.closest("[data-rm]");
     if (rm) { removeFromCart(rm.dataset.rm.split(",").map(Number)); return renderCart(); }
@@ -636,7 +650,7 @@ function renderCheckout(total) {
     try { localStorage.setItem("form", JSON.stringify({ name: data.name, phone: data.phone, delivery: data.delivery, address: data.address })); } catch {}
     $("#send").disabled = true; $("#err").textContent = "";
     try {
-      const { order } = await api("/api/orders", { method: "POST", body: JSON.stringify({ ...data, items: S.cart, promo: S.promo?.code || "" }) });
+      const { order } = await api("/api/orders", { method: "POST", body: JSON.stringify({ ...data, items: S.cart.filter((i) => !i.removed).map(({ removed, ...i }) => i), promo: S.promo?.code || "" }) });
       S.cart = []; saveCart(); S.checkout = false; S.promo = null; if (S.me) S.me.firstOrder = false;
       $("#view").innerHTML = `<div class="empty"><h2>Заказ №${order.id} отправлен 🍵</h2><p>Проверим наличие и напишем вам в чате с ботом. Как только подтвердим, придут сумма и реквизиты для оплаты.</p>
         <a class="btn" href="#orders">Мои заказы</a></div>`;

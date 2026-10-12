@@ -20,11 +20,14 @@ const WELCOME =
   "🎁 На первый заказ — промокод SINITSA10, скидка 10%.\n\n" +
   "Выбирайте, с чего начнём:";
 
+const CHANNEL_URL = "https://t.me/sinitsa_chai";
+
 const ABOUT =
   "🐦 «Синица» — небольшой чайный магазин из Москвы. Мы собрали коллекцию китайского и тайваньского чая: улуны, ГАБА, красные чаи и пуэры.\n\n" +
   "🍵 Каждый чай можно взять по 20 г — попробовать, прежде чем брать больше.\n\n" +
   "📦 Чай собираем под ваш заказ. Сначала мы проверяем наличие и пишем вам здесь, затем бот присылает сумму и реквизиты для оплаты. Отправляем после оплаты.\n\n" +
   "💬 Есть вопрос? Просто напишите сюда — ответим лично.\n\n" +
+  "📢 О чае, заварке и новинках пишем в нашем канале: @sinitsa_chai\n\n" +
   "🧑‍💼 Покупаете оптом — для кофейни, магазина или подарков? Нажмите /opt или «Я оптовик» в приветствии, обсудим условия лично.";
 
 const ADMIN_HELP =
@@ -52,6 +55,7 @@ function startKeyboard() {
       [shopButton("🛍 Открыть магазин")],
       [shopButton("🍵 Подобрать чай", "#quiz")],
       [{ text: "🐦 О Синице", callback_data: "about" }, { text: "💬 Задать вопрос", callback_data: "ask" }],
+      [{ text: "📢 Наш канал о чае", url: CHANNEL_URL }],
       [{ text: "🧑‍💼 Я оптовик", callback_data: "wholesale" }],
     ],
   };
@@ -64,7 +68,7 @@ function inlineMenu(userId) {
   const rows = [
     [shopButton(BTN.quiz, "#quiz"), shopButton(BTN.shop)],
     [cb("orders"), cb("delivery")],
-    [cb("about")],
+    [cb("about"), { text: "📢 Наш канал", url: CHANNEL_URL }],
   ];
   if (isAdmin(userId)) rows.push([cb("active"), cb("stock")], [cb("payment"), cb("stats")], [cb("sheet")]);
   return { inline_keyboard: rows };

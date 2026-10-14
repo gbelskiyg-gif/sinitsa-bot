@@ -74,7 +74,13 @@ export function buildOrder(body, user, { isFirstOrder = false } = {}) {
   const phoneDigits = String(body.phone ?? "").replace(/\D/g, "");
   const delivery = String(body.delivery || "");
   const address = clean(body.address, 300);
-  const comment = clean(body.comment, 500);
+  let comment = clean(body.comment, 500);
+  // Заказ с сайта: как удобнее связаться (в Telegram заказ и так привязан к чату)
+  const CONTACT = { tg: "Telegram", wa: "WhatsApp", call: "звонок" };
+  if (!user.id && CONTACT[body.contact]) {
+    const nick = clean(body.contactNick, 60);
+    comment = [`Связь: ${CONTACT[body.contact]}${nick ? ` ${nick}` : ""}`, comment].filter(Boolean).join(" · ");
+  }
   if (body.terms !== true) throw new OrderError("Отметьте, что согласны с условиями доставки и возврата.");
   if (body.consent !== true) throw new OrderError("Отметьте согласие на обработку персональных данных.");
   if (!name) throw new OrderError("Укажите имя.");
@@ -101,6 +107,7 @@ export function buildOrder(body, user, { isFirstOrder = false } = {}) {
 
 export function orderText(o, { forAdmin = false, username = "" } = {}) {
   const lines = [`<b>Заказ №${o.id}</b> · ${STATUS[o.status]}`, ""];
+  if (forAdmin && !o.user_id) lines.splice(1, 0, "🌐 С сайта — свяжитесь с покупателем, подтвердите заказ и пришлите реквизиты");
   for (const i of o.items)
     lines.push(i.teaId ? `• ${esc(i.name)}, ${esc(i.label)} × ${i.qty} = ${rub(i.sum)}` : i.sum >= 0 ? `• ${esc(i.name)}: ${rub(i.sum)}` : `• ${esc(i.name)}: −${rub(-i.sum)}`);
   lines.push("", `<b>Итого: ${rub(o.total)}</b>`);
@@ -166,6 +173,7 @@ export async function claimPaid(order, username = "") {
 /** Продавец не нашёл перевод: сбрасываем отметку и снова даём покупателю кнопку. */
 export async function rejectPaid(order) {
   const updated = store.setPaidClaim(order.id, false);
+  if (!order.user_id) return updated;
   await tgSafe("sendMessage", {
     chat_id: order.user_id,
     text: `Пока не видим перевод по заказу №${order.id} на ${rub(order.total)}. Проверьте, пожалуйста, реквизиты и сумму или пришлите сюда скриншот перевода.`,
@@ -208,6 +216,8 @@ export async function refreshAdminMessages(order, username) {
 }
 
 export async function notifyCustomer(order) {
+  // Заказ с сайта: покупателя в Telegram нет, связываемся по телефону
+  if (!order.user_id) return;
   if (order.status === "accepted") {
     return tgSafe("sendMessage", { chat_id: order.user_id, text: paymentText(order), reply_markup: getPayment() ? payButton(order) : menuKeyboard(order.user_id) });
   }

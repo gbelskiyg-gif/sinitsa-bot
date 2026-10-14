@@ -20,6 +20,7 @@ import { consentPage, privacyPage, termsPage } from "./legal.js";
 import { menuKeyboard } from "./menu.js";
 import { requestWholesale } from "./wholesale.js";
 import { checkToken, ordersCsv } from "./export.js";
+import { sitePage } from "./site.js";
 
 const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "public");
 const TYPES = {
@@ -67,6 +68,11 @@ function html(res, body) {
   res.end(body);
 }
 
+function redirect(res, to, code) {
+  res.writeHead(code, { location: to });
+  res.end();
+}
+
 function send(res, status, data) {
   if (status === 204) { res.writeHead(204); return res.end(); }
   const body = JSON.stringify(data);
@@ -94,6 +100,21 @@ function readJson(req, limit = 20_000) {
     });
     req.on("error", reject);
   });
+}
+
+const PROMOS_FIRST_NOTE = "Если промокод только на первый заказ, проверим по номеру телефона при оформлении.";
+// Не больше 5 заказов с сайта в час с одного адреса
+const siteHits = new Map();
+function clientIp(req) {
+  return String(req.headers["x-forwarded-for"] || "").split(",")[0].trim() || req.socket.remoteAddress || "";
+}
+function siteRateOk(ip) {
+  const now = Date.now();
+  const list = (siteHits.get(ip) || []).filter((t) => now - t < 3600_000);
+  if (list.length >= 5) return false;
+  list.push(now); siteHits.set(ip, list);
+  if (siteHits.size > 5000) siteHits.clear();
+  return true;
 }
 
 function auth(req) {
@@ -137,6 +158,22 @@ async function api(req, res, url) {
       freeDeliveryFrom: FREE_DELIVERY_FROM,
       deliveryInfo: DELIVERY_INFO,
     });
+  }
+
+  // Заказ с сайта, без Telegram: связываемся с покупателем по телефону
+  if (req.method === "GET" && url.pathname === "/api/site-promo") {
+    const r = checkPromo(url.searchParams.get("code"), true);
+    return send(res, 200, r.ok ? { ...r, note: PROMOS_FIRST_NOTE } : r);
+  }
+  if (req.method === "POST" && url.pathname === "/api/site-orders") {
+    const ip = clientIp(req);
+    if (!siteRateOk(ip)) return send(res, 429, { error: "Слишком много заказов подряд. Напишите нам в Telegram @sinitsa_chai_bot, поможем." });
+    const body = await readJson(req);
+    if (body.website) return send(res, 201, { order: { id: 0, total: 0, items: [] } }); // бот-спамер заполнил скрытое поле
+    const draft = buildOrder(body, { id: 0 }, { isFirstOrder: store.isFirstOrderByPhone(body.phone) });
+    const order = store.createOrder(draft);
+    await notifyAdminsNew(order, "");
+    return send(res, 201, { order: publicOrder(order) });
   }
 
   const user = auth(req);
@@ -225,6 +262,14 @@ export function startServer(port) {
         return res.end(ordersCsv());
       }
       if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, { error: "method" });
+      // Старые кнопки бота вели на /?tab=… — магазин теперь живёт на /shop
+      if (url.pathname === "/" && url.searchParams.has("tab")) return redirect(res, `/shop?tab=${encodeURIComponent(url.searchParams.get("tab"))}`, 302);
+      if (url.pathname === "/index.html") return redirect(res, "/shop", 301);
+      const page = sitePage(url.pathname, url.searchParams);
+      if (page) {
+        res.writeHead(page.status || 200, { "content-type": page.type || "text/html; charset=utf-8", "cache-control": "no-cache" });
+        return res.end(page.body);
+      }
       return serveStatic(req, res);
     } catch (e) {
       if (e instanceof OrderError) return send(res, 400, { error: e.message });

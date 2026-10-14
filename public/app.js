@@ -544,16 +544,16 @@ function renderCart() {
     ${S.undo ? `<div class="undo"><span>Убрали ${esc(S.undo.label)}</span><button class="link" id="undo">↩︎ Вернуть</button></div>` : ""}
     ${cartBlocks(lines)}
     ${discount ? `<div class="line"><div class="muted">Скидка на набор</div><div class="sum">−${rub(discount)}</div></div>` : ""}
-    ${inTelegram() ? `<div class="promo">${S.promo
+    ${`<div class="promo">${S.promo
       ? (promoOff
         ? `<div class="line" style="border:0"><div class="muted">Промокод ${esc(S.promo.code)} · ${esc(S.promo.label)}</div><div class="sum">−${rub(promoOff)}</div></div>`
         : `<p class="muted small" style="margin:0">Промокод ${esc(S.promo.code)} не складывается со скидкой набора. Он сработает на чаи, которые вы добавите отдельно.</p>`) +
         `<button class="link" id="promo-off">Убрать промокод</button>`
       : `<label class="search"><input id="promo" placeholder="Промокод" autocomplete="off"></label><button class="btn ghost" id="promo-go">Применить</button>`}
-      <p class="error" id="promo-err"></p></div>` : ""}
+      <p class="error" id="promo-err"></p></div>`}
     <div class="total"><span>Итого</span><span>${rub(total)}</span></div>
     ${S.freeFrom ? `<p class="free-left">${total >= S.freeFrom ? "🎁 Доставка бесплатная — любой службой" : `🚚 До бесплатной доставки осталось ${rub(S.freeFrom - total)}`}</p>` : ""}
-    <p class="note">Доставку выберете на следующем шаге: ПВЗ Яндекса и Ozon — 290 ₽, СДЭК и Почта — 450 ₽. Чай собираем под заказ: наличие и сроки подтвердим в чате, оплата после подтверждения.</p>
+    <p class="note">Доставку выберете на следующем шаге: ПВЗ Яндекса и Ozon — 290 ₽, СДЭК и Почта — 450 ₽. Чай собираем под заказ: наличие и сроки подтвердим ${inTelegram() ? "в чате" : "по телефону или в мессенджере"}, оплата после подтверждения.</p>
     ${S.deliveryInfo ? `<details class="dl-info"><summary>Доставка и возврат</summary><p>${esc(S.deliveryInfo.replace(/^🚚 Доставка\n\n/, "")).replace(/\n/g, "<br>")}</p></details>` : ""}
     ${off.length ? `<p class="error">Уберите чаи, которых нет в наличии, чтобы оформить заказ.</p>` : ""}
     <button class="btn wide" id="go" ${off.length ? "disabled" : ""}>Оформить заказ</button>`;
@@ -597,7 +597,7 @@ function renderCart() {
   $("#promo-go")?.addEventListener("click", async () => {
     const code = $("#promo").value.trim(); if (!code) return;
     try {
-      const r = await api("/api/promo?code=" + encodeURIComponent(code));
+      const r = await api((inTelegram() ? "/api/promo?code=" : "/api/site-promo?code=") + encodeURIComponent(code));
       if (!r.ok) { $("#promo-err").textContent = r.error; return; }
       S.promo = r; renderCart(); toast(cartLines().promoOff ? "Промокод применён" : "На наборы уже действует скидка");
     } catch (err) { $("#promo-err").textContent = err.message; }
@@ -619,10 +619,14 @@ function renderCheckout(total) {
   const dSel = S.delivery[f.delivery] ? f.delivery : "yandex";
   $("#view").onclick = null;
   $("#view").innerHTML = `<h2 class="section-title">Оформление</h2>
-    ${inTelegram() ? "" : `<p class="error">Оформить заказ можно только из Telegram. <a href="${BOT_LINK}">Откройте магазин через бота</a>.</p>`}
+    ${inTelegram() ? "" : `<p class="muted small" style="margin:0 0 12px">Удобнее в Telegram? <a href="${BOT_LINK}">Оформите через бота @sinitsa_chai_bot</a> — там же статусы заказа.</p>`}
     <form id="f" novalidate>
       <label>Имя<input id="f-name" name="name" required maxlength="80" value="${esc(f.name || u?.first_name || "")}"></label>
       <label>Телефон<input id="f-phone" name="phone" type="tel" required maxlength="30" placeholder="+7 900 000-00-00" value="${esc(f.phone || "")}"></label>
+      ${inTelegram() ? "" : `<fieldset class="dl"><legend>Как с вами связаться, чтобы подтвердить заказ</legend>
+        <div class="contact-opts">${[["tg", "Telegram"], ["wa", "WhatsApp"], ["call", "Звонок"]].map(([k, l]) => `<label><input type="radio" name="contact" value="${k}" ${(f.contact || "tg") === k ? "checked" : ""}>${l}</label>`).join("")}</div>
+        <label id="nick-wrap" style="margin-top:10px">Ник в Telegram (необязательно)<input id="f-nick" name="contactNick" maxlength="60" placeholder="@username" value="${esc(f.contactNick || "")}"></label>
+        <label class="hp" aria-hidden="true">Не заполняйте<input name="website" tabindex="-1" autocomplete="off"></label></fieldset>`}
       <fieldset class="dl"><legend>Доставка</legend>${Object.entries(S.delivery).map(([k, d]) => {
         const c = deliveryCost(k, total);
         return `<label class="dl-opt"><input type="radio" name="delivery" value="${k}" ${k === dSel ? "checked" : ""}><span><b>${esc(d.label)}</b><small>${esc(d.note)}</small></span><span class="dl-price${c.free || !c.cost ? " free" : ""}">${c.free || !c.cost ? "бесплатно" : rub(c.cost)}</span></label>`;
@@ -637,13 +641,15 @@ function renderCheckout(total) {
       <div class="total"><span>Итого</span><span id="grand"></span></div>
       <p class="muted small" id="dl-note" style="margin:0 0 10px"></p>
       <p class="error" id="err"></p>
-      <button class="btn wide" id="send" ${inTelegram() ? "" : "disabled"}>Отправить заказ</button>
+      <button class="btn wide" id="send">Отправить заказ</button>
       <button class="link" type="button" id="back">← Вернуться в корзину</button>
     </form>`;
   const sync = () => {
     const k = $("#f input[name=delivery]:checked")?.value || "";
     const d = S.delivery[k];
     $("#addr-wrap").hidden = !d || !d.address;
+    const ct = $("#f input[name=contact]:checked")?.value;
+    if ($("#nick-wrap")) $("#nick-wrap").hidden = ct !== "tg";
     if (d?.address) $("#addr-label").textContent = d.address;
     const c = d && deliveryCost(k, total);
     $("#dl-sum").textContent = !c ? "—" : c.cost ? rub(c.cost) : "бесплатно";
@@ -665,13 +671,20 @@ function renderCheckout(total) {
     };
     if (!data.terms) return need("#f-terms", "Отметьте, что согласны с условиями доставки и возврата.");
     if (!data.consent) return need("#f-consent", "Отметьте согласие на обработку персональных данных.");
-    try { localStorage.setItem("form", JSON.stringify({ name: data.name, phone: data.phone, delivery: data.delivery, address: data.address })); } catch {}
+    try { localStorage.setItem("form", JSON.stringify({ name: data.name, phone: data.phone, delivery: data.delivery, address: data.address, contact: data.contact, contactNick: data.contactNick })); } catch {}
     $("#send").disabled = true; $("#err").textContent = "";
     try {
-      const { order } = await api("/api/orders", { method: "POST", body: JSON.stringify({ ...data, items: S.cart.filter((i) => !i.removed).map(({ removed, ...i }) => i), promo: S.promo?.code || "" }) });
+      const { order } = await api(inTelegram() ? "/api/orders" : "/api/site-orders", { method: "POST", body: JSON.stringify({ ...data, items: S.cart.filter((i) => !i.removed).map(({ removed, ...i }) => i), promo: S.promo?.code || "" }) });
       S.cart = []; saveCart(); S.checkout = false; S.promo = null; if (S.me) S.me.firstOrder = false;
-      $("#view").innerHTML = `<div class="empty"><h2>Заказ №${order.id} отправлен 🍵</h2><p>Проверим наличие и напишем вам в чате с ботом. Как только подтвердим, придут сумма и реквизиты для оплаты.</p>
-        <a class="btn" href="#orders">Мои заказы</a></div>`;
+      if (inTelegram()) {
+        $("#view").innerHTML = `<div class="empty"><h2>Заказ №${order.id} отправлен 🍵</h2><p>Проверим наличие и напишем вам в чате с ботом. Как только подтвердим, придут сумма и реквизиты для оплаты.</p>
+          <a class="btn" href="#orders">Мои заказы</a></div>`;
+      } else {
+        saveSiteOrder(order);
+        const how = { tg: "в Telegram", wa: "в WhatsApp", call: "по телефону" }[data.contact] || "по телефону";
+        $("#view").innerHTML = `<div class="empty"><h2>Заказ №${order.id} отправлен 🍵</h2><p>Проверим наличие и свяжемся с вами ${how}. Как только подтвердим, пришлём сумму и реквизиты для оплаты.</p>
+          <a class="btn" href="/blog">Почитать о чае, пока ждёте</a></div>`;
+      }
       try { tgApp?.HapticFeedback?.notificationOccurred("success"); } catch {}
     } catch (err) { $("#err").textContent = err.message; $("#send").disabled = false; track("order_error", err.message); }
   };
@@ -690,9 +703,16 @@ function payHTML(o) {
     <p class="muted small" style="margin:6px 0 10px">В комментарии к переводу: «Заказ ${o.id}»</p>
     ${o.paidClaim ? `<p class="small" style="margin:0;color:var(--gold)">Вы отметили оплату — проверим и подтвердим в чате.</p>` : `<button class="btn wide" data-paid="${o.id}">✅ Я оплатил</button>`}</div>`;
 }
+// Заказы с сайта: помним номера на этом устройстве, статус сообщаем лично
+function loadSiteOrders() { try { return JSON.parse(localStorage.getItem("siteOrders") || "[]"); } catch { return []; } }
+function saveSiteOrder(o) { try { localStorage.setItem("siteOrders", JSON.stringify([{ id: o.id, total: o.total, at: Date.now(), items: o.items.filter((i) => i.teaId).map((i) => `${i.name}, ${i.label} × ${i.qty}`) }, ...loadSiteOrders()].slice(0, 20))); } catch {} }
 async function renderOrders() {
   if (!inTelegram()) {
-    $("#view").innerHTML = `<div class="empty"><h2>Мои заказы</h2><p>Заказы видны, когда магазин открыт через бота.</p><a class="btn" href="${BOT_LINK}">Открыть @sinitsa_chai_bot</a></div>`;
+    const list = loadSiteOrders();
+    $("#view").innerHTML = `<h2 class="section-title">Мои заказы</h2>
+      ${list.length ? list.map((o) => `<div class="line" style="display:block"><h3>Заказ №${o.id}</h3><div class="muted small">${o.items.map(esc).join("<br>")}</div>
+        <b class="sum" style="color:var(--gold)">${rub(o.total)}</b></div>`).join("") : `<p class="muted">На этом устройстве заказов пока нет.</p>`}
+      <p class="muted small">Статус заказа сообщаем лично — по телефону или в мессенджере, который вы выбрали. Хотите видеть статусы в одном месте — <a href="${BOT_LINK}">заказывайте через бота</a>.</p>`;
     return;
   }
   $("#view").innerHTML = `<h2 class="section-title">Мои заказы</h2><p class="muted">Загружаем…</p>`;
@@ -782,7 +802,11 @@ window.addEventListener("hashchange", route);
     return;
   }
   // Раздел, с которого открыли приложение из бота: ?tab=quiz | orders | cart
-  const tab = new URLSearchParams(location.search).get("tab");
+  let tab = new URLSearchParams(location.search).get("tab");
+  if (!tab && !location.hash && location.pathname === "/podbor") tab = "quiz";
+  // Ссылка со страницы чая: /shop#tea-12 — открываем карточку поверх каталога
+  const deep = location.hash.match(/^#tea-(\d+)$/);
+  if (deep) { history.replaceState(null, "", `${location.pathname}#catalog`); route(); if (tea(deep[1])) openTea(deep[1]); return; }
   if (["quiz", "orders", "cart", "catalog", "sets"].includes(tab)) history.replaceState(null, "", `${location.pathname}#${tab}`);
   else if (!/^#(quiz|orders|cart|catalog|sets)$/.test(location.hash)) history.replaceState(null, "", `${location.pathname}${location.search}#catalog`);
   track("app_open", tab || "");

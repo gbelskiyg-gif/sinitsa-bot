@@ -251,6 +251,12 @@ export function anonymizeOldOrders(days = 30) {
     .run(`-${days} days`).changes;
 }
 
+/** Для заказов с сайта: первый ли заказ на этот телефон (по любым каналам). */
+export function isFirstOrderByPhone(phone) {
+  const d = String(phone ?? "").replace(/\D/g, "").slice(-10);
+  if (d.length < 10) return true;
+  return !db.prepare("SELECT phone FROM orders WHERE status != 'cancelled'").all().some((r) => String(r.phone).replace(/\D/g, "").slice(-10) === d);
+}
 export function isFirstOrder(userId) {
   return db.prepare("SELECT COUNT(*) AS n FROM orders WHERE user_id = ? AND status != 'cancelled'").get(userId).n === 0;
 }

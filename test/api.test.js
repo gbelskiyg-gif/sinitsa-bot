@@ -282,3 +282,52 @@ test("таблица заказов для Google: только по секре�
   assert.ok(first && /^\d+,/.test(first), "есть строки заказов");
   assert.ok(!/^=/.test(csv.split(",").find((c) => c.startsWith("=")) || ""), "формулы не пропускаем");
 });
+
+test("сайт: главная, каталог, чай, блог и статьи с SEO-разметкой", async () => {
+  for (const p of ["/", "/chai", "/chai/gaba-shanlinsi", "/blog", "/blog/puer-yunnan", "/podbor", "/shop"]) {
+    const r = await fetch(base + p);
+    assert.equal(r.status, 200, p);
+    const html = await r.text();
+    assert.match(html, /<title>[^<]{10,}<\/title>/, p);
+    assert.match(html, /<meta name="description" content="[^"]{40,}">/, p);
+    assert.match(html, /<link rel="canonical" href="https:\/\/example\.test/, p);
+    if (!["/podbor", "/shop"].includes(p)) {
+      assert.equal((html.match(/<h1[ >]/g) || []).length, 1, `один H1 на ${p}`);
+      assert.match(html, /application\/ld\+json/, p);
+    }
+  }
+  assert.equal((await fetch(base + "/chai/net-takogo")).status, 404);
+  assert.equal((await fetch(base + "/blog/net-takoj")).status, 404);
+});
+
+test("сайт: sitemap и robots", async () => {
+  const sm = await (await fetch(base + "/sitemap.xml")).text();
+  assert.match(sm, /<loc>https:\/\/example\.test\/blog\/chai-tajvanya<\/loc>/);
+  assert.equal((sm.match(/\/chai\//g) || []).length, 29, "все чаи в карте сайта");
+  const rb = await (await fetch(base + "/robots.txt")).text();
+  assert.match(rb, /Sitemap: https:\/\/example\.test\/sitemap\.xml/);
+  assert.match(rb, /Disallow: \/api\//);
+});
+
+test("старые ссылки бота ведут в магазин", async () => {
+  const r = await fetch(base + "/?tab=quiz", { redirect: "manual" });
+  assert.equal(r.status, 302);
+  assert.equal(r.headers.get("location"), "/shop?tab=quiz");
+});
+
+test("заказ с сайта без Telegram: сумма по каталогу, способ связи, промокод по телефону", async () => {
+  const post = (body) => fetch(base + "/api/site-orders", { method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ terms: true, consent: true, name: "Сайт", delivery: "yandex", address: "Москва, ПВЗ", ...body }) }).then(async (r) => ({ status: r.status, body: await r.json() }));
+  const items = [{ teaId: 1, pack: "50", qty: 1 }];
+  const a = await post({ phone: "+7 999 555-44-33", items, contact: "wa", promo: "SINITSA10" });
+  assert.equal(a.status, 201);
+  const o = store.getOrder(a.body.order.id);
+  assert.equal(o.user_id, 0);
+  assert.match(o.comment, /Связь: WhatsApp/);
+  assert.equal(o.total, 1390 - 140 + 290);
+  const b = await post({ phone: "8 (999) 555-44-33", items, promo: "SINITSA10" });
+  assert.equal(b.status, 400, "второй заказ на тот же телефон — без промокода первого заказа");
+  const spam = await post({ phone: "+7 900 000-00-01", items, website: "http://spam" });
+  assert.equal(spam.status, 201);
+  assert.equal(spam.body.order.id, 0, "скрытое поле заполнено — заказ не сохраняем");
+});

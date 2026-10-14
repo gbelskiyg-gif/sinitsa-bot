@@ -10,7 +10,7 @@ import { sheetFormula } from "./export.js";
 // Раздел передаём через ?tab=, потому что после # Telegram дописывает свои параметры запуска
 const shopButton = (text, hash = "") => ({
   text,
-  web_app: { url: hash ? `${PUBLIC_URL}/?tab=${hash.replace("#", "")}` : `${PUBLIC_URL}/` },
+  web_app: { url: hash ? `${PUBLIC_URL}/shop?tab=${hash.replace("#", "")}` : `${PUBLIC_URL}/shop` },
 });
 
 const WELCOME =
@@ -456,6 +456,7 @@ const FEEDBACK_AFTER_DAYS = Number(process.env.FEEDBACK_AFTER_DAYS || 3);
 async function askFeedback() {
   for (const o of store.ordersDueForFeedback(FEEDBACK_AFTER_DAYS)) {
     store.markFeedbackAsked(o.id);
+    if (!o.user_id) continue; // заказ с сайта — в Telegram спросить некого
     const names = o.items.filter((i) => i.teaId).map((i) => i.name);
     await tgSafe("sendMessage", {
       chat_id: o.user_id,
@@ -476,7 +477,7 @@ async function askFeedback() {
 export async function startBot() {
   const me = await tg("getMe");
   console.log(`Бот @${me.username} запущен`);
-  await tgSafe("setChatMenuButton", { menu_button: { type: "web_app", text: "Магазин", web_app: { url: `${PUBLIC_URL}/` } } });
+  await tgSafe("setChatMenuButton", { menu_button: { type: "web_app", text: "Магазин", web_app: { url: `${PUBLIC_URL}/shop` } } });
   await tgSafe("setMyCommands", {
     commands: [
       { command: "start", description: "Начать сначала" },

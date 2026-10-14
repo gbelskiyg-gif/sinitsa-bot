@@ -2,7 +2,7 @@
 //   /            главная
 //   /chai        каталог, /chai/<slug> — страница чая
 //   /blog        блог «О чае», /blog/<slug> — статья
-//   /shop        магазин (то же приложение, что в Telegram), /podbor — он же, сразу на подборе
+//   главная — сам магазин (то же приложение, что в Telegram); /shop и /podbor ведут на неё
 //   /sitemap.xml, /robots.txt
 // Заказ на сайте оформляется без Telegram (см. /api/site-orders в server.js).
 import fs from "node:fs";
@@ -47,7 +47,6 @@ function photoOf(t) {
   for (const ext of ["webp", "jpg", "png"]) if (fs.existsSync(path.join(PUBLIC_DIR, "teas", "kinds", `${t.kind}.${ext}`))) return `/teas/kinds/${t.kind}.${ext}`;
   return "/emblem.jpg";
 }
-const kindPhoto = (k) => photoOf({ id: -1, kind: k });
 const available = (t) => store.availability()[t.id] !== false;
 
 // Виды для каталога и главной: в порядке, удобном для знакомства
@@ -94,22 +93,22 @@ function layout({ title, description, canonical, image = "/emblem.jpg", jsonld =
 ${ld.map((x) => `<script type="application/ld+json">${JSON.stringify(x).replace(/</g, "\\u003c")}</script>`).join("\n")}
 <script>
 // Telegram открыл старую ссылку на главную — ведём сразу в магазин
-if (/tgWebAppData/.test(location.hash)) location.replace("/shop" + location.search + location.hash);
+if (/tgWebAppData/.test(location.hash)) location.replace("/" + location.search + location.hash);
 </script>
 </head>
 <body>
 <header class="hd"><div class="wrap hd-in">
   <a class="logo" href="/"><img src="/emblem.jpg" alt="Синица — логотип" width="44" height="44"><span>Синица</span></a>
   <nav class="menu" aria-label="Разделы">
-    <a href="/chai">Чаи</a><a href="/podbor">Подбор</a><a href="/blog">О чае</a><a href="/#dostavka">Доставка</a>
+    <a href="/">Каталог</a><a href="/#quiz">Подбор</a><a href="/#sets">Наборы</a><a href="/blog">О чае</a>
   </nav>
-  <a class="btn sm" href="/shop">Магазин</a>
+  <a class="btn sm" href="/#cart">Корзина</a>
 </div></header>
 <main>${body}</main>
 <footer class="ft"><div class="wrap ft-in">
   <div><a class="logo" href="/"><img src="/emblem.jpg" alt="" width="36" height="36"><span>Синица</span></a>
     <p class="muted small">Китайский чай с доставкой по России.<br>Каждый чай можно взять по 20 г на пробу.</p></div>
-  <div class="ft-col"><b>Покупателям</b><a href="/shop">Магазин</a><a href="/podbor">Подбор чая</a><a href="/chai">Каталог</a><a href="/#dostavka">Доставка и оплата</a></div>
+  <div class="ft-col"><b>Покупателям</b><a href="/">Каталог</a><a href="/#quiz">Подбор чая</a><a href="/#sets">Наборы</a><a href="/chai">Все чаи списком</a></div>
   <div class="ft-col"><b>О чае</b><a href="/blog">Блог</a>${ARTICLES.slice(0, 3).map((a) => `<a href="/blog/${a.slug}">${esc(a.h1.split(":")[0])}</a>`).join("")}</div>
   <div class="ft-col"><b>Мы на связи</b><a href="${BOT}">Telegram-бот @sinitsa_chai_bot</a><a href="${CHANNEL}">Канал о чае</a><a href="${INSTAGRAM}">Instagram</a></div>
 </div><div class="wrap ft-legal small muted">
@@ -146,21 +145,10 @@ function articleCard(a) {
     <h3>${esc(a.h1)}</h3><span class="muted small">${esc(a.description)}</span></span></a>`;
 }
 
-const ORDER_WAYS = `
-<div class="ways">
-  <div class="way"><span class="eyebrow">На сайте</span><h3>Закажите здесь</h3>
-    <ol class="steps"><li>Выберите чай в <a href="/shop">магазине</a> или пройдите <a href="/podbor">подбор</a>.</li>
-    <li>Укажите имя, телефон и пункт выдачи.</li>
-    <li>Мы свяжемся — в Telegram, WhatsApp или по телефону, как вам удобнее, — подтвердим заказ и пришлём реквизиты.</li></ol>
-    <a class="btn" href="/shop">Перейти в магазин</a></div>
-  <div class="way alt"><span class="eyebrow">Или в Telegram</span><h3>Через бота</h3>
-    <ol class="steps"><li>Откройте <a href="${BOT}">@sinitsa_chai_bot</a> и нажмите «Магазин».</li>
-    <li>Тот же каталог, подбор и корзина — прямо в Telegram.</li>
-    <li>Статусы заказа и оплата — в чате с ботом.</li></ol>
-    <a class="btn ghost" href="${BOT}">Открыть бота</a></div>
-</div>`;
-
-// ---------- главная ----------
+// ---------- главная = магазин ----------
+// Главная — это сам магазин (public/index.html, тот же, что в Telegram): каталог с фильтрами,
+// карточка чая, подбор, наборы, корзина и заказы — без переходов на другие страницы.
+// Здесь добавляем к нему то, что нужно только сайту: заголовок для поиска, доставку, вопросы, подвал.
 const FAQ = [
   ["Как оплатить заказ?", "После того как мы подтвердим наличие, пришлём сумму и реквизиты. Оплата переводом по СБП. Ничего не нужно платить заранее, пока мы не подтвердили заказ."],
   ["Сколько стоит доставка?", `ПВЗ Яндекс Маркета и Ozon — 290 ₽, СДЭК и Почта России — 450 ₽. Цена одна для любого города. От ${rub(FREE_DELIVERY_FROM)} доставка бесплатная любой службой.`],
@@ -170,71 +158,66 @@ const FAQ = [
   ["Можно заказать без Telegram?", "Да, прямо на сайте. Оставьте телефон и выберите, как с вами связаться: Telegram, WhatsApp или звонок."],
 ];
 
+function siteFooter() {
+  return `<footer class="s-ft site-only"><div class="s-ft-in">
+  <div><a class="brand" href="/"><img src="/emblem.jpg" alt="" width="36" height="36"><span>Синица</span></a>
+    <p class="muted small">Китайский чай с доставкой по России.<br>Каждый чай можно взять по 20 г на пробу.</p></div>
+  <div class="s-col"><b>Покупателям</b><a href="/#catalog">Каталог</a><a href="/#quiz">Подбор чая</a><a href="/#sets">Наборы</a><a href="/#cart">Корзина</a></div>
+  <div class="s-col"><b>О чае</b><a href="/blog">Блог</a>${ARTICLES.slice(0, 3).map((a) => `<a href="/blog/${a.slug}">${esc(a.h1.split(":")[0])}</a>`).join("")}</div>
+  <div class="s-col"><b>Мы на связи</b><a href="${BOT}">Telegram-бот @sinitsa_chai_bot</a><a href="${CHANNEL}">Канал о чае</a><a href="${INSTAGRAM}">Instagram</a></div>
+</div><p class="s-legal small muted"><a href="/terms">Условия доставки и возврата</a> · <a href="/privacy">Политика конфиденциальности</a> · <a href="/consent">Согласие на обработку данных</a></p></footer>`;
+}
+
 function homePage() {
-  const popular = [1, 13, 9, 7, 19, 21].map((id) => TEAS.find((t) => t.id === id)).filter(Boolean);
-  const kinds = KIND_ORDER.filter((k) => TEAS.some((t) => t.kind === k));
-  const body = `
-<section class="hero"><div class="wrap hero-in">
-  <div class="hero-t">
-    <span class="eyebrow">Китайский чай · доставка по России</span>
-    <h1>Китайский чай с доставкой: улуны, ГАБА, пуэр и красный чай</h1>
-    <p class="lead">Чай из Фуцзяни, Гуандуна, Юньнани и с Тайваня. Каждый можно взять по 20 г на пробу, а если не знаете, с чего начать, — подберём по вкусу за минуту.</p>
-    <div class="row"><a class="btn" href="/shop">Выбрать чай</a><a class="btn ghost" href="/podbor">🍵 Подобрать мой чай</a></div>
-    <p class="small muted">Заказ — прямо на сайте или в Telegram, как удобнее.</p>
-  </div>
-  <img class="hero-img" src="/blog/teguanin.webp" alt="Улун в пиале и чашка настоя" width="520" height="520">
-</div></section>
+  const title = "Китайский чай с доставкой по России — Синица";
+  const description = "Улуны, ГАБА, пуэр и красный чай из Китая и с Тайваня. Пробники по 20 г, подбор чая по вкусу, наборы со скидкой, доставка по России. Заказ прямо на сайте.";
+  const ld = [
+    { "@context": "https://schema.org", "@type": "Organization", name: BRAND, url: abs("/"), logo: abs("/emblem.jpg"), sameAs: [CHANNEL, INSTAGRAM, BOT] },
+    { "@context": "https://schema.org", "@type": "WebSite", name: BRAND, url: abs("/") },
+    { "@context": "https://schema.org", "@type": "FAQPage", mainEntity: FAQ.map(([q, a]) => ({ "@type": "Question", name: q, acceptedAnswer: { "@type": "Answer", text: a } })) },
+  ];
+  const head = `<title>${esc(title)}</title>
+<meta name="description" content="${esc(description)}">
+<link rel="canonical" href="${esc(abs("/"))}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="${BRAND}">
+<meta property="og:title" content="${esc(title)}">
+<meta property="og:description" content="${esc(description)}">
+<meta property="og:url" content="${esc(abs("/"))}">
+<meta property="og:image" content="${esc(abs("/blog/teguanin.webp"))}">
+${ld.map((x) => `<script type="application/ld+json">${JSON.stringify(x).replace(/</g, "\\u003c")}</script>`).join("\n")}`;
 
-<section class="wrap sec">
-  <h2>Виды китайского чая</h2>
-  <p class="muted">Выберите по вкусу — внутри каждого вида свои оттенки.</p>
-  <div class="kinds">${kinds.map((k) => `<a class="kind" href="/chai#${KIND_SLUG[k]}"><img src="${kindPhoto(k)}" alt="${esc(KINDS[k].label)}" loading="lazy" width="200" height="200">
-    <span><b>${esc(KINDS[k].label)}</b><small class="muted">${esc(KIND_TEXT[k])}</small></span></a>`).join("")}</div>
+  const top = `<section class="s-hero site-only home-only">
+  <span class="eyebrow">Китайский чай · доставка по России</span>
+  <h1>Китайский чай с доставкой: улуны, ГАБА, пуэр и красный чай</h1>
+  <p>Чай из Фуцзяни, Гуандуна, Юньнани и с Тайваня. Каждый можно взять по 20 г на пробу. Выберите ниже — или подберём по вкусу за минуту.</p>
+  <div class="s-row"><a class="btn" href="#quiz">🍵 Подобрать мой чай</a><a class="btn ghost" href="#sets">Наборы −10%</a></div>
+</section>`;
+
+  const bottom = `<div class="s-blocks site-only home-only">
+<section id="kak-zakazat"><h2>Как заказать</h2>
+  <ol class="s-steps">
+    <li><b>Положите чай в корзину</b><span>Нажмите на чай, выберите вес — 20, 50 или 100 г.</span></li>
+    <li><b>Оформите заказ</b><span>Имя, телефон и пункт выдачи. Выберите, как с вами связаться: Telegram, WhatsApp или звонок.</span></li>
+    <li><b>Подтвердим и отправим</b><span>Проверим наличие, пришлём сумму и реквизиты. После оплаты отправим в тот же день или на следующий.</span></li>
+  </ol>
+  <p class="muted small">Удобнее в Telegram? Тот же магазин есть в боте <a href="${BOT}">@sinitsa_chai_bot</a> — там же статусы заказа.</p>
 </section>
-
-<section class="wrap sec">
-  <h2>С чего начинают чаще всего</h2>
-  <div class="grid">${popular.map((t) => teaCard(t)).join("")}</div>
-  <p><a class="btn ghost" href="/chai">Весь каталог — ${TEAS.length} чаёв</a></p>
-</section>
-
-<section class="wrap sec">
-  <div class="quiz-cta"><div><span class="eyebrow">Подбор чая</span><h2>Не знаете, какой выбрать?</h2>
-    <p class="muted">Ответьте на несколько вопросов: что любите во вкусе, когда пьёте, для себя или в подарок. Предложим 1–3 чая, которые подойдут именно вам.</p></div>
-    <a class="btn" href="/podbor">Подобрать за минуту</a></div>
-</section>
-
-<section class="wrap sec" id="kak-zakazat">
-  <h2>Как заказать</h2>
-  ${ORDER_WAYS}
-</section>
-
-<section class="wrap sec" id="dostavka">
-  <h2>Доставка и оплата</h2>
-  <div class="dl-grid">${Object.values(DELIVERY).map((d) => `<div class="dl"><b>${esc(d.label)}</b><span class="price">${rub(d.price)}</span><small class="muted">${esc(d.note)}</small></div>`).join("")}</div>
+<section id="dostavka"><h2>Доставка и оплата</h2>
+  <div class="s-dl">${Object.values(DELIVERY).map((d) => `<div><b>${esc(d.label)}</b><span>${rub(d.price)}</span><small class="muted">${esc(d.note)}</small></div>`).join("")}</div>
   <p>🎁 От ${rub(FREE_DELIVERY_FROM)} доставка бесплатная любой службой. Отправляем по всей России. Чай собираем под заказ, оплата — переводом после подтверждения. <a href="/terms">Условия доставки и возврата</a>.</p>
 </section>
-
-<section class="wrap sec">
-  <div class="sec-h"><h2>О чае: где он растёт</h2><a href="/blog">Все статьи →</a></div>
-  <div class="posts">${ARTICLES.slice(0, 3).map(articleCard).join("")}</div>
+<section><div class="s-head"><h2>О чае: где он растёт</h2><a href="/blog">Все статьи →</a></div>
+  <div class="s-posts">${ARTICLES.slice(0, 3).map((a) => `<a class="s-post" href="/blog/${a.slug}"><img src="${esc(a.cover)}" alt="${esc(a.h1)}" loading="lazy" width="600" height="400"><span><b>${esc(a.h1)}</b><small class="muted">${esc(a.description)}</small></span></a>`).join("")}</div>
 </section>
-
-<section class="wrap sec faq">
-  <h2>Частые вопросы</h2>
+<section class="s-faq"><h2>Частые вопросы</h2>
   ${FAQ.map(([q, a]) => `<details><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join("")}
-</section>`;
-  return layout({
-    title: "Китайский чай с доставкой по России — Синица",
-    description: "Улуны, ГАБА, пуэр и красный чай из Китая и с Тайваня. Пробники по 20 г, подбор чая по вкусу, доставка по России. Заказ на сайте или в Telegram.",
-    canonical: "/",
-    image: "/blog/teguanin.webp",
-    jsonld: [
-      { "@context": "https://schema.org", "@type": "WebSite", name: BRAND, url: abs("/") },
-      { "@context": "https://schema.org", "@type": "FAQPage", mainEntity: FAQ.map(([q, a]) => ({ "@type": "Question", name: q, acceptedAnswer: { "@type": "Answer", text: a } })) },
-    ],
-    body,
-  });
+</section>
+</div>
+${siteFooter()}`;
+
+  const tpl = fs.readFileSync(path.join(PUBLIC_DIR, "index.html"), "utf8");
+  return tpl.replace(/<title>.*?<\/title>/, head).replace("<!--SITE_TOP-->", top).replace("<!--SITE_BOTTOM-->", bottom);
 }
 
 // ---------- каталог ----------
@@ -244,7 +227,7 @@ function catalogPage() {
   ${crumbsHTML([["Главная", "/"], ["Каталог чая", "/chai"]])}
   <h1>Каталог китайского чая</h1>
   <p class="lead">${TEAS.length} чаёв: улуны, ГАБА, красный чай и пуэр. Цены за 20 г — столько хватит на несколько чаепитий, чтобы понять, ваш ли это чай.</p>
-  <div class="chips">${kinds.map((k) => `<a class="chip" href="#${KIND_SLUG[k]}">${esc(KINDS[k].label)}</a>`).join("")}<a class="chip gold" href="/podbor">🍵 Подбор</a></div>
+  <div class="chips">${kinds.map((k) => `<a class="chip" href="#${KIND_SLUG[k]}">${esc(KINDS[k].label)}</a>`).join("")}<a class="chip gold" href="/#quiz">🍵 Подбор</a></div>
   ${kinds.map((k) => `<section class="kind-sec" id="${KIND_SLUG[k]}"><h2>${esc(KINDS[k].label)}</h2><p class="muted">${esc(KIND_TEXT[k])}</p>
     <div class="grid">${TEAS.filter((t) => t.kind === k).sort((a, b) => available(b) - available(a)).map((t) => teaCard(t)).join("")}</div></section>`).join("")}
 </div>`;
@@ -283,7 +266,7 @@ function teaPage(t) {
         ${["20", "50", "100"].map((p) => `<tr><td>${p} г</td><td>${rub(t.prices[p])}</td></tr>`).join("")}</tbody></table>
       ${off ? `<p class="warn">Сейчас нет в наличии. Напишите нам — сообщим, когда появится, или подскажем похожий.</p>
         <div class="row"><a class="btn ghost" href="${BOT}">Написать в Telegram</a></div>`
-      : `<div class="row"><a class="btn" href="/shop#tea-${t.id}">Купить на сайте</a><a class="btn ghost" href="${BOT}">Заказать в Telegram</a></div>`}
+      : `<div class="row"><a class="btn" href="/#tea-${t.id}">В корзину</a><a class="btn ghost" href="${BOT}">Заказать в Telegram</a></div>`}
       <p class="small muted">Доставка по России от 290 ₽, от ${rub(FREE_DELIVERY_FROM)} — бесплатно.</p>
     </div>
   </div>
@@ -361,7 +344,7 @@ function articlePage(a) {
   <div class="prose">${a.body}</div>
   ${teas.length ? `<section class="sec"><h2>Чай из этой статьи</h2><div class="grid">${teas.map((t) => teaCard(t, { h: "h3" })).join("")}</div></section>` : ""}
   <div class="quiz-cta"><div><h2>Подберём чай под ваш вкус</h2><p class="muted">Несколько вопросов — и 1–3 чая, которые вам подойдут. Каждый можно взять по 20 г.</p></div>
-    <div class="row"><a class="btn" href="/podbor">Подобрать чай</a><a class="btn ghost" href="/shop">В магазин</a></div></div>
+    <div class="row"><a class="btn" href="/#quiz">Подобрать чай</a><a class="btn ghost" href="/">В каталог</a></div></div>
   <section class="sec"><h2>Ещё о чае</h2><div class="posts">${others.map(articleCard).join("")}</div></section>
 </article>`;
   return layout({
@@ -389,36 +372,10 @@ function articlePage(a) {
   });
 }
 
-// ---------- магазин: то же приложение, что в Telegram, со своим заголовком ----------
-const SHOP_META = {
-  "/shop": {
-    title: "Магазин китайского чая — купить онлайн | Синица",
-    description: "Каталог, наборы и корзина: улуны, ГАБА, пуэр и красный чай с доставкой по России. Пробники по 20 г, наборы со скидкой 10%.",
-  },
-  "/podbor": {
-    title: "Подбор китайского чая за 1 минуту | Синица",
-    description: "Подберём чай под ваш вкус: ответьте на несколько вопросов — и получите 1–3 подходящих чая с описанием, ценой и рецептом заваривания.",
-  },
-};
-function shopPage(p) {
-  const m = SHOP_META[p];
-  const tpl = fs.readFileSync(path.join(PUBLIC_DIR, "index.html"), "utf8");
-  const head = `<title>${esc(m.title)}</title>
-<meta name="description" content="${esc(m.description)}">
-<link rel="canonical" href="${esc(abs(p))}">
-<meta property="og:title" content="${esc(m.title)}">
-<meta property="og:description" content="${esc(m.description)}">
-<meta property="og:image" content="${esc(abs("/emblem.jpg"))}">
-<meta property="og:url" content="${esc(abs(p))}">`;
-  return tpl.replace(/<title>.*?<\/title>/, head);
-}
-
 // ---------- sitemap и robots ----------
 function sitemap() {
   const urls = [
     ["/", "weekly", "1.0"],
-    ["/shop", "weekly", "0.9"],
-    ["/podbor", "monthly", "0.8"],
     ["/chai", "weekly", "0.9"],
     ...TEAS.map((t) => [teaUrl(t), "weekly", "0.8"]),
     ["/blog", "weekly", "0.7"],
@@ -443,7 +400,7 @@ function notFound() {
     description: "Такой страницы нет.",
     canonical: "/",
     body: `<div class="wrap sec empty"><h1>Такой страницы нет</h1><p class="muted">Возможно, чай переехал. Загляните в каталог или пройдите подбор.</p>
-      <div class="row"><a class="btn" href="/chai">Каталог</a><a class="btn ghost" href="/podbor">Подбор</a></div></div>`,
+      <div class="row"><a class="btn" href="/">Каталог</a><a class="btn ghost" href="/#quiz">Подбор</a></div></div>`,
   });
 }
 
@@ -456,7 +413,6 @@ export function sitePage(pathname, search = new URLSearchParams()) {
     const r = search.get("r");
     return { body: blogPage(REGIONS.includes(r) ? r : "") };
   }
-  if (SHOP_META[p]) return { body: shopPage(p) };
   if (p === "/sitemap.xml") return { body: sitemap(), type: "application/xml; charset=utf-8" };
   if (p === "/robots.txt") return { body: robots(), type: "text/plain; charset=utf-8" };
   let m = p.match(/^\/chai\/([a-z0-9-]+)$/);

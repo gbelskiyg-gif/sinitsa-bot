@@ -51,6 +51,7 @@ const art = (t) => t.photo
   : `<div class="art"><span aria-hidden="true">${S.kinds[t.kind].glyph}</span></div>`;
 
 // ---------- каталог ----------
+const SORTS = [["pop", "Популярные"], ["asc", "Сначала дешевле"], ["desc", "Сначала дороже"], ["new", "Новинки"]];
 const GROUPS = [["all", "Все"], ["gaba", "ГАБА"], ["oolong", "Улуны"], ["red", "Красный чай"], ["puer", "Пуэры"]];
 function renderCatalog() {
   let list = S.teas.filter((t) =>
@@ -58,25 +59,31 @@ function renderCatalog() {
     (!S.query || `${t.name} ${t.notes} ${S.kinds[t.kind].label} ${t.region}`.toLowerCase().includes(S.query)));
   if (S.sort === "asc") list = [...list].sort((a, b) => a.prices["50"] - b.prices["50"]);
   if (S.sort === "desc") list = [...list].sort((a, b) => b.prices["50"] - a.prices["50"]);
+  if (S.sort === "new") list = [...list].sort((a, b) => b.id - a.id); // новые чаи добавляем в конец каталога
   list = [...list].sort((a, b) => b.available - a.available);
-  $("#view").innerHTML = `
+  // На сайте свой заголовок над каталогом (для поиска), этот — только в Telegram
+  $("#view").innerHTML = `${inTelegram() ? `
     <section class="hero">
       <div class="eyebrow">Китайский чай. Свой ритм.</div>
       <h1>Хороший чай. <em>Время для себя.</em></h1>
       <p>Тёплая чашка, глубокий вкус и немного времени для себя. Каждый чай можно взять по 20 г на пробу.</p>
       <a class="btn" href="#quiz">🍵 Подобрать мой чай</a>
-    </section>
+    </section>` : ""}
     <label class="search"><span aria-hidden="true">⌕</span><input id="q" type="search" placeholder="Найти свой чай" value="${esc(S.query)}" autocomplete="off"></label>
-    <div class="chips scroll" id="groups">${GROUPS.map(([k, l]) => `<button class="chip" data-g="${k}" aria-pressed="${S.group === k}">${l}</button>`).join("")}
-      <button class="chip" id="sort">${{ pop: "По умолчанию", asc: "Сначала дешевле", desc: "Сначала дороже" }[S.sort]} ⇅</button></div>
+    <div class="chips scroll" id="groups">${GROUPS.map(([k, l]) => `<button class="chip" data-g="${k}" aria-pressed="${S.group === k}">${l}</button>`).join("")}</div>
+    <div class="chips scroll sorts" id="sorts" aria-label="Сортировка">${SORTS.map(([k, l]) => `<button class="chip" data-sort="${k}" aria-pressed="${S.sort === k}">${l}</button>`).join("")}</div>
     ${!S.query && S.group === "all" && S.sets.length ? setsBanner() : ""}
     <p class="note">${list.length} из ${S.teas.length} · цены за 50 г · собираем под заказ</p>
     <div class="grid">${list.length ? list.map(cardHTML).join("") : `<p class="muted">Ничего не нашли. Попробуйте другое слово.</p>`}</div>
     <div class="opt-box"><span>🧑‍💼</span><span><b>Покупаете оптом?</b><small>Для кофейни, магазина или подарков — обсудим цены лично, в Москве можно встретиться и попробовать.</small></span><button class="btn ghost" data-opt="0">Я оптовик</button></div>`;
   $("#q").addEventListener("input", (e) => { S.query = e.target.value.trim().toLowerCase(); const pos = e.target.selectionStart; renderCatalog(); const q = $("#q"); q.focus(); q.setSelectionRange(pos, pos); });
+  $("#sorts").addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    S.sort = b.dataset.sort; renderCatalog();
+  });
   $("#groups").addEventListener("click", (e) => {
     const b = e.target.closest("button"); if (!b) return;
-    if (b.id === "sort") S.sort = { pop: "asc", asc: "desc", desc: "pop" }[S.sort]; else S.group = b.dataset.g;
+    S.group = b.dataset.g;
     renderCatalog();
   });
 }
@@ -768,6 +775,9 @@ async function renderOrders() {
 // ---------- навигация ----------
 function route() {
   const tab = (location.hash || "#catalog").slice(1) || "catalog";
+  // Сайт: блоки главной (заголовок, доставка, вопросы) видны только в каталоге
+  if (document.body.dataset.tab && document.body.dataset.tab !== tab && !inTelegram()) window.scrollTo(0, 0);
+  document.body.dataset.tab = tab;
   document.querySelectorAll(".nav a").forEach((a) => a.classList.toggle("active", a.dataset.tab === tab));
   $("#view").onclick = null;
   if (tab !== "cart") { S.checkout = false; S.undo = null; }
@@ -780,6 +790,14 @@ function route() {
   else renderCatalog();
 }
 document.addEventListener("click", (e) => {
+  // Ссылки сайта на блоки главной («Доставка», «Как заказать»): возвращаем каталог и листаем к блоку
+  const hm = e.target.closest("[data-home]");
+  if (hm) {
+    e.preventDefault();
+    const go = () => document.getElementById(hm.dataset.home)?.scrollIntoView({ behavior: "smooth" });
+    if ((location.hash || "#catalog") !== "#catalog") { location.hash = "#catalog"; setTimeout(go, 50); } else go();
+    return;
+  }
   const doc = e.target.closest("a[data-doc]");
   if (doc && tgApp?.openLink) { e.preventDefault(); tgApp.openLink(location.origin + doc.getAttribute("href")); return; }
   const op = e.target.closest("[data-opt]");

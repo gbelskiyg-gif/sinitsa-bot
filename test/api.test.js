@@ -284,17 +284,15 @@ test("таблица заказов для Google: только по секре�
 });
 
 test("сайт: главная, каталог, чай, блог и статьи с SEO-разметкой", async () => {
-  for (const p of ["/", "/chai", "/chai/gaba-shanlinsi", "/blog", "/blog/puer-yunnan", "/podbor", "/shop"]) {
+  for (const p of ["/", "/chai", "/chai/gaba-shanlinsi", "/blog", "/blog/puer-yunnan"]) {
     const r = await fetch(base + p);
     assert.equal(r.status, 200, p);
     const html = await r.text();
     assert.match(html, /<title>[^<]{10,}<\/title>/, p);
     assert.match(html, /<meta name="description" content="[^"]{40,}">/, p);
     assert.match(html, /<link rel="canonical" href="https:\/\/example\.test/, p);
-    if (!["/podbor", "/shop"].includes(p)) {
-      assert.equal((html.match(/<h1[ >]/g) || []).length, 1, `один H1 на ${p}`);
-      assert.match(html, /application\/ld\+json/, p);
-    }
+    assert.equal((html.match(/<h1[ >]/g) || []).length, 1, `один H1 на ${p}`);
+    assert.match(html, /application\/ld\+json/, p);
   }
   assert.equal((await fetch(base + "/chai/net-takogo")).status, 404);
   assert.equal((await fetch(base + "/blog/net-takoj")).status, 404);
@@ -309,10 +307,15 @@ test("сайт: sitemap и robots", async () => {
   assert.match(rb, /Disallow: \/api\//);
 });
 
-test("старые ссылки бота ведут в магазин", async () => {
-  const r = await fetch(base + "/?tab=quiz", { redirect: "manual" });
-  assert.equal(r.status, 302);
-  assert.equal(r.headers.get("location"), "/shop?tab=quiz");
+test("магазин на главной: /shop и /podbor ведут туда, ?tab= открывает раздел", async () => {
+  const home = await (await fetch(base + "/?tab=quiz")).text();
+  assert.match(home, /id="view"/, "главная — это магазин");
+  assert.match(home, /Как заказать/);
+  let r = await fetch(base + "/shop?tab=cart", { redirect: "manual" });
+  assert.equal(r.status, 301);
+  assert.equal(r.headers.get("location"), "/?tab=cart");
+  r = await fetch(base + "/podbor", { redirect: "manual" });
+  assert.equal(r.headers.get("location"), "/?tab=quiz");
 });
 
 test("заказ с сайта без Telegram: сумма по каталогу, способ связи, промокод по телефону", async () => {

@@ -10,7 +10,7 @@ import { sheetFormula } from "./export.js";
 // Раздел передаём через ?tab=, потому что после # Telegram дописывает свои параметры запуска
 const shopButton = (text, hash = "") => ({
   text,
-  web_app: { url: hash ? `${PUBLIC_URL}/shop?tab=${hash.replace("#", "")}` : `${PUBLIC_URL}/shop` },
+  web_app: { url: hash ? `${PUBLIC_URL}/?tab=${hash.replace("#", "")}` : `${PUBLIC_URL}/` },
 });
 
 const WELCOME =
@@ -477,7 +477,7 @@ async function askFeedback() {
 export async function startBot() {
   const me = await tg("getMe");
   console.log(`Бот @${me.username} запущен`);
-  await tgSafe("setChatMenuButton", { menu_button: { type: "web_app", text: "Магазин", web_app: { url: `${PUBLIC_URL}/shop` } } });
+  await tgSafe("setChatMenuButton", { menu_button: { type: "web_app", text: "Магазин", web_app: { url: `${PUBLIC_URL}/` } } });
   await tgSafe("setMyCommands", {
     commands: [
       { command: "start", description: "Начать сначала" },

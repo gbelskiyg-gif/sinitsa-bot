@@ -8,16 +8,18 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Prata&display=swap">
 <link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/home.css">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script>if (window.Telegram && Telegram.WebApp && Telegram.WebApp.initData) document.documentElement.classList.add("tg");</script>
 </head>
 <body>
 <header class="top">
   <a class="brand" href="#catalog"><img src="/emblem.jpg" alt="" width="40" height="40"><span>Синица</span></a>
-  <nav class="sitenav" aria-label="Сайт"><a href="/">Главная</a><a href="/chai">Чаи</a><a href="/blog">О чае</a></nav>
+  <nav class="sitenav" aria-label="Сайт"><a href="#kak-zakazat" data-home="kak-zakazat">Как заказать</a><a href="#dostavka" data-home="dostavka">Доставка</a><a href="/blog">О чае</a></nav>
 </header>
-
+<!--SITE_TOP-->
 <main id="view" aria-live="polite"></main>
+<!--SITE_BOTTOM-->
 
 <nav class="nav" aria-label="Разделы">
   <a href="#catalog" data-tab="catalog"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg>Каталог</a>

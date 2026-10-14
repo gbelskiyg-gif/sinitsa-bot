@@ -262,9 +262,9 @@ export function startServer(port) {
         return res.end(ordersCsv());
       }
       if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, { error: "method" });
-      // Старые кнопки бота вели на /?tab=… — магазин теперь живёт на /shop
-      if (url.pathname === "/" && url.searchParams.has("tab")) return redirect(res, `/shop?tab=${encodeURIComponent(url.searchParams.get("tab"))}`, 302);
-      if (url.pathname === "/index.html") return redirect(res, "/shop", 301);
+      // Магазин живёт на главной; старые адреса ведут туда же (?tab= магазин понимает сам)
+      if (url.pathname === "/shop" || url.pathname === "/index.html") return redirect(res, "/" + url.search, 301);
+      if (url.pathname === "/podbor") return redirect(res, "/?tab=quiz", 301);
       const page = sitePage(url.pathname, url.searchParams);
       if (page) {
         res.writeHead(page.status || 200, { "content-type": page.type || "text/html; charset=utf-8", "cache-control": "no-cache" });

@@ -65,7 +65,7 @@ const KIND_TEXT = {
 const KIND_SLUG = { gaba: "gaba", light_oolong: "svetlyj-ulun", dark_oolong: "temnyj-ulun", dancong: "dancun", red: "krasnyj-chaj", sheng: "shen-puer", shu: "shu-puer", puer: "puer" };
 
 // ---------- общий каркас ----------
-function layout({ title, description, canonical, image = "/emblem.jpg", jsonld = [], body, type = "website" }) {
+function layout({ title, description, canonical, image = "/emblem.jpg", jsonld = [], body, type = "website", head = "" }) {
   const ld = [
     { "@context": "https://schema.org", "@type": "Organization", name: BRAND, url: abs("/"), logo: abs("/emblem.jpg"), sameAs: [CHANNEL, INSTAGRAM, BOT] },
     ...jsonld,
@@ -91,6 +91,7 @@ function layout({ title, description, canonical, image = "/emblem.jpg", jsonld =
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Prata&display=swap">
 <link rel="stylesheet" href="/site.css">
+${head}
 ${ld.map((x) => `<script type="application/ld+json">${JSON.stringify(x).replace(/</g, "\\u003c")}</script>`).join("\n")}
 <script>
 // Telegram открыл старую ссылку на главную — ведём сразу в магазин
@@ -170,20 +171,42 @@ const FAQ = [
   ["Можно заказать без Telegram?", "Да, прямо на сайте. Оставьте телефон и выберите, как с вами связаться: Telegram, WhatsApp или звонок."],
 ];
 
+// Истории видов чая на главной (3D-пиала меняет цвет настоя под каждый)
+const EXP = [
+  { kind: "gaba", where: "Тайвань", title: "ГАБА-улуны", text: "Мягкие и сладкие: печёные фрукты, мёд и лёгкая кислинка. Лист выдерживают без кислорода — отсюда особый, очень спокойный вкус.", links: [["Смотреть ГАБА", "/chai#gaba"], ["Чай Тайваня", "/blog/chai-tajvanya"]] },
+  { kind: "oolong", where: "Фуцзянь · Гуандун", title: "Улуны", text: "От свежего цветочного Тегуанинь до обжаренного Дахунпао с утёсов Уишань и ароматных Дань Цун с горы Феникса.", links: [["Смотреть улуны", "/chai#svetlyj-ulun"], ["Утёсные улуны", "/blog/dahunpao-uishan"]] },
+  { kind: "red", where: "Юньнань", title: "Красный чай", text: "Мёд, солод и хлеб. Золотые почки дяньхуна почти не горчат — с него легко начать знакомство с китайским чаем.", links: [["Смотреть красный чай", "/chai#krasnyj-chaj"], ["О дяньхуне", "/blog/dianhong-yunnan"]] },
+  { kind: "puer", where: "Юньнань · Мьянма", title: "Пуэр", text: "Тёмный тёплый шу и бодрый молодой шэн. Прессованные блины, выдержка годами и вкус дерева, орехов и сухофруктов.", links: [["Смотреть пуэры", "/chai#shu-puer"], ["Всё о пуэре", "/blog/puer-yunnan"]] },
+];
+
 function homePage() {
   const popular = [1, 13, 9, 7, 19, 21].map((id) => TEAS.find((t) => t.id === id)).filter(Boolean);
   const kinds = KIND_ORDER.filter((k) => TEAS.some((t) => t.kind === k));
   const body = `
-<section class="hero"><div class="wrap hero-in">
-  <div class="hero-t">
-    <span class="eyebrow">Китайский чай · доставка по России</span>
-    <h1>Китайский чай с доставкой: улуны, ГАБА, пуэр и красный чай</h1>
-    <p class="lead">Чай из Фуцзяни, Гуандуна, Юньнани и с Тайваня. Каждый можно взять по 20 г на пробу, а если не знаете, с чего начать, — подберём по вкусу за минуту.</p>
-    <div class="row"><a class="btn" href="/shop">Выбрать чай</a><a class="btn ghost" href="/podbor">🍵 Подобрать мой чай</a></div>
-    <p class="small muted">Заказ — прямо на сайте или в Telegram, как удобнее.</p>
+<section class="exp">
+  <div class="exp-stage" aria-hidden="true">
+    <div class="exp-glow"></div>
+    <canvas id="tea3d"></canvas>
+    <img class="exp-fallback" src="/blog/teguanin.webp" alt="" width="520" height="520">
+    <div class="exp-count wrap"><b>01</b> / ${EXP.length + 1}</div>
   </div>
-  <img class="hero-img" src="/blog/teguanin.webp" alt="Улун в пиале и чашка настоя" width="520" height="520">
-</div></section>
+  <div class="exp-panels">
+    <div class="exp-panel" data-kind="intro"><div class="wrap"><div class="exp-text">
+      <span class="eyebrow">Китайский чай · доставка по России</span>
+      <h1>Китайский чай с доставкой: улуны, ГАБА, пуэр и красный чай</h1>
+      <p class="lead">Чай из Фуцзяни, Гуандуна, Юньнани и с Тайваня. Каждый можно взять по 20 г на пробу, а если не знаете, с чего начать, — подберём по вкусу за минуту.</p>
+      <div class="row"><a class="btn" href="/shop">Выбрать чай</a><a class="btn ghost" href="/podbor">🍵 Подобрать мой чай</a></div>
+      <p class="small muted">Заказ — прямо на сайте или в Telegram, как удобнее.</p>
+      <span class="exp-hint small muted">Листайте — расскажем о видах чая ↓</span>
+    </div></div></div>
+    ${EXP.map((x, i) => `<div class="exp-panel" data-kind="${x.kind}"><div class="wrap"><div class="exp-text">
+      <span class="eyebrow">${String(i + 2).padStart(2, "0")} · ${esc(x.where)}</span>
+      <h2 class="exp-h">${esc(x.title)}</h2>
+      <p class="lead">${esc(x.text)}</p>
+      <div class="row">${x.links.map(([l, u], j) => `<a class="btn${j ? " ghost" : ""}" href="${u}">${esc(l)}</a>`).join("")}</div>
+    </div></div></div>`).join("")}
+  </div>
+</section>
 
 <section class="wrap sec">
   <h2>Виды китайского чая</h2>
@@ -229,6 +252,9 @@ function homePage() {
     description: "Улуны, ГАБА, пуэр и красный чай из Китая и с Тайваня. Пробники по 20 г, подбор чая по вкусу, доставка по России. Заказ на сайте или в Telegram.",
     canonical: "/",
     image: "/blog/teguanin.webp",
+    head: `<script type="importmap">{"imports":{"three":"/vendor/three.module.min.js"}}</script>
+<link rel="modulepreload" href="/vendor/three.module.min.js">
+<script type="module" src="/tea3d.js"></script>`,
     jsonld: [
       { "@context": "https://schema.org", "@type": "WebSite", name: BRAND, url: abs("/") },
       { "@context": "https://schema.org", "@type": "FAQPage", mainEntity: FAQ.map(([q, a]) => ({ "@type": "Question", name: q, acceptedAnswer: { "@type": "Answer", text: a } })) },

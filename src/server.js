@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
+import zlib from "node:zlib";
 import { fileURLToPath } from "node:url";
 import { verifyInitData } from "./auth.js";
 import { BOT_TOKEN } from "./config.js";
@@ -121,6 +122,14 @@ function auth(req) {
   return verifyInitData(req.headers["x-telegram-init-data"], BOT_TOKEN);
 }
 
+const gzCache = new Map();
+function gzipCached(file, buf) {
+  const key = file + ":" + buf.length;
+  let z = gzCache.get(key);
+  if (!z) { z = zlib.gzipSync(buf, { level: 6 }); if (gzCache.size > 200) gzCache.clear(); gzCache.set(key, z); }
+  return z;
+}
+
 function serveStatic(req, res) {
   let p = decodeURIComponent(new URL(req.url, "http://x").pathname);
   if (p === "/") p = "/index.html";
@@ -132,11 +141,20 @@ function serveStatic(req, res) {
       return res.end("Не найдено");
     }
     const ext = path.extname(file);
-    res.writeHead(200, {
+    const headers = {
       "content-type": TYPES[ext] || "application/octet-stream",
-      // Код приложения всегда проверяем на свежесть — иначе телефон может держать старую версию после обновления
-      "cache-control": [".html", ".js", ".css"].includes(ext) ? "no-cache" : "public, max-age=3600",
-    });
+      // Код приложения всегда проверяем на свежесть — иначе телефон может держать старую версию после обновления.
+      // Библиотеки в /vendor/ не меняются (версия в имени папки не нужна — обновляем редко), кэшируем на неделю.
+      "cache-control": p.startsWith("/vendor/") ? "public, max-age=604800" : [".html", ".js", ".css"].includes(ext) ? "no-cache" : "public, max-age=3600",
+    };
+    // Текст сжимаем: three.js весит 690 КБ, сжатый — около 170 КБ
+    if ([".html", ".js", ".css", ".svg"].includes(ext) && /\bgzip\b/.test(req.headers["accept-encoding"] || "")) {
+      headers["content-encoding"] = "gzip";
+      headers.vary = "accept-encoding";
+      res.writeHead(200, headers);
+      return res.end(gzipCached(file, buf));
+    }
+    res.writeHead(200, headers);
     res.end(buf);
   });
 }

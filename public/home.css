@@ -68,3 +68,11 @@ body:not([data-tab="catalog"]) .home-only { display: none !important; }
   .s-ft-in { grid-template-columns: 1.4fr 1fr 1fr 1fr; }
 }
 @media (max-width: 520px) { .sitenav a[data-home="kak-zakazat"] { display: none; } }
+@media (max-width: 430px) { .sitenav a[data-home="dostavka"] { display: none; } .sitenav { margin-left: auto; } }
+
+/* вход через Telegram */
+.acc { color: var(--gold) !important; font-weight: 600; }
+.login-box { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin: 6px 0 14px; padding: 14px 16px; border: 1px solid #2aabee66; border-radius: 12px; background: #2aabee12; }
+.login-box b { display: block; }
+.login-box small { display: block; color: var(--muted); font-size: 13px; max-width: 460px; }
+.tg-login { min-height: 40px; }

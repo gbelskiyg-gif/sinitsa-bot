@@ -334,3 +334,23 @@ test("заказ с сайта без Telegram: сумма по каталогу
   assert.equal(spam.status, 201);
   assert.equal(spam.body.order.id, 0, "скрытое поле заполнено — заказ не сохраняем");
 });
+
+test("вход на сайте через Telegram: сессия, заказ в профиле, подделка не проходит", async () => {
+  const { signLoginWidget } = await import("../src/auth.js");
+  const login = (data) => fetch(base + "/api/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(data) }).then(async (r) => ({ status: r.status, body: await r.json() }));
+  const bad = await login({ ...signLoginWidget({ id: 880044, first_name: "Сайт" }, TOKEN), id: 880045 });
+  assert.equal(bad.status, 401, "подменили id — не пускаем");
+  const old = await login(signLoginWidget({ id: 880044, first_name: "Сайт" }, TOKEN, Math.floor(Date.now() / 1000) - 3 * 86400));
+  assert.equal(old.status, 401, "старая подпись");
+  const ok = await login(signLoginWidget({ id: 880044, first_name: "Сайт", username: "site_user" }, TOKEN));
+  assert.equal(ok.status, 200);
+  const h = { "content-type": "application/json", "x-site-auth": ok.body.token };
+  const created = await fetch(base + "/api/orders", { method: "POST", headers: h,
+    body: JSON.stringify({ terms: true, consent: true, name: "Сайт", phone: "+7 900 777-77-77", delivery: "yandex", address: "Москва, ПВЗ", items: [{ teaId: 1, pack: "20", qty: 1 }] }) });
+  assert.equal(created.status, 201);
+  const mine = await (await fetch(base + "/api/orders", { headers: h })).json();
+  assert.equal(mine.orders.length, 1, "заказ виден в профиле с любого устройства");
+  assert.equal(store.getOrder(mine.orders[0].id).user_id, 880044);
+  const forged = await fetch(base + "/api/orders", { headers: { "x-site-auth": ok.body.token.replace(/.$/, (c) => (c === "A" ? "B" : "A")) } });
+  assert.equal(forged.status, 401);
+});

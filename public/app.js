@@ -27,17 +27,51 @@ function toast(text) {
 async function api(path, opts = {}) {
   const res = await fetch(path, {
     ...opts,
-    headers: { "content-type": "application/json", "x-telegram-init-data": tgApp?.initData || "", ...(opts.headers || {}) },
+    headers: { "content-type": "application/json", "x-telegram-init-data": tgApp?.initData || "", "x-site-auth": inTelegram() ? "" : S.auth?.token || "", ...(opts.headers || {}) },
   });
   const data = await res.json().catch(() => ({}));
+  // Вход на сайте истёк — выходим, покупатель войдёт заново
+  if (res.status === 401 && S.auth && !inTelegram()) { logout(); }
   if (!res.ok) throw new Error(data.error || "Не получилось. Попробуйте ещё раз.");
   return data;
 }
 const inTelegram = () => !!tgApp?.initData;
+// Покупатель известен: открыл магазин в Telegram или вошёл на сайте через Telegram
+const authed = () => inTelegram() || !!S.auth?.token;
+
+// ---------- вход на сайте через Telegram ----------
+const BOT_NAME = "sinitsa_chai_bot";
+function loadAuth() { try { S.auth = JSON.parse(localStorage.getItem("siteAuth") || "null"); } catch { S.auth = null; } }
+function saveAuth() { try { S.auth ? localStorage.setItem("siteAuth", JSON.stringify(S.auth)) : localStorage.removeItem("siteAuth"); } catch {} updateAccount(); }
+function logout() { S.auth = null; S.me = null; saveAuth(); }
+function updateAccount() {
+  const a = $("#acc"); if (!a) return;
+  a.textContent = S.auth?.user ? `👤 ${S.auth.user.first_name || "Мой профиль"}` : "Войти";
+}
+const loginBox = (text) => `<div class="login-box site-only"><div><b>Войдите через Telegram</b><small>${text}</small></div><div class="tg-login"></div></div>`;
+// Кнопку Telegram вставляем только туда, где она видна (скрипт Telegram рисует её сам)
+function mountLogin() {
+  document.querySelectorAll(".tg-login:empty").forEach((el) => {
+    const sc = document.createElement("script");
+    sc.async = true;
+    sc.src = "https://telegram.org/js/telegram-widget.js?22";
+    Object.assign(sc.dataset, { telegramLogin: BOT_NAME, size: "large", radius: "20", onauth: "onTelegramAuth(user)", requestAccess: "write" });
+    el.appendChild(sc);
+  });
+}
+window.onTelegramAuth = async (user) => {
+  try {
+    const r = await api("/api/login", { method: "POST", body: JSON.stringify(user) });
+    S.auth = { token: r.token, user: r.user }; saveAuth();
+    api("/api/me").then((me) => (S.me = me)).catch(() => {});
+    toast(`Вы вошли, ${r.user.first_name || "добро пожаловать"}!`);
+    route();
+  } catch (err) { toast(err.message); }
+};
 // Аналитика: отмечаем шаги, чтобы видеть, где люди уходят. Только в Telegram, тихо, без ожидания ответа.
 function track(name, data = "") {
-  if (!inTelegram()) return;
-  try { fetch("/api/event", { method: "POST", keepalive: true, headers: { "content-type": "application/json", "x-telegram-init-data": tgApp.initData }, body: JSON.stringify({ name, data: String(data) }) }).catch(() => {}); } catch {}
+  if (!authed()) return;
+  try { fetch("/api/event", { method: "POST", keepalive: true, headers: { "content-type": "application/json", "x-telegram-init-data": tgApp?.initData || "", "x-site-auth": inTelegram() ? "" : S.auth.token }, body: JSON.stringify({ name, data: String(data) }) }).catch(() => {}); } catch {}
 }
 
 // ---------- помощники каталога ----------
@@ -215,7 +249,7 @@ function addToCart(teaId, pack, qty, set = "") {
 
 // «Я оптовик»: опт не через корзину — сообщаем нам, дальше общаемся лично в чате
 async function wholesale(teaId, btn) {
-  if (!inTelegram()) { location.href = BOT_LINK; return; }
+  if (!authed()) { location.href = BOT_LINK; return; }
   btn.disabled = true;
   try {
     const r = await api("/api/wholesale", { method: "POST", body: JSON.stringify({ teaId }) });
@@ -560,7 +594,7 @@ function renderCart() {
       <p class="error" id="promo-err"></p></div>`}
     <div class="total"><span>Итого</span><span>${rub(total)}</span></div>
     ${S.freeFrom ? `<p class="free-left">${total >= S.freeFrom ? "🎁 Доставка бесплатная — любой службой" : `🚚 До бесплатной доставки осталось ${rub(S.freeFrom - total)}`}</p>` : ""}
-    <p class="note">Доставку выберете на следующем шаге: ПВЗ Яндекса и Ozon — 290 ₽, СДЭК и Почта — 450 ₽. Чай собираем под заказ: наличие и сроки подтвердим ${inTelegram() ? "в чате" : "по телефону или в мессенджере"}, оплата после подтверждения.</p>
+    <p class="note">Доставку выберете на следующем шаге: ПВЗ Яндекса и Ozon — 290 ₽, СДЭК и Почта — 450 ₽. Чай собираем под заказ: наличие и сроки подтвердим ${authed() ? "в Telegram" : "по телефону или в мессенджере"}, оплата после подтверждения.</p>
     ${S.deliveryInfo ? `<details class="dl-info"><summary>Доставка и возврат</summary><p>${esc(S.deliveryInfo.replace(/^🚚 Доставка\n\n/, "")).replace(/\n/g, "<br>")}</p></details>` : ""}
     ${off.length ? `<p class="error">Уберите чаи, которых нет в наличии, чтобы оформить заказ.</p>` : ""}
     <button class="btn wide" id="go" ${off.length ? "disabled" : ""}>Оформить заказ</button>`;
@@ -604,7 +638,7 @@ function renderCart() {
   $("#promo-go")?.addEventListener("click", async () => {
     const code = $("#promo").value.trim(); if (!code) return;
     try {
-      const r = await api((inTelegram() ? "/api/promo?code=" : "/api/site-promo?code=") + encodeURIComponent(code));
+      const r = await api((authed() ? "/api/promo?code=" : "/api/site-promo?code=") + encodeURIComponent(code));
       if (!r.ok) { $("#promo-err").textContent = r.error; return; }
       S.promo = r; renderCart(); toast(cartLines().promoOff ? "Промокод применён" : "На наборы уже действует скидка");
     } catch (err) { $("#promo-err").textContent = err.message; }
@@ -626,11 +660,11 @@ function renderCheckout(total) {
   const dSel = S.delivery[f.delivery] ? f.delivery : "yandex";
   $("#view").onclick = null;
   $("#view").innerHTML = `<h2 class="section-title">Оформление</h2>
-    ${inTelegram() ? "" : `<p class="muted small" style="margin:0 0 12px">Удобнее в Telegram? <a href="${BOT_LINK}">Оформите через бота @sinitsa_chai_bot</a> — там же статусы заказа.</p>`}
+    ${authed() ? "" : loginBox("Заказ сохранится в профиле, статусы и реквизиты придут в Telegram. Или оформите без входа — ниже.")}
     <form id="f" novalidate>
-      <label>Имя<input id="f-name" name="name" required maxlength="80" value="${esc(f.name || u?.first_name || "")}"></label>
+      <label>Имя<input id="f-name" name="name" required maxlength="80" value="${esc(f.name || u?.first_name || S.auth?.user?.first_name || "")}"></label>
       <label>Телефон<input id="f-phone" name="phone" type="tel" required maxlength="30" placeholder="+7 900 000-00-00" value="${esc(f.phone || "")}"></label>
-      ${inTelegram() ? "" : `<fieldset class="dl"><legend>Как с вами связаться, чтобы подтвердить заказ</legend>
+      ${authed() ? "" : `<fieldset class="dl"><legend>Как с вами связаться, чтобы подтвердить заказ</legend>
         <div class="contact-opts">${[["tg", "Telegram"], ["wa", "WhatsApp"], ["call", "Звонок"]].map(([k, l]) => `<label><input type="radio" name="contact" value="${k}" ${(f.contact || "tg") === k ? "checked" : ""}>${l}</label>`).join("")}</div>
         <label id="nick-wrap" style="margin-top:10px">Ник в Telegram (необязательно)<input id="f-nick" name="contactNick" maxlength="60" placeholder="@username" value="${esc(f.contactNick || "")}"></label>
         <label class="hp" aria-hidden="true">Не заполняйте<input name="website" tabindex="-1" autocomplete="off"></label></fieldset>`}
@@ -663,7 +697,7 @@ function renderCheckout(total) {
     $("#grand").textContent = rub(total + (c?.cost || 0));
     $("#dl-note").textContent = !c ? "Выберите способ доставки." : c.free ? `Доставка бесплатная — заказ от ${rub(S.freeFrom)}.` : !c.cost ? "Место и время встречи согласуем в чате." : S.freeFrom ? `До бесплатной доставки не хватает ${rub(S.freeFrom - total)}.` : "";
   };
-  $("#f").addEventListener("change", sync); sync();
+  $("#f").addEventListener("change", sync); sync(); mountLogin();
   $("#back").onclick = () => { S.checkout = false; renderCart(); };
   $("#f").onsubmit = async (e) => {
     e.preventDefault();
@@ -681,10 +715,10 @@ function renderCheckout(total) {
     try { localStorage.setItem("form", JSON.stringify({ name: data.name, phone: data.phone, delivery: data.delivery, address: data.address, contact: data.contact, contactNick: data.contactNick })); } catch {}
     $("#send").disabled = true; $("#err").textContent = "";
     try {
-      const { order } = await api(inTelegram() ? "/api/orders" : "/api/site-orders", { method: "POST", body: JSON.stringify({ ...data, items: S.cart.filter((i) => !i.removed).map(({ removed, ...i }) => i), promo: S.promo?.code || "" }) });
+      const { order } = await api(authed() ? "/api/orders" : "/api/site-orders", { method: "POST", body: JSON.stringify({ ...data, items: S.cart.filter((i) => !i.removed).map(({ removed, ...i }) => i), promo: S.promo?.code || "" }) });
       S.cart = []; saveCart(); S.checkout = false; S.promo = null; if (S.me) S.me.firstOrder = false;
-      if (inTelegram()) {
-        $("#view").innerHTML = `<div class="empty"><h2>Заказ №${order.id} отправлен 🍵</h2><p>Проверим наличие и напишем вам в чате с ботом. Как только подтвердим, придут сумма и реквизиты для оплаты.</p>
+      if (authed()) {
+        $("#view").innerHTML = `<div class="empty"><h2>Заказ №${order.id} отправлен 🍵</h2><p>Проверим наличие и напишем вам в Telegram, в чате с ботом @${BOT_NAME}. Как только подтвердим, придут сумма и реквизиты для оплаты.</p>
           <a class="btn" href="#orders">Мои заказы</a></div>`;
       } else {
         saveSiteOrder(order);
@@ -714,22 +748,26 @@ function payHTML(o) {
 function loadSiteOrders() { try { return JSON.parse(localStorage.getItem("siteOrders") || "[]"); } catch { return []; } }
 function saveSiteOrder(o) { try { localStorage.setItem("siteOrders", JSON.stringify([{ id: o.id, total: o.total, at: Date.now(), items: o.items.filter((i) => i.teaId).map((i) => `${i.name}, ${i.label} × ${i.qty}`) }, ...loadSiteOrders()].slice(0, 20))); } catch {} }
 async function renderOrders() {
-  if (!inTelegram()) {
+  if (!authed()) {
     const list = loadSiteOrders();
     $("#view").innerHTML = `<h2 class="section-title">Мои заказы</h2>
+      ${loginBox("Ваши заказы будут видны с любого телефона и компьютера, а статусы и реквизиты придут в Telegram.")}
+      ${list.length ? `<p class="eyebrow" style="margin:18px 0 0">На этом устройстве</p>` : ""}
       ${list.length ? list.map((o) => `<div class="line" style="display:block"><h3>Заказ №${o.id}</h3><div class="muted small">${o.items.map(esc).join("<br>")}</div>
         <b class="sum" style="color:var(--gold)">${rub(o.total)}</b></div>`).join("") : `<p class="muted">На этом устройстве заказов пока нет.</p>`}
-      <p class="muted small">Статус заказа сообщаем лично — по телефону или в мессенджере, который вы выбрали. Хотите видеть статусы в одном месте — <a href="${BOT_LINK}">заказывайте через бота</a>.</p>`;
+      <p class="muted small">Статус заказа без входа сообщаем лично — по телефону или в мессенджере, который вы выбрали.</p>`;
+    mountLogin();
     return;
   }
+  const who = !inTelegram() && S.auth?.user ? `<p class="muted small site-only">Вы вошли как ${esc(S.auth.user.first_name || "")}${S.auth.user.username ? ` (@${esc(S.auth.user.username)})` : ""} · <button class="link" id="logout" style="padding:0">Выйти</button></p>` : "";
   $("#view").innerHTML = `<h2 class="section-title">Мои заказы</h2><p class="muted">Загружаем…</p>`;
   try {
     const { orders } = await api("/api/orders");
     if (!orders.length) {
-      $("#view").innerHTML = `<div class="empty"><h2>Пока нет заказов</h2><p>После оформления заказ появится здесь, а статусы будут приходить в чат.</p><a class="btn" href="#catalog">В каталог</a></div>`;
+      $("#view").innerHTML = who + `<div class="empty"><h2>Пока нет заказов</h2><p>После оформления заказ появится здесь, а статусы будут приходить в чат.</p><a class="btn" href="#catalog">В каталог</a></div>`;
       return;
     }
-    $("#view").innerHTML = `<h2 class="section-title">Мои заказы</h2>` + orders.map((o) => `
+    $("#view").innerHTML = `<h2 class="section-title">Мои заказы</h2>` + who + orders.map((o) => `
       <div class="line" style="display:block"><div style="display:flex;justify-content:space-between;gap:12px"><h3>Заказ №${o.id}</h3><span class="status ${o.status}">${esc(o.statusLabel)}</span></div>
       <div class="muted small">${o.items.map((i) => i.teaId ? `${esc(i.name)}, ${esc(i.label)} × ${i.qty}` : (i.sum >= 0 ? `${esc(i.name)}: ${rub(i.sum)}` : `${esc(i.name)}: −${rub(-i.sum)}`)).join("<br>")}</div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px"><b class="sum" style="color:var(--gold)">${rub(o.total)}</b>
@@ -790,6 +828,7 @@ function route() {
   else renderCatalog();
 }
 document.addEventListener("click", (e) => {
+  if (e.target.closest("#logout")) { logout(); toast("Вы вышли"); route(); return; }
   // Ссылки сайта на блоки главной («Доставка», «Как заказать»): возвращаем каталог и листаем к блоку
   const hm = e.target.closest("[data-home]");
   if (hm) {
@@ -810,11 +849,11 @@ document.addEventListener("click", (e) => {
 window.addEventListener("hashchange", route);
 
 (async function init() {
-  loadCart(); updateBadge();
+  loadCart(); updateBadge(); loadAuth(); updateAccount();
   try {
     const data = await api("/api/catalog");
     Object.assign(S, { teas: data.teas, kinds: data.kinds, recipes: data.recipes, mugRecipes: data.mugRecipes, tastes: data.tastes, sets: data.sets || [], delivery: data.delivery || {}, freeFrom: data.freeDeliveryFrom || 0, deliveryInfo: data.deliveryInfo || "" });
-    if (inTelegram()) api("/api/me").then((me) => (S.me = me)).catch(() => {});
+    if (authed()) api("/api/me").then((me) => (S.me = me)).catch(() => {});
   } catch {
     $("#view").innerHTML = `<div class="empty"><h2>Не удалось загрузить каталог</h2><p>Проверьте интернет и откройте магазин ещё раз.</p></div>`;
     return;

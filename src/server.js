@@ -2,7 +2,7 @@ import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { verifyInitData } from "./auth.js";
+import { signSession, verifyInitData, verifyLoginWidget, verifySession } from "./auth.js";
 import { BOT_TOKEN } from "./config.js";
 import { DELIVERY, DELIVERY_INFO, FREE_DELIVERY_FROM, KINDS, MUG_RECIPES, RECIPES, SETS, TASTES, TEAS, quizOf } from "./catalog.js";
 import * as store from "./db.js";
@@ -117,8 +117,9 @@ function siteRateOk(ip) {
   return true;
 }
 
+// Покупатель: из мини-приложения (подпись Telegram) или с сайта после «Войти через Telegram»
 function auth(req) {
-  return verifyInitData(req.headers["x-telegram-init-data"], BOT_TOKEN);
+  return verifyInitData(req.headers["x-telegram-init-data"], BOT_TOKEN) || verifySession(req.headers["x-site-auth"], BOT_TOKEN);
 }
 
 function serveStatic(req, res) {
@@ -174,6 +175,15 @@ async function api(req, res, url) {
     const order = store.createOrder(draft);
     await notifyAdminsNew(order, "");
     return send(res, 201, { order: publicOrder(order) });
+  }
+
+  // Вход на сайте через Telegram: проверяем подпись и выдаём сессию
+  if (req.method === "POST" && url.pathname === "/api/login") {
+    const body = await readJson(req, 2000);
+    const tgUser = verifyLoginWidget(body, BOT_TOKEN);
+    if (!tgUser) return send(res, 401, { error: "Не получилось войти. Попробуйте ещё раз." });
+    store.upsertUser(tgUser);
+    return send(res, 200, { token: signSession(tgUser, BOT_TOKEN), user: { id: tgUser.id, first_name: tgUser.first_name, username: tgUser.username } });
   }
 
   const user = auth(req);

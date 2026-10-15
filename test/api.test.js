@@ -369,3 +369,23 @@ test("блины «зайчик / тигр / дракон»: без выбора
   assert.match(ok.body.order.items[0].name, /— Тигр$/);
   assert.equal(ok.body.order.items[0].variant, "Тигр");
 });
+
+test("заказ с сайта: по ключу видно статус, после подтверждения — реквизиты и ссылка на оплату, «Я оплатил»", async () => {
+  const r = await fetch(base + "/api/site-orders", { method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ terms: true, consent: true, name: "Оплата", phone: "8 900 555-00-11", delivery: "yandex", address: "Москва, ПВЗ", contact: "wa", items: [{ teaId: 1, pack: "20", qty: 1 }] }) }).then((x) => x.json());
+  assert.ok(r.token && r.token.length >= 20);
+  const get = (t) => fetch(`${base}/api/site-orders/${r.order.id}?t=${t}`).then(async (x) => ({ status: x.status, body: await x.json() }));
+  assert.equal((await get("chuzhoy")).status, 404, "без ключа заказ не открыть");
+  let s = await get(r.token);
+  assert.equal(s.body.order.status, "new");
+  assert.equal(s.body.order.payment, null, "до подтверждения реквизитов нет");
+  store.setSetting("payment", { phone: "+7 900 000-00-00", bank: "Т-Банк", name: "Александр Б.", link: "https://tbank.ru/cf/test" });
+  store.setStatus(r.order.id, "accepted");
+  s = await get(r.token);
+  assert.equal(s.body.order.payment.link, "https://tbank.ru/cf/test");
+  const { sitePaymentMessage, waNumber } = await import("../src/orders.js");
+  assert.equal(waNumber("8 900 555-00-11"), "79005550011");
+  assert.match(sitePaymentMessage(store.getOrder(r.order.id)), new RegExp(`\\?order=${r.order.id}&t=${r.token}`));
+  const paid = await fetch(`${base}/api/site-orders/${r.order.id}/paid?t=${r.token}`, { method: "POST" }).then((x) => x.json());
+  assert.equal(paid.order.paidClaim, true);
+});

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
+import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { signSession, verifyInitData, verifyLoginWidget, verifySession } from "./auth.js";
 import { BOT_TOKEN } from "./config.js";
@@ -173,9 +174,25 @@ async function api(req, res, url) {
     const body = await readJson(req);
     if (body.website) return send(res, 201, { order: { id: 0, total: 0, items: [] } }); // бот-спамер заполнил скрытое поле
     const draft = buildOrder(body, { id: 0 }, { isFirstOrder: store.isFirstOrderByPhone(body.phone) });
-    const order = store.createOrder(draft);
+    // Секретный ключ заказа: по нему покупатель без входа видит статус, QR и реквизиты на сайте
+    const token = crypto.randomBytes(12).toString("hex");
+    const order = store.createOrder({ ...draft, siteToken: token });
     await notifyAdminsNew(order, "");
-    return send(res, 201, { order: publicOrder(order) });
+    return send(res, 201, { order: publicOrder(order), token });
+  }
+  // Заказ с сайта по ссылке-ключу: статус, а после подтверждения — QR и реквизиты
+  const so = url.pathname.match(/^\/api\/site-orders\/(\d+)(\/paid)?$/);
+  if (so) {
+    const order = store.getOrder(Number(so[1]));
+    const t = url.searchParams.get("t") || "";
+    if (!order || !order.site_token || t.length !== order.site_token.length || !crypto.timingSafeEqual(Buffer.from(t), Buffer.from(order.site_token)))
+      return send(res, 404, { error: "Заказ не найден." });
+    if (req.method === "GET" && !so[2]) return send(res, 200, { order: publicOrder(order) });
+    if (req.method === "POST" && so[2]) {
+      const r = await claimPaid(order, "");
+      if (!r.ok) return send(res, 409, { error: r.error });
+      return send(res, 200, { order: publicOrder(r.order) });
+    }
   }
 
   // Вход на сайте через Telegram: проверяем подпись и выдаём сессию

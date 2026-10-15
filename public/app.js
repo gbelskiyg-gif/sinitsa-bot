@@ -107,6 +107,7 @@ function renderCatalog() {
     <div class="chips scroll" id="groups">${GROUPS.map(([k, l]) => `<button class="chip" data-g="${k}" aria-pressed="${S.group === k}">${l}</button>`).join("")}</div>
     <div class="chips scroll sorts" id="sorts" aria-label="Сортировка">${SORTS.map(([k, l]) => `<button class="chip" data-sort="${k}" aria-pressed="${S.sort === k}">${l}</button>`).join("")}</div>
     ${!S.query && S.group === "all" && S.sets.length ? setsBanner() : ""}
+    ${!S.query && S.group === "all" ? unusualBanner() : ""}
     <p class="note">${list.length} из ${S.teas.length} · цены за 50 г · собираем под заказ</p>
     <div class="grid">${list.length ? list.map(cardHTML).join("") : `<p class="muted">Ничего не нашли. Попробуйте другое слово.</p>`}</div>
     <div class="opt-box"><span>🧑‍💼</span><span><b>Покупаете оптом?</b><small>Для кофейни, магазина или подарков — обсудим цены лично, в Москве можно встретиться и попробовать.</small></span><button class="btn ghost" data-opt="0">Я оптовик</button></div>`;
@@ -196,6 +197,13 @@ function addSet(key) {
   set.teas.forEach((teaId) => S.cart.push({ teaId, pack, qty: 1, set: id }));
   saveCart(); toast(`Набор «${set.title}» по ${pack} г в корзине`);
   track("cart_add", `набор «${set.title}» · ${pack} г`);
+}
+// УТП: самый необычный чай коллекции
+function unusualBanner() {
+  const t = S.teas.find((x) => x.unusual && x.available); if (!t) return "";
+  return `<button class="sets-banner unusual" data-tea="${t.id}"><span>🐛</span><span><b>Чай, который сделали гусеницы</b>
+    <small>Гусеницы едят чайный лист, а из их гранул получается густой сладкий настой. Звучит странно — вкус удивляет. Рискнёте?</small></span>
+    <span class="more-price">от ${rub(t.prices["20"])} →</span></button>`;
 }
 function cardHTML(t) {
   return `<button class="card${t.available ? "" : " off"}" data-tea="${t.id}">${art(t)}
@@ -751,16 +759,16 @@ function renderCheckout(total) {
     try { localStorage.setItem("form", JSON.stringify({ name: data.name, phone: data.phone, delivery: data.delivery, address: data.address, contact: data.contact, contactNick: data.contactNick })); } catch {}
     $("#send").disabled = true; $("#err").textContent = "";
     try {
-      const { order } = await api(authed() ? "/api/orders" : "/api/site-orders", { method: "POST", body: JSON.stringify({ ...data, items: S.cart.filter((i) => !i.removed).map(({ removed, ...i }) => i), promo: S.promo?.code || "" }) });
+      const { order, token } = await api(authed() ? "/api/orders" : "/api/site-orders", { method: "POST", body: JSON.stringify({ ...data, items: S.cart.filter((i) => !i.removed).map(({ removed, ...i }) => i), promo: S.promo?.code || "" }) });
       S.cart = []; saveCart(); S.checkout = false; S.promo = null; if (S.me) S.me.firstOrder = false;
       if (authed()) {
         $("#view").innerHTML = `<div class="empty"><h2>Заказ №${order.id} отправлен 🍵</h2><p>Проверим наличие и напишем вам в Telegram, в чате с ботом @${BOT_NAME}. Как только подтвердим, придут сумма и реквизиты для оплаты.</p>
           <a class="btn" href="#orders">Мои заказы</a></div>`;
       } else {
-        saveSiteOrder(order);
+        saveSiteOrder(order, token);
         const how = { tg: "в Telegram", wa: "в WhatsApp", call: "по телефону" }[data.contact] || "по телефону";
-        $("#view").innerHTML = `<div class="empty"><h2>Заказ №${order.id} отправлен 🍵</h2><p>Проверим наличие и свяжемся с вами ${how}. Как только подтвердим, пришлём сумму и реквизиты для оплаты.</p>
-          <a class="btn" href="/blog">Почитать о чае, пока ждёте</a></div>`;
+        $("#view").innerHTML = `<div class="empty"><h2>Заказ №${order.id} отправлен 🍵</h2><p>Проверим наличие и свяжемся с вами ${how}. Как только подтвердим, в разделе «Заказы» здесь, на сайте, появятся QR-код и реквизиты для оплаты — никуда переходить не нужно.</p>
+          <a class="btn" href="#orders">Мои заказы</a></div>`;
       }
       try { tgApp?.HapticFeedback?.notificationOccurred("success"); } catch {}
     } catch (err) {
@@ -775,30 +783,68 @@ function renderCheckout(total) {
 
 // ---------- мои заказы ----------
 // Ждёт оплаты: реквизиты, копирование номера и кнопка «Я оплатил»
-function payHTML(o) {
+// QR-код из ссылки на оплату (библиотека /vendor/qrcode.js)
+function qrSVG(text) {
+  try { const q = qrcode(0, "M"); q.addData(text); q.make(); return q.createSvgTag({ cellSize: 5, margin: 2, scalable: true }); } catch { return ""; }
+}
+function payHTML(o, siteToken = "") {
   if (o.status !== "accepted") return "";
-  if (!o.payment) return `<p class="muted small" style="margin:8px 0 0">Реквизиты для оплаты пришлём в чате с ботом.</p>`;
+  if (!o.payment) return `<p class="muted small" style="margin:8px 0 0">Реквизиты для оплаты пришлём ${siteToken ? "в выбранный мессенджер" : "в чате с ботом"}.</p>`;
   const p = o.payment;
+  const qr = p.link ? qrSVG(p.link) : "";
   return `<div class="pay"><div class="eyebrow">К оплате ${rub(o.total)}</div>
+    ${p.link ? `<div class="pay-qr">${qr ? `<div class="qr">${qr}</div>` : ""}<div><p class="small" style="margin:0 0 8px">Наведите камеру телефона на QR-код или нажмите кнопку — откроется перевод в приложении банка.</p>
+      <a class="btn wide" href="${esc(p.link)}" target="_blank" rel="noopener">Открыть оплату в банке</a>
+      <p class="small muted" style="margin:6px 0 0">Сумма: <b>${rub(o.total)}</b>, в комментарии — «Заказ ${o.id}»</p></div></div>` : ""}
     <p class="small" style="margin:6px 0">Перевод по СБП по номеру телефона:</p>
     <button class="pay-row" data-copy="${esc(p.phone)}"><span>📱 ${esc(p.phone)}</span><small>скопировать</small></button>
     <p class="small" style="margin:6px 0 0">🏦 ${esc(p.bank)} · 👤 ${esc(p.name)}</p>
     <p class="muted small" style="margin:6px 0 10px">В комментарии к переводу: «Заказ ${o.id}»</p>
-    ${o.paidClaim ? `<p class="small" style="margin:0;color:var(--gold)">Вы отметили оплату — проверим и подтвердим в чате.</p>` : `<button class="btn wide" data-paid="${o.id}">✅ Я оплатил</button>`}</div>`;
+    ${o.paidClaim ? `<p class="small" style="margin:0;color:var(--gold)">Вы отметили оплату — проверим и подтвердим.</p>` : siteToken ? `<button class="btn wide" data-paid-site="${o.id}" data-t="${esc(siteToken)}">✅ Я оплатил</button>` : `<button class="btn wide" data-paid="${o.id}">✅ Я оплатил</button>`}</div>`;
 }
 // Заказы с сайта: помним номера на этом устройстве, статус сообщаем лично
 function loadSiteOrders() { try { return JSON.parse(localStorage.getItem("siteOrders") || "[]"); } catch { return []; } }
-function saveSiteOrder(o) { try { localStorage.setItem("siteOrders", JSON.stringify([{ id: o.id, total: o.total, at: Date.now(), items: o.items.filter((i) => i.teaId).map((i) => `${i.name}, ${i.label} × ${i.qty}`) }, ...loadSiteOrders()].slice(0, 20))); } catch {} }
+function saveSiteOrder(o, token = "") {
+  try {
+    const rest = loadSiteOrders().filter((x) => x.id !== o.id);
+    localStorage.setItem("siteOrders", JSON.stringify([{ id: o.id, total: o.total, at: Date.now(), token, items: o.items.filter((i) => i.teaId).map((i) => `${i.name}, ${i.label} × ${i.qty}`) }, ...rest].slice(0, 20)));
+  } catch {}
+}
+// Свежие статусы заказов с сайта (по ключу заказа)
+async function siteOrderStatus(x) {
+  if (!x.token) return null;
+  try { return (await api(`/api/site-orders/${x.id}?t=${encodeURIComponent(x.token)}`)).order; } catch { return null; }
+}
 async function renderOrders() {
   if (!authed()) {
     const list = loadSiteOrders();
-    $("#view").innerHTML = `<h2 class="section-title">Мои заказы</h2>
-      ${loginBox("Ваши заказы будут видны с любого телефона и компьютера, а статусы и реквизиты придут в Telegram.")}
-      ${list.length ? `<p class="eyebrow" style="margin:18px 0 0">На этом устройстве</p>` : ""}
-      ${list.length ? list.map((o) => `<div class="line" style="display:block"><h3>Заказ №${o.id}</h3><div class="muted small">${o.items.map(esc).join("<br>")}</div>
-        <b class="sum" style="color:var(--gold)">${rub(o.total)}</b></div>`).join("") : `<p class="muted">На этом устройстве заказов пока нет.</p>`}
-      <p class="muted small">Статус заказа без входа сообщаем лично — по телефону или в мессенджере, который вы выбрали.</p>`;
-    mountLogin();
+    const draw = (live) => {
+      $("#view").innerHTML = `<h2 class="section-title">Мои заказы</h2>
+      ${list.length ? list.map((x) => {
+        const o = live[x.id];
+        return `<div class="line" style="display:block"><div style="display:flex;justify-content:space-between;gap:12px"><h3>Заказ №${x.id}</h3>${o ? `<span class="status ${o.status}">${esc(o.statusLabel)}</span>` : ""}</div>
+          <div class="muted small">${(o ? o.items.map((i) => i.teaId ? `${i.name}, ${i.label} × ${i.qty}` : `${i.name}: ${i.sum >= 0 ? "" : "−"}${rub(Math.abs(i.sum))}`) : x.items).map(esc).join("<br>")}</div>
+          <b class="sum" style="color:var(--gold)">${rub(o ? o.total : x.total)}</b>
+          ${o ? (o.status === "new" ? `<p class="muted small" style="margin:8px 0 0">Проверяем наличие. Как только подтвердим, здесь появятся QR-код и реквизиты для оплаты.</p>` : payHTML(o, x.token)) : ""}</div>`;
+      }).join("") : `<p class="muted">На этом устройстве заказов пока нет.</p>`}
+      ${loginBox("Чтобы видеть заказы с любого телефона и компьютера, а статусы получать в Telegram.")}`;
+      mountLogin();
+    };
+    draw({});
+    const live = {};
+    await Promise.all(list.map(async (x) => { const o = await siteOrderStatus(x); if (o) live[x.id] = o; }));
+    if ((location.hash || "") === "#orders" && !authed()) draw(live);
+    $("#view").onclick = async (e) => {
+      const ps = e.target.closest("[data-paid-site]");
+      if (ps) {
+        ps.disabled = true;
+        try { await api(`/api/site-orders/${ps.dataset.paidSite}/paid?t=${encodeURIComponent(ps.dataset.t)}`, { method: "POST" }); toast("Спасибо! Проверим перевод и подтвердим"); renderOrders(); }
+        catch (err) { toast(err.message); ps.disabled = false; }
+        return;
+      }
+      const cp = e.target.closest("[data-copy]");
+      if (cp) { try { await navigator.clipboard.writeText(cp.dataset.copy); toast("Скопировано"); } catch { toast(cp.dataset.copy); } }
+    };
     return;
   }
   const who = !inTelegram() && S.auth?.user ? `<p class="muted small site-only">Вы вошли как ${esc(S.auth.user.first_name || "")}${S.auth.user.username ? ` (@${esc(S.auth.user.username)})` : ""} · <button class="link" id="logout" style="padding:0">Выйти</button></p>` : "";
@@ -904,7 +950,15 @@ window.addEventListener("hashchange", route);
     return;
   }
   // Раздел, с которого открыли приложение из бота: ?tab=quiz | orders | cart
-  let tab = new URLSearchParams(location.search).get("tab");
+  const qs = new URLSearchParams(location.search);
+  if (qs.get("order") && qs.get("t") && !inTelegram()) {
+    try {
+      const { order } = await api(`/api/site-orders/${Number(qs.get("order"))}?t=${encodeURIComponent(qs.get("t"))}`);
+      saveSiteOrder(order, qs.get("t"));
+    } catch {}
+    history.replaceState(null, "", "/#orders"); route(); return;
+  }
+  let tab = qs.get("tab");
   if (!tab && !location.hash && location.pathname === "/podbor") tab = "quiz";
   // Ссылка со страницы чая: /shop#tea-12 — открываем карточку поверх каталога
   const deep = location.hash.match(/^#tea-(\d+)$/);

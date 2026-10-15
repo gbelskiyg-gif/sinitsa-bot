@@ -76,6 +76,7 @@ for (const sql of [
   "ALTER TABLE orders ADD COLUMN consent_at TEXT",
   "ALTER TABLE users ADD COLUMN menu_v INTEGER NOT NULL DEFAULT 0",
   "ALTER TABLE orders ADD COLUMN paid_claim_at TEXT",
+  "ALTER TABLE orders ADD COLUMN site_token TEXT",
 ]) {
   try {
     db.exec(sql);
@@ -208,10 +209,10 @@ function rowToOrder(r) {
 export function createOrder(o) {
   const res = db
     .prepare(
-      `INSERT INTO orders (user_id, name, phone, delivery, address, comment, items_json, total, promo, consent_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+      `INSERT INTO orders (user_id, name, phone, delivery, address, comment, items_json, total, promo, consent_at, site_token)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)`
     )
-    .run(o.userId, o.name, o.phone, o.delivery, o.address || "", o.comment || "", JSON.stringify(o.items), o.total, o.promo || "");
+    .run(o.userId, o.name, o.phone, o.delivery, o.address || "", o.comment || "", JSON.stringify(o.items), o.total, o.promo || "", o.siteToken || null);
   return getOrder(Number(res.lastInsertRowid));
 }
 /** Все заказы для таблицы: новые сверху, с ником покупателя. */

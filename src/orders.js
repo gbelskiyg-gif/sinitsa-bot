@@ -1,4 +1,4 @@
-import { notifyChats } from "./config.js";
+import { PUBLIC_URL, notifyChats } from "./config.js";
 import { DELIVERY, KINDS, PACKS, PROMOS, STATUS, deliveryCost, findTea, normalizePromo, packInfo, rub } from "./catalog.js";
 import * as store from "./db.js";
 import { esc, tgSafe } from "./telegram.js";
@@ -221,9 +221,49 @@ export async function refreshAdminMessages(order, username) {
   }
 }
 
+// ---------- заказы с сайта: помогаем продавцу отправить реквизиты туда, где удобно покупателю ----------
+/** Страница заказа на сайте: статус, а после подтверждения — QR и реквизиты. */
+export const siteOrderUrl = (o) => (o.site_token ? `${PUBLIC_URL}/?order=${o.id}&t=${o.site_token}` : "");
+/** Номер для WhatsApp: только цифры, российский номер с 8 или без кода → 7XXXXXXXXXX. */
+export function waNumber(phone) {
+  let d = String(phone || "").replace(/\D/g, "");
+  if (d.length === 11 && d.startsWith("8")) d = "7" + d.slice(1);
+  if (d.length === 10) d = "7" + d;
+  return d;
+}
+/** Готовое сообщение покупателю: сумма, ссылка на страницу оплаты и реквизиты. */
+export function sitePaymentMessage(o) {
+  const p = getPayment();
+  const lines = [`Здравствуйте! Это «Синица» 🍵`, `Заказ №${o.id} подтвердили. К оплате: ${rub(o.total)}.`];
+  const url = siteOrderUrl(o);
+  if (url) lines.push("", `Оплатить можно на странице заказа — там QR-код и реквизиты:`, url);
+  if (p) lines.push("", `Или переводом по СБП:`, `📱 ${p.phone}`, `🏦 ${p.bank}`, `👤 ${p.name}`, `В комментарии к переводу: «Заказ ${o.id}».`);
+  if (p?.link) lines.push("", `Ссылка на оплату: ${p.link}`);
+  return lines.join("\n");
+}
+async function helpAdminsWithSitePayment(o) {
+  const contact = (String(o.comment || "").match(/Связь: (Telegram|WhatsApp|звонок)(?: (\S+))?/) || []);
+  const how = contact[1] || "звонок";
+  const nick = (contact[2] || "").replace(/^@/, "").replace(/[^\w]/g, "");
+  const msg = sitePaymentMessage(o);
+  const buttons = [];
+  if (how === "WhatsApp") buttons.push([{ text: "💬 Отправить в WhatsApp", url: `https://wa.me/${waNumber(o.phone)}?text=${encodeURIComponent(msg)}` }]);
+  if (how === "Telegram" && nick) buttons.push([{ text: `✈️ Написать @${nick}`, url: `https://t.me/${nick}` }]);
+  const url = siteOrderUrl(o);
+  if (url) buttons.push([{ text: "🔗 Страница оплаты заказа", url }]);
+  const hint = how === "WhatsApp" ? "Нажмите «Отправить в WhatsApp» — сообщение уже набрано, останется отправить."
+    : how === "Telegram" ? `Покупатель просил связаться в Telegram${nick ? ` (@${nick})` : ""}. Скопируйте текст ниже и отправьте ему.`
+    : `Покупатель просил позвонить: ${o.phone}. Реквизиты он увидит на странице заказа — или отправьте текст ниже по СМС.`;
+  for (const chat of notifyChats())
+    await tgSafe("sendMessage", { chat_id: chat, text: `🌐 Заказ №${o.id} с сайта принят.\n${hint}\n\nТекст для покупателя:\n\n${msg}`, ...(buttons.length ? { reply_markup: { inline_keyboard: buttons } } : {}), disable_web_page_preview: true });
+}
+
 export async function notifyCustomer(order) {
-  // Заказ с сайта: покупателя в Telegram нет, связываемся по телефону
-  if (!order.user_id) return;
+  // Заказ с сайта: покупателя в Telegram нет — помогаем продавцу отправить реквизиты
+  if (!order.user_id) {
+    if (order.status === "accepted") await helpAdminsWithSitePayment(order);
+    return;
+  }
   if (order.status === "accepted") {
     return tgSafe("sendMessage", { chat_id: order.user_id, text: paymentText(order), reply_markup: getPayment() ? payButton(order) : menuKeyboard(order.user_id) });
   }

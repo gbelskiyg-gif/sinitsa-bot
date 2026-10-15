@@ -79,6 +79,7 @@ for (const sql of [
   "ALTER TABLE orders ADD COLUMN paid_claim_at TEXT",
   "ALTER TABLE orders ADD COLUMN site_token TEXT",
   "ALTER TABLE orders ADD COLUMN phone_key TEXT",
+  "ALTER TABLE orders ADD COLUMN tg_chat INTEGER",
 ]) {
   try {
     db.exec(sql);
@@ -194,6 +195,11 @@ export function getSetting(key, fallback = null) {
 }
 export function setSetting(key, value) {
   db.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(key, JSON.stringify(value));
+}
+/** Заказ с сайта: покупатель нажал «Старт» в боте по ссылке со страницы заказа — пишем ему в этот чат. */
+export function linkOrderChat(id, chatId) {
+  db.prepare("UPDATE orders SET tg_chat = ? WHERE id = ?").run(chatId, id);
+  return getOrder(id);
 }
 /** Покупатель нажал «Я оплатил» (или сброс, если продавец не нашёл перевод). */
 export function setPaidClaim(id, on) {

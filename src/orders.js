@@ -179,9 +179,9 @@ export async function claimPaid(order, username = "") {
 /** Продавец не нашёл перевод: сбрасываем отметку и снова даём покупателю кнопку. */
 export async function rejectPaid(order) {
   const updated = store.setPaidClaim(order.id, false);
-  if (!order.user_id) return updated;
+  if (!customerChat(order)) return updated;
   await tgSafe("sendMessage", {
-    chat_id: order.user_id,
+    chat_id: customerChat(order),
     text: `Пока не видим перевод по заказу №${order.id} на ${rub(order.total)}. Проверьте, пожалуйста, реквизиты и сумму или пришлите сюда скриншот перевода.`,
     reply_markup: payButton(order),
   });
@@ -241,6 +241,10 @@ export function sitePaymentMessage(o) {
   if (p?.link) lines.push("", `Ссылка на оплату: ${p.link}`);
   return lines.join("\n");
 }
+/** Куда писать покупателю: Telegram-аккаунт заказа или чат, привязанный по ссылке с сайта. */
+export const customerChat = (o) => o.user_id || o.tg_chat || null;
+/** Ссылка «Получать статус в Telegram» для заказа с сайта: t.me/бот?start=o<id>_<ключ> */
+export const siteStartPayload = (o) => (o.site_token ? `o${o.id}_${o.site_token.slice(0, 16)}` : "");
 async function helpAdminsWithSitePayment(o) {
   const contact = (String(o.comment || "").match(/Связь: (Telegram|WhatsApp|звонок)(?: (\S+))?/) || []);
   const how = contact[1] || "звонок";
@@ -259,16 +263,26 @@ async function helpAdminsWithSitePayment(o) {
 }
 
 export async function notifyCustomer(order) {
-  // Заказ с сайта: покупателя в Telegram нет — помогаем продавцу отправить реквизиты
-  if (!order.user_id) {
+  const chat = customerChat(order);
+  // Заказ с сайта, покупатель не подключил бота — помогаем продавцу отправить реквизиты вручную
+  if (!chat) {
     if (order.status === "accepted") await helpAdminsWithSitePayment(order);
     return;
   }
   if (order.status === "accepted") {
-    return tgSafe("sendMessage", { chat_id: order.user_id, text: paymentText(order), reply_markup: getPayment() ? payButton(order) : menuKeyboard(order.user_id) });
+    if (!order.user_id)
+      for (const a of notifyChats())
+        await tgSafe("sendMessage", { chat_id: a, text: `🌐 Заказ №${order.id} с сайта принят. Покупатель подключил бота — сумма и реквизиты ушли ему в Telegram автоматически.` });
+    return tgSafe("sendMessage", { chat_id: chat, text: paymentText(order), reply_markup: getPayment() ? payButton(order) : menuKeyboard(chat) });
   }
   const t = CUSTOMER_STATUS[order.status];
-  if (t) await tgSafe("sendMessage", { chat_id: order.user_id, text: t.replace("{id}", order.id), reply_markup: menuKeyboard(order.user_id) });
+  if (t) await tgSafe("sendMessage", { chat_id: chat, text: t.replace("{id}", order.id), reply_markup: menuKeyboard(chat) });
+}
+/** Сообщение покупателю сразу после привязки заказа с сайта к Telegram. */
+export function linkedText(o) {
+  if (o.status === "accepted") return paymentText(o);
+  const now = { new: "Сейчас проверяем наличие — как только подтвердим, пришлём сюда сумму и реквизиты.", paid: "Оплату получили, собираем чай.", shipped: "Заказ уже отправлен.", done: "Заказ завершён.", cancelled: "Заказ отменён." }[o.status] || "";
+  return `Готово! Заказ №${o.id} с сайта привязан к этому чату 🍵\nВсе новости по заказу будем присылать сюда.\n\n${now}`;
 }
 
 /** Публичное представление заказа для мини-приложения. */
@@ -285,6 +299,7 @@ export function publicOrder(o) {
     // Ждёт оплаты: показываем реквизиты в «Моих заказах»
     payment: o.status === "accepted" ? getPayment() : null,
     paidClaim: !!o.paid_claim_at,
+    tgLinked: !!(o.user_id || o.tg_chat),
   };
 }
 

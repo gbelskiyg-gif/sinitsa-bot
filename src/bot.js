@@ -1,7 +1,8 @@
 import { ADMIN_IDS, ORDERS_CHAT_ID, PUBLIC_URL, isAdmin, notifyChats } from "./config.js";
 import { DELIVERY_INFO, STATUS, TEAS, findTea, rub } from "./catalog.js";
 import * as store from "./db.js";
-import { adminKeyboard, canMove, claimPaid, getPayment, notifyCustomer, orderText, refreshAdminMessages, rejectPaid } from "./orders.js";
+import crypto from "node:crypto";
+import { adminKeyboard, canMove, claimPaid, getPayment, linkedText, notifyCustomer, orderText, refreshAdminMessages, rejectPaid, siteStartPayload } from "./orders.js";
 import { esc, poll, tg, tgSafe } from "./telegram.js";
 import { BTN, MENU_VERSION, menuKeyboard } from "./menu.js";
 import { requestWholesale } from "./wholesale.js";
@@ -84,8 +85,31 @@ function stockKeyboard() {
   };
 }
 
+// Ссылка со страницы заказа на сайте: /start o<id>_<ключ> — привязываем заказ к этому чату
+async function linkSiteOrder(msg, payload) {
+  const m = /^o(\d+)_([0-9a-f]{16})$/.exec(payload || "");
+  if (!m) return false;
+  const o = store.getOrder(Number(m[1]));
+  const want = o && !o.user_id ? siteStartPayload(o) : "";
+  const a = Buffer.from(want), b = Buffer.from(payload);
+  if (!want || a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+    await tgSafe("sendMessage", { chat_id: msg.chat.id, text: "Не нашли такой заказ. Откройте ссылку со страницы заказа на сайте ещё раз или просто напишите нам сюда." });
+    return true;
+  }
+  const linked = store.linkOrderChat(o.id, msg.chat.id);
+  await tgSafe("sendMessage", {
+    chat_id: msg.chat.id, text: linkedText(linked),
+    reply_markup: linked.status === "accepted" && getPayment() && !linked.paid_claim_at ? { inline_keyboard: [[{ text: "✅ Я оплатил", callback_data: `paid:${linked.id}` }]] } : menuKeyboard(msg.from.id),
+  });
+  for (const chat of notifyChats())
+    await tgSafe("sendMessage", { chat_id: chat, text: `🔗 Покупатель заказа №${o.id} с сайта подключил бота${msg.from.username ? ` (@${msg.from.username})` : ""} — статусы и реквизиты будут уходить ему автоматически.` });
+  return true;
+}
+
 async function onStart(msg) {
   const chat = msg.chat.id;
+  const payload = String(msg.text || "").split(/\s+/)[1] || "";
+  if (payload.startsWith("o") && (await linkSiteOrder(msg, payload))) { store.markMenu(msg.from.id, MENU_VERSION); return; }
   const photo = await tgSafe("sendPhoto", {
     chat_id: chat,
     photo: `${PUBLIC_URL}/emblem.jpg`,
@@ -353,7 +377,7 @@ async function onCallback(q) {
   if (data.startsWith("fb:") || data.startsWith("fw:")) {
     const [kind, id, value] = data.split(":");
     const order = store.getOrder(Number(id));
-    if (!order || order.user_id !== q.from.id) return answer();
+    if (!order || (order.user_id || order.tg_chat) !== q.from.id) return answer();
     if (kind === "fb" && RATINGS[value]) {
       store.saveFeedback(order.id, q.from.id, { rating: value });
       await tgSafe("editMessageText", {
@@ -392,7 +416,7 @@ async function onCallback(q) {
   // Покупатель: «Я оплатил»
   if (data.startsWith("paid:")) {
     const order = store.getOrder(Number(data.split(":")[1]));
-    if (!order || order.user_id !== q.from.id) return answer();
+    if (!order || (order.user_id || order.tg_chat) !== q.from.id) return answer();
     const r = await claimPaid(order, q.from.username);
     if (!r.ok) return answer(r.error);
     await tgSafe("editMessageReplyMarkup", { chat_id: chat, message_id: q.message.message_id, reply_markup: { inline_keyboard: [] } });

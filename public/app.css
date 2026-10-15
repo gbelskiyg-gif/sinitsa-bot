@@ -284,3 +284,5 @@ form label.need { color: #ff5c5c; }
 .sc-dots button { width: 8px; height: 8px; padding: 0; border-radius: 999px; border: 0; background: var(--line); cursor: pointer; transition: width .3s, background .3s; }
 .sc-dots button[aria-current="true"] { width: 22px; background: var(--gold); }
 @media (prefers-reduced-motion: reduce) { .sc-track, .sc-img > img { transition: none; } }
+.tg-btn { background: #2aabee; border-color: #2aabee; color: #fff; }
+.tg-link { margin-top: 10px; display: inline-flex; }

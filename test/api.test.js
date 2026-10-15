@@ -411,3 +411,18 @@ test("промокод: «синица 10» в любом регистре; по
   const c = await call("/api/orders", { method: "POST", init: fresh, body: JSON.stringify({ name: "Новый", phone: "+79112223344", delivery: "yandex", address: "Москва, ПВЗ", items: [{ teaId: 1, pack: "50", qty: 1 }], promo: "SINITSA10" }) });
   assert.equal(c.status, 400);
 });
+
+test("заказ с сайта можно привязать к Telegram: ключ ссылки, чат сохраняется, статус видно на сайте", async () => {
+  const { siteStartPayload, customerChat } = await import("../src/orders.js");
+  const r = await fetch(base + "/api/site-orders", { method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ terms: true, consent: true, name: "ТГ", phone: "+7 912 000-11-22", contact: "tg", nick: "@buyer", delivery: "yandex", address: "Москва, ПВЗ", items: [{ teaId: 1, pack: "50", qty: 1 }] }) }).then((x) => x.json());
+  const o = store.getOrder(r.order.id);
+  assert.equal(siteStartPayload(o), `o${o.id}_${r.token.slice(0, 16)}`);
+  assert.ok(siteStartPayload(o).length <= 64, "лимит Telegram на параметр start");
+  assert.equal(customerChat(o), null);
+  const get = () => fetch(`${base}/api/site-orders/${o.id}?t=${r.token}`).then((x) => x.json());
+  assert.equal((await get()).order.tgLinked, false);
+  store.linkOrderChat(o.id, 5550001);
+  assert.equal(customerChat(store.getOrder(o.id)), 5550001);
+  assert.equal((await get()).order.tgLinked, true);
+});

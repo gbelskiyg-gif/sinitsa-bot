@@ -832,8 +832,13 @@ function renderCheckout(total) {
       } else {
         saveSiteOrder(order, token);
         const how = { tg: "в Telegram", wa: "в WhatsApp", call: "по телефону" }[data.contact] || "по телефону";
-        $("#view").innerHTML = `<div class="empty"><h2>Заказ №${order.id} отправлен 🍵</h2><p>Проверим наличие и свяжемся с вами ${how}. Как только подтвердим, в разделе «Заказы» здесь, на сайте, появятся QR-код и реквизиты для оплаты — никуда переходить не нужно.</p>
-          <a class="btn" href="#orders">Мои заказы</a></div>`;
+        const tg = data.contact === "tg";
+        $("#view").innerHTML = `<div class="empty"><h2>Заказ №${order.id} отправлен 🍵</h2>
+          ${tg ? `<p>Нажмите кнопку ниже и «Старт» в боте — подтверждение, сумма к оплате и статусы будут приходить вам в Telegram автоматически.</p>
+            <div class="row" style="justify-content:center;flex-wrap:wrap;gap:10px"><a class="btn tg-btn" href="${tgStartLink(order.id, token)}" target="_blank" rel="noopener">✈️ Получать статус в Telegram</a><a class="btn ghost" href="#orders">Мои заказы</a></div>`
+          : `<p>Проверим наличие и свяжемся с вами ${how}. Как только подтвердим, в разделе «Заказы» здесь, на сайте, появятся QR-код и реквизиты для оплаты — никуда переходить не нужно.</p>
+            <a class="btn" href="#orders">Мои заказы</a>
+            <p class="small muted" style="margin-top:14px">Удобнее получать новости в Telegram? <a href="${tgStartLink(order.id, token)}" target="_blank" rel="noopener">Подключите бота</a> — одно нажатие.</p>`}</div>`;
       }
       try { tgApp?.HapticFeedback?.notificationOccurred("success"); } catch {}
     } catch (err) {
@@ -875,6 +880,8 @@ function saveSiteOrder(o, token = "") {
     localStorage.setItem("siteOrders", JSON.stringify([{ id: o.id, total: o.total, at: Date.now(), token, items: o.items.filter((i) => i.teaId).map((i) => `${i.name}, ${i.label} × ${i.qty}`) }, ...rest].slice(0, 20)));
   } catch {}
 }
+// Ссылка на бота, которая привязывает заказ с сайта к Telegram покупателя
+const tgStartLink = (id, token) => `https://t.me/${BOT_NAME}?start=o${id}_${String(token).slice(0, 16)}`;
 // Свежие статусы заказов с сайта (по ключу заказа)
 async function siteOrderStatus(x) {
   if (!x.token) return null;
@@ -890,7 +897,9 @@ async function renderOrders() {
         return `<div class="line" style="display:block"><div style="display:flex;justify-content:space-between;gap:12px"><h3>Заказ №${x.id}</h3>${o ? `<span class="status ${o.status}">${esc(o.statusLabel)}</span>` : ""}</div>
           <div class="muted small">${(o ? o.items.map((i) => i.teaId ? `${i.name}, ${i.label} × ${i.qty}` : `${i.name}: ${i.sum >= 0 ? "" : "−"}${rub(Math.abs(i.sum))}`) : x.items).map(esc).join("<br>")}</div>
           <b class="sum" style="color:var(--gold)">${rub(o ? o.total : x.total)}</b>
-          ${o ? (o.status === "new" ? `<p class="muted small" style="margin:8px 0 0">Проверяем наличие. Как только подтвердим, здесь появятся QR-код и реквизиты для оплаты.</p>` : payHTML(o, x.token)) : ""}</div>`;
+          ${o ? (o.status === "new" ? `<p class="muted small" style="margin:8px 0 0">Проверяем наличие. Как только подтвердим, здесь появятся QR-код и реквизиты для оплаты.</p>` : payHTML(o, x.token)) : ""}
+          ${o && !o.tgLinked && !["done", "cancelled"].includes(o.status) && x.token ? `<a class="btn ghost sm tg-link" href="${tgStartLink(x.id, x.token)}" target="_blank" rel="noopener">✈️ Получать статус в Telegram</a>` : ""}
+          ${o?.tgLinked ? `<p class="small muted" style="margin:8px 0 0">✈️ Статусы приходят вам в Telegram</p>` : ""}</div>`;
       }).join("") : `<p class="muted">На этом устройстве заказов пока нет.</p>`}
       ${loginBox("Чтобы видеть заказы с любого телефона и компьютера, а статусы получать в Telegram.")}`;
       mountLogin();

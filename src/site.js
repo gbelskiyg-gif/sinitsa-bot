@@ -191,12 +191,12 @@ function homePage() {
 <meta property="og:image" content="${esc(abs("/blog/teguanin.webp"))}">
 ${ld.map((x) => `<script type="application/ld+json">${JSON.stringify(x).replace(/</g, "\\u003c")}</script>`).join("\n")}`;
 
-  const top = `<section class="s-hero site-only home-only">
+  const top = `<section class="s-hero site-only home-only"><div class="s-hero-txt">
   <span class="eyebrow">Китайский чай · доставка по России</span>
   <h1>Китайский чай с доставкой: улуны, ГАБА, пуэр и красный чай</h1>
   <p>Чай из Фуцзяни, Гуандуна, Юньнани и с Тайваня. Каждый можно взять по 20 г на пробу. Выберите ниже — или подберём по вкусу за минуту.</p>
   <div class="s-row"><a class="btn" href="#quiz">🍵 Подобрать мой чай</a><a class="btn ghost" href="#sets">Наборы −10%</a></div>
-</section>`;
+</div><div class="promo" id="promo" aria-label="Наши предложения"></div></section>`;
 
   const bottom = `<div class="s-blocks site-only home-only">
 <section id="kak-zakazat"><h2>Как заказать</h2>

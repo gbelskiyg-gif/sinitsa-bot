@@ -106,11 +106,11 @@ function renderCatalog() {
     <label class="search"><span aria-hidden="true">⌕</span><input id="q" type="search" placeholder="Найти свой чай" value="${esc(S.query)}" autocomplete="off"></label>
     <div class="chips scroll" id="groups">${GROUPS.map(([k, l]) => `<button class="chip" data-g="${k}" aria-pressed="${S.group === k}">${l}</button>`).join("")}</div>
     <div class="chips scroll sorts" id="sorts" aria-label="Сортировка">${SORTS.map(([k, l]) => `<button class="chip" data-sort="${k}" aria-pressed="${S.sort === k}">${l}</button>`).join("")}</div>
-    ${!S.query && S.group === "all" && S.sets.length ? setsBanner() : ""}
-    ${!S.query && S.group === "all" ? unusualBanner() : ""}
+    ${inTelegram() && !S.query && S.group === "all" ? `<div class="promo" id="promo"></div>` : ""}
     <p class="note">${list.length} из ${S.teas.length} · цены за 50 г · собираем под заказ</p>
     <div class="grid">${list.length ? list.map(cardHTML).join("") : `<p class="muted">Ничего не нашли. Попробуйте другое слово.</p>`}</div>
     <div class="opt-box"><span>🧑‍💼</span><span><b>Покупаете оптом?</b><small>Для кофейни, магазина или подарков — обсудим цены лично, в Москве можно встретиться и попробовать.</small></span><button class="btn ghost" data-opt="0">Я оптовик</button></div>`;
+  if (inTelegram()) mountPromo();
   $("#q").addEventListener("input", (e) => { S.query = e.target.value.trim().toLowerCase(); const pos = e.target.selectionStart; renderCatalog(); const q = $("#q"); q.focus(); q.setSelectionRange(pos, pos); });
   $("#sorts").addEventListener("click", (e) => {
     const b = e.target.closest("button"); if (!b) return;
@@ -126,11 +126,6 @@ const SET_PACKS = ["20", "50", "100"];
 function setPrice(set, pack = "20") {
   const sum = set.teas.reduce((s, id) => s + (tea(id)?.prices[pack] || 0), 0);
   return { sum, final: sum - Math.round((sum * SET_DISCOUNT) / 10) * 10 };
-}
-// Короткий баннер в каталоге — сами наборы во вкладке «Наборы»
-function setsBanner() {
-  const from = Math.min(...S.sets.map((x) => setPrice(x).final));
-  return `<a class="sets-banner" href="#sets"><span>🎁</span><span><b>Наборы чая</b><small>ГАБА, пуэры, улуны — по 20, 50 или 100 г, скидка 10%</small></span><span class="more-price">от ${rub(from)} →</span></a>`;
 }
 function renderSets() {
   S.setPack ||= {};
@@ -198,12 +193,72 @@ function addSet(key) {
   saveCart(); toast(`Набор «${set.title}» по ${pack} г в корзине`);
   track("cart_add", `набор «${set.title}» · ${pack} г`);
 }
-// УТП: самый необычный чай коллекции
-function unusualBanner() {
-  const t = S.teas.find((x) => x.unusual && x.available); if (!t) return "";
-  return `<button class="sets-banner unusual" data-tea="${t.id}"><span>🐛</span><span><b>Чай, который сделали гусеницы</b>
-    <small>Гусеницы едят чайный лист, а из их гранул получается густой сладкий настой. Звучит странно — вкус удивляет. Рискнёте?</small></span>
-    <span class="more-price">от ${rub(t.prices["20"])} →</span></button>`;
+// ---------- карусель на главной: гусеничный чай, наборы, премиум ----------
+function promoSlides() {
+  const out = [];
+  const t = S.teas.filter((x) => x.unusual && x.available).sort((a, b) => a.prices["20"] - b.prices["20"])[0];
+  if (t) out.push({ cls: "cat", attr: `data-tea="${t.id}"`, img: `<img src="/promo/caterpillar.svg" alt="Гусеница на чайном листе и горка тёмных гранул чая" width="800" height="500">`,
+    eye: "🐛 Самый необычный чай", title: "Чай, который сделали гусеницы",
+    text: "Гусеницы едят чайный лист, а из их гранул получается густой сладкий настой. Звучит странно — вкус удивляет.", cta: `Попробовать — от ${rub(t.prices["20"])}` });
+  if (S.sets.length) {
+    const from = Math.min(...S.sets.map((x) => setPrice(x).final));
+    const pics = ["gaba", "shu", "dark_oolong"];
+    out.push({ cls: "sets", attr: `data-promo="sets"`, img: `<div class="promo-sets">${pics.map((k) => `<img src="/teas/kinds/${k}.webp" alt="" loading="lazy">`).join("")}<b>−10%</b></div>`,
+      eye: "🎁 Наборы чая", title: "Три чая в одной коробке — скидка 10%",
+      text: "ГАБА, пуэры, улуны по 20, 50 или 100 г. Или соберите свой набор из любых 3–6 чаёв.", cta: `Наборы — от ${rub(from)}` });
+  }
+  if (S.teas.some((x) => x.premium && x.available)) out.push({ cls: "prem", attr: `data-promo="premium"`,
+    img: `<img src="/teas/kinds/dark_oolong.webp" alt="Тёмный утёсный улун" loading="lazy">`,
+    eye: "✦ Премиум", title: "Редкие чаи для особого случая",
+    text: "Утёсные улуны Уишань со старых кустов, выдержанные пуэры и хэйча Любао.", cta: "Смотреть премиум" });
+  return out;
+}
+let promoTimer = null;
+function mountPromo() {
+  const box = $("#promo"); if (!box) return;
+  clearInterval(promoTimer);
+  const slides = promoSlides();
+  if (!slides.length) { box.hidden = true; return; }
+  box.innerHTML = `<div class="promo-track">${slides.map((x, i) => `<button class="promo-slide ${x.cls}" ${x.attr} aria-roledescription="слайд" aria-label="${i + 1} из ${slides.length}: ${esc(x.title)}"${i ? ' tabindex="-1"' : ""}>
+      <span class="promo-img">${x.img}</span>
+      <span class="promo-txt"><small>${x.eye}</small><b>${esc(x.title)}</b><span>${esc(x.text)}</span><em>${x.cta} →</em></span></button>`).join("")}</div>
+    ${slides.length > 1 ? `<button class="promo-arr prev" aria-label="Назад">‹</button><button class="promo-arr next" aria-label="Вперёд">›</button>
+    <div class="promo-dots">${slides.map((_, i) => `<button aria-label="Слайд ${i + 1}" data-i="${i}"></button>`).join("")}</div>` : ""}`;
+  box.setAttribute("aria-roledescription", "карусель");
+  const track_ = box.querySelector(".promo-track");
+  let cur = 0, paused = false;
+  const go = (i) => {
+    cur = (i + slides.length) % slides.length;
+    track_.style.transform = `translateX(${-cur * 100}%)`;
+    box.querySelectorAll(".promo-slide").forEach((el, k) => (el.tabIndex = k === cur ? 0 : -1));
+    box.querySelectorAll(".promo-dots button").forEach((d, k) => d.setAttribute("aria-current", k === cur));
+  };
+  go(0);
+  if (slides.length < 2) return;
+  box.querySelector(".prev").onclick = () => go(cur - 1);
+  box.querySelector(".next").onclick = () => go(cur + 1);
+  box.querySelector(".promo-dots").onclick = (e) => { const d = e.target.closest("[data-i]"); if (d) go(Number(d.dataset.i)); };
+  box.onmouseenter = () => (paused = true); box.onmouseleave = () => (paused = false);
+  box.onfocusin = () => (paused = true); box.onfocusout = () => (paused = false);
+  // листание пальцем
+  let x0 = null, moved = false;
+  box.addEventListener("touchstart", (e) => { x0 = e.touches[0].clientX; moved = false; paused = true; }, { passive: true });
+  box.addEventListener("touchmove", (e) => { if (x0 !== null && Math.abs(e.touches[0].clientX - x0) > 10) moved = true; }, { passive: true });
+  box.addEventListener("touchend", (e) => {
+    const dx = (e.changedTouches[0]?.clientX ?? x0) - x0; x0 = null;
+    if (Math.abs(dx) > 40) go(cur + (dx < 0 ? 1 : -1));
+    setTimeout(() => (paused = false), 4000);
+  });
+  box.addEventListener("click", (e) => { if (moved) { e.stopPropagation(); e.preventDefault(); moved = false; } }, true);
+  if (!matchMedia("(prefers-reduced-motion: reduce)").matches)
+    promoTimer = setInterval(() => { if (!paused && !document.hidden && document.body.contains(box)) go(cur + 1); }, 5500);
+}
+function openPromo(kind) {
+  track("promo", kind);
+  if (kind === "sets") { location.hash = "#sets"; return; }
+  S.group = "premium"; S.query = "";
+  if ((location.hash || "#catalog") !== "#catalog") location.hash = "#catalog"; else renderCatalog();
+  setTimeout(() => $("#groups")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
 }
 function cardHTML(t) {
   return `<button class="card${t.available ? "" : " off"}" data-tea="${t.id}">${art(t)}
@@ -930,6 +985,8 @@ document.addEventListener("click", (e) => {
   if (tme && tgApp?.openTelegramLink && inTelegram()) { e.preventDefault(); tgApp.openTelegramLink(tme.href); return; }
   const doc = e.target.closest("a[data-doc]");
   if (doc && tgApp?.openLink) { e.preventDefault(); tgApp.openLink(location.origin + doc.getAttribute("href")); return; }
+  const pr = e.target.closest("[data-promo]");
+  if (pr) return openPromo(pr.dataset.promo);
   const op = e.target.closest("[data-opt]");
   if (op) return wholesale(Number(op.dataset.opt), op);
   const c = e.target.closest("[data-tea]");
@@ -945,6 +1002,7 @@ window.addEventListener("hashchange", route);
     const data = await api("/api/catalog");
     Object.assign(S, { teas: data.teas, kinds: data.kinds, recipes: data.recipes, mugRecipes: data.mugRecipes, tastes: data.tastes, sets: data.sets || [], delivery: data.delivery || {}, freeFrom: data.freeDeliveryFrom || 0, deliveryInfo: data.deliveryInfo || "" });
     if (authed()) api("/api/me").then((me) => (S.me = me)).catch(() => {});
+    if (!inTelegram()) mountPromo(); // на сайте карусель стоит в шапке главной
   } catch {
     $("#view").innerHTML = `<div class="empty"><h2>Не удалось загрузить каталог</h2><p>Проверьте интернет и откройте магазин ещё раз.</p></div>`;
     return;

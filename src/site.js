@@ -17,6 +17,9 @@ const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..",
 const BOT = "https://t.me/sinitsa_chai_bot";
 const CHANNEL = "https://t.me/sinitsa_chai";
 const INSTAGRAM = "https://www.instagram.com/sinitsa_chai/";
+// Живые люди для вопросов: показываем внизу сайта и в оформлении заказа
+const PEOPLE = [["Яна", "alpha_omega_Y"], ["Александр", "Ont_hefly"]];
+const peopleLinks = () => PEOPLE.map(([n, u]) => `<a href="https://t.me/${u}">${n} — @${u}</a>`).join("");
 const BRAND = "Синица";
 
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -110,7 +113,7 @@ if (/tgWebAppData/.test(location.hash)) location.replace("/" + location.search +
     <p class="muted small">Китайский чай с доставкой по России.<br>Каждый чай можно взять по 20 г на пробу.</p></div>
   <div class="ft-col"><b>Покупателям</b><a href="/">Каталог</a><a href="/#quiz">Подбор чая</a><a href="/#sets">Наборы</a><a href="/chai">Все чаи списком</a></div>
   <div class="ft-col"><b>О чае</b><a href="/blog">Блог</a>${ARTICLES.slice(0, 3).map((a) => `<a href="/blog/${a.slug}">${esc(a.h1.split(":")[0])}</a>`).join("")}</div>
-  <div class="ft-col"><b>Мы на связи</b><a href="${BOT}">Telegram-бот @sinitsa_chai_bot</a><a href="${CHANNEL}">Канал о чае</a><a href="${INSTAGRAM}">Instagram</a></div>
+  <div class="ft-col"><b>Мы на связи</b>${peopleLinks()}<a href="${BOT}">Telegram-бот @sinitsa_chai_bot</a><a href="${CHANNEL}">Канал о чае</a><a href="${INSTAGRAM}">Instagram</a></div>
 </div><div class="wrap ft-legal small muted">
   <a href="/terms">Условия доставки и возврата</a> · <a href="/privacy">Политика конфиденциальности</a> · <a href="/consent">Согласие на обработку данных</a>
 </div></footer>
@@ -164,7 +167,7 @@ function siteFooter() {
     <p class="muted small">Китайский чай с доставкой по России.<br>Каждый чай можно взять по 20 г на пробу.</p></div>
   <div class="s-col"><b>Покупателям</b><a href="/#catalog">Каталог</a><a href="/#quiz">Подбор чая</a><a href="/#sets">Наборы</a><a href="/#cart">Корзина</a></div>
   <div class="s-col"><b>О чае</b><a href="/blog">Блог</a>${ARTICLES.slice(0, 3).map((a) => `<a href="/blog/${a.slug}">${esc(a.h1.split(":")[0])}</a>`).join("")}</div>
-  <div class="s-col"><b>Мы на связи</b><a href="${BOT}">Telegram-бот @sinitsa_chai_bot</a><a href="${CHANNEL}">Канал о чае</a><a href="${INSTAGRAM}">Instagram</a></div>
+  <div class="s-col"><b>Мы на связи</b>${peopleLinks()}<a href="${BOT}">Telegram-бот @sinitsa_chai_bot</a><a href="${CHANNEL}">Канал о чае</a><a href="${INSTAGRAM}">Instagram</a></div>
 </div><p class="s-legal small muted"><a href="/terms">Условия доставки и возврата</a> · <a href="/privacy">Политика конфиденциальности</a> · <a href="/consent">Согласие на обработку данных</a></p></footer>`;
 }
 

@@ -705,6 +705,7 @@ function renderCheckout(total) {
       <p class="muted small" id="dl-note" style="margin:0 0 10px"></p>
       <p class="error" id="err"></p>
       <button class="btn wide" id="send">Отправить заказ</button>
+      <p class="muted small ask-us">Остались вопросы? Напишите нам в Telegram: <a href="https://t.me/alpha_omega_Y">Яна</a> · <a href="https://t.me/Ont_hefly">Александр</a></p>
       <button class="link" type="button" id="back">← Вернуться в корзину</button>
     </form>`;
   const sync = () => {
@@ -878,6 +879,9 @@ document.addEventListener("click", (e) => {
     if ((location.hash || "#catalog") !== "#catalog") { location.hash = "#catalog"; setTimeout(go, 50); } else go();
     return;
   }
+  // Ссылки на Telegram внутри мини-приложения открываем средствами Telegram
+  const tme = e.target.closest('a[href^="https://t.me/"]');
+  if (tme && tgApp?.openTelegramLink && inTelegram()) { e.preventDefault(); tgApp.openTelegramLink(tme.href); return; }
   const doc = e.target.closest("a[data-doc]");
   if (doc && tgApp?.openLink) { e.preventDefault(); tgApp.openLink(location.origin + doc.getAttribute("href")); return; }
   const op = e.target.closest("[data-opt]");

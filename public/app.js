@@ -880,6 +880,13 @@ function saveSiteOrder(o, token = "") {
     localStorage.setItem("siteOrders", JSON.stringify([{ id: o.id, total: o.total, at: Date.now(), token, items: o.items.filter((i) => i.teaId).map((i) => `${i.name}, ${i.label} × ${i.qty}`) }, ...rest].slice(0, 20)));
   } catch {}
 }
+// Шкала статуса заказа: Оформлен → Подтверждён → Оплачен → Отправлен → Получен
+const STEPS = [["new", "Оформлен"], ["accepted", "Подтверждён"], ["paid", "Оплачен"], ["shipped", "Отправлен"], ["done", "Получен"]];
+function stepsHTML(o) {
+  if (o.status === "cancelled") return `<p class="steps-off">Заказ отменён</p>`;
+  const cur = STEPS.findIndex(([k]) => k === o.status);
+  return `<ol class="steps" aria-label="Статус: ${esc(o.statusLabel)}">${STEPS.map(([k, l], i) => `<li class="${i < cur ? "ok" : i === cur ? "now" : ""}"${i === cur ? ' aria-current="step"' : ""}><i></i><span>${l}</span></li>`).join("")}</ol>`;
+}
 // Ссылка на бота, которая привязывает заказ с сайта к Telegram покупателя
 const tgStartLink = (id, token) => `https://t.me/${BOT_NAME}?start=o${id}_${String(token).slice(0, 16)}`;
 // Свежие статусы заказов с сайта (по ключу заказа)
@@ -897,6 +904,7 @@ async function renderOrders() {
         return `<div class="line" style="display:block"><div style="display:flex;justify-content:space-between;gap:12px"><h3>Заказ №${x.id}</h3>${o ? `<span class="status ${o.status}">${esc(o.statusLabel)}</span>` : ""}</div>
           <div class="muted small">${(o ? o.items.map((i) => i.teaId ? `${i.name}, ${i.label} × ${i.qty}` : `${i.name}: ${i.sum >= 0 ? "" : "−"}${rub(Math.abs(i.sum))}`) : x.items).map(esc).join("<br>")}</div>
           <b class="sum" style="color:var(--gold)">${rub(o ? o.total : x.total)}</b>
+          ${o ? stepsHTML(o) : x.token ? "" : `<p class="muted small" style="margin:8px 0 0">Статус этого заказа пришлём в выбранный мессенджер.</p>`}
           ${o ? (o.status === "new" ? `<p class="muted small" style="margin:8px 0 0">Проверяем наличие. Как только подтвердим, здесь появятся QR-код и реквизиты для оплаты.</p>` : payHTML(o, x.token)) : ""}
           ${o && !o.tgLinked && !["done", "cancelled"].includes(o.status) && x.token ? `<a class="btn ghost sm tg-link" href="${tgStartLink(x.id, x.token)}" target="_blank" rel="noopener">✈️ Получать статус в Telegram</a>` : ""}
           ${o?.tgLinked ? `<p class="small muted" style="margin:8px 0 0">✈️ Статусы приходят вам в Telegram</p>` : ""}</div>`;
@@ -933,7 +941,7 @@ async function renderOrders() {
       <div class="line" style="display:block"><div style="display:flex;justify-content:space-between;gap:12px"><h3>Заказ №${o.id}</h3><span class="status ${o.status}">${esc(o.statusLabel)}</span></div>
       <div class="muted small">${o.items.map((i) => i.teaId ? `${esc(i.name)}, ${esc(i.label)} × ${i.qty}` : (i.sum >= 0 ? `${esc(i.name)}: ${rub(i.sum)}` : `${esc(i.name)}: −${rub(-i.sum)}`)).join("<br>")}</div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px"><b class="sum" style="color:var(--gold)">${rub(o.total)}</b>
-      </div>${payHTML(o)}<div style="display:flex;justify-content:flex-end;margin-top:4px">
+      </div>${stepsHTML(o)}${payHTML(o)}<div style="display:flex;justify-content:flex-end;margin-top:4px">
       <span style="display:flex;gap:16px">${o.canCancel ? `<button class="link" data-cancel="${o.id}">Отменить</button>` : ""}
       <button class="link" data-repeat="${o.id}">Повторить</button></span></div></div>`).join("");
     S.lastOrders = orders;

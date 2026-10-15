@@ -63,8 +63,9 @@ body:not([data-tab="catalog"]) .home-only { display: none !important; }
   html:not(.tg) .nav { order: -1; }
   .s-dl { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   /* шапка: текст слева, карусель справа */
-  .s-hero { display: grid; grid-template-columns: 1.05fr .95fr; gap: 32px; align-items: center; }
-  .s-hero .promo { margin: 0; }
+  .s-hero { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); gap: 32px; align-items: center; }
+  .s-hero > * { min-width: 0; }
+  .s-hero .promo { margin: 0; align-self: center; }
   .s-posts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .s-post { flex-direction: column; align-items: stretch; }
   .s-post img { width: 100%; height: 150px; }

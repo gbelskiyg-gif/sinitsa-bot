@@ -222,7 +222,7 @@ function mountPromo() {
   box.innerHTML = `<div class="promo-track">${slides.map((x, i) => `<button class="promo-slide ${x.cls}" ${x.attr} aria-roledescription="слайд" aria-label="${i + 1} из ${slides.length}: ${esc(x.title)}"${i ? ' tabindex="-1"' : ""}>
       <span class="promo-img">${x.img}</span>
       <span class="promo-txt"><small>${x.eye}</small><b>${esc(x.title)}</b><span>${esc(x.text)}</span><em>${x.cta} →</em></span></button>`).join("")}</div>
-    ${slides.length > 1 ? `<button class="promo-arr prev" aria-label="Назад">‹</button><button class="promo-arr next" aria-label="Вперёд">›</button>
+    ${slides.length > 1 ? `<div class="promo-nav"><button class="promo-arr prev" aria-label="Назад">‹</button><button class="promo-arr next" aria-label="Вперёд">›</button></div>
     <div class="promo-dots">${slides.map((_, i) => `<button aria-label="Слайд ${i + 1}" data-i="${i}"></button>`).join("")}</div>` : ""}`;
   box.setAttribute("aria-roledescription", "карусель");
   const track_ = box.querySelector(".promo-track");

@@ -86,10 +86,10 @@ const art = (t) => t.photo
 
 // ---------- каталог ----------
 const SORTS = [["pop", "Популярные"], ["asc", "Сначала дешевле"], ["desc", "Сначала дороже"], ["new", "Новинки"]];
-const GROUPS = [["all", "Все"], ["gaba", "ГАБА"], ["oolong", "Улуны"], ["red", "Красный чай"], ["puer", "Пуэры"]];
+const GROUPS = [["all", "Все"], ["premium", "✦ Премиум"], ["gaba", "ГАБА"], ["oolong", "Улуны"], ["red", "Красный чай"], ["puer", "Пуэры и хэйча"]];
 function renderCatalog() {
   let list = S.teas.filter((t) =>
-    (S.group === "all" || S.kinds[t.kind].group === S.group) &&
+    (S.group === "all" || (S.group === "premium" ? t.premium : S.kinds[t.kind].group === S.group)) &&
     (!S.query || `${t.name} ${t.notes} ${S.kinds[t.kind].label} ${t.region}`.toLowerCase().includes(S.query)));
   if (S.sort === "asc") list = [...list].sort((a, b) => a.prices["50"] - b.prices["50"]);
   if (S.sort === "desc") list = [...list].sort((a, b) => b.prices["50"] - a.prices["50"]);
@@ -162,7 +162,7 @@ function renderBuilder() {
   const sum = B.ids.reduce((s, id) => s + tea(id).prices[B.pack], 0);
   const ok = B.ids.length >= BUILD_MIN && B.ids.length <= BUILD_MAX;
   const final = ok ? sum - Math.round((sum * SET_DISCOUNT) / 10) * 10 : sum;
-  const groups = GROUPS.filter(([k]) => k !== "all").map(([k, l]) => [l, teas.filter((t) => S.kinds[t.kind].group === k)]).filter(([, l]) => l.length);
+  const groups = GROUPS.filter(([k]) => k !== "all" && k !== "premium").map(([k, l]) => [l, teas.filter((t) => S.kinds[t.kind].group === k)]).filter(([, l]) => l.length);
   const hint = B.ids.length < BUILD_MIN ? `Выберите ещё ${BUILD_MIN - B.ids.length} — и скидка 10% включится` : B.ids.length === BUILD_MAX ? "Максимум 6 чаёв в наборе" : "Скидка 10% включена";
   $("#view").innerHTML = `<button class="link" id="build-back">← Все наборы</button>
     <h2 class="section-title" style="padding-top:4px">Свой набор</h2>
@@ -199,7 +199,7 @@ function addSet(key) {
 }
 function cardHTML(t) {
   return `<button class="card${t.available ? "" : " off"}" data-tea="${t.id}">${art(t)}
-    <div class="card-body"><span class="type">${esc(S.kinds[t.kind].label)}</span><h3>${esc(t.name)}</h3>
+    <div class="card-body"><span class="type">${t.premium ? `<b class="prem">✦ Премиум</b> · ` : ""}${esc(S.kinds[t.kind].label)}</span><h3>${esc(t.name)}</h3>
     <div class="price">${t.available ? rub(t.prices["50"]) : "Нет в наличии"}<small>${t.available ? "50 г" : ""}</small></div></div></button>`;
 }
 
@@ -214,7 +214,7 @@ function openTea(id) {
   const draw = () => {
     const p = packInfo(t, pack);
     body.innerHTML = `<button class="close" aria-label="Закрыть">✕</button>${art(t)}
-      <span class="type">${esc(S.kinds[t.kind].label)} · ${esc(t.region)}</span>
+      <span class="type">${t.premium ? `<b class="prem">✦ Премиум</b> · ` : ""}${esc(S.kinds[t.kind].label)} · ${esc(t.region)}</span>
       <h2>${esc(t.name)}</h2><p class="muted">${esc(t.notes)}</p>
       <div class="tags"><span class="tag">Насыщенность: ${esc(t.strengthLabel.toLowerCase())}</span>${t.tastes.map((x) => `<span class="tag">${esc(S.tastes[x])}</span>`).join("")}</div>
       ${t.available ? `${vars.length ? `

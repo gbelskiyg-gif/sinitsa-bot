@@ -53,7 +53,7 @@ function photoOf(t) {
 const available = (t) => store.availability()[t.id] !== false;
 
 // Виды для каталога и главной: в порядке, удобном для знакомства
-const KIND_ORDER = ["gaba", "light_oolong", "dark_oolong", "dancong", "red", "sheng", "shu", "puer"];
+const KIND_ORDER = ["gaba", "light_oolong", "dark_oolong", "dancong", "red", "sheng", "shu", "puer", "heicha"];
 const KIND_TEXT = {
   gaba: "Мягкие сладкие улуны с Тайваня: печёные фрукты, мёд, кислинка.",
   light_oolong: "Свежие, цветочные, с мягкой сладостью.",
@@ -63,8 +63,9 @@ const KIND_TEXT = {
   sheng: "Молодой бодрый пуэр: травы, фрукты, лёгкая терпкость.",
   shu: "Тёмный тёплый пуэр: дерево, орехи, земля.",
   puer: "Пуэры с выдержкой и по годам.",
+  heicha: "Тёмные чаи Любао из Гуанси: мягкие, густые, с древесными нотами.",
 };
-const KIND_SLUG = { gaba: "gaba", light_oolong: "svetlyj-ulun", dark_oolong: "temnyj-ulun", dancong: "dancun", red: "krasnyj-chaj", sheng: "shen-puer", shu: "shu-puer", puer: "puer" };
+const KIND_SLUG = { gaba: "gaba", light_oolong: "svetlyj-ulun", dark_oolong: "temnyj-ulun", dancong: "dancun", red: "krasnyj-chaj", sheng: "shen-puer", shu: "shu-puer", puer: "puer", heicha: "heicha" };
 
 // ---------- общий каркас ----------
 function layout({ title, description, canonical, image = "/emblem.jpg", jsonld = [], body, type = "website" }) {

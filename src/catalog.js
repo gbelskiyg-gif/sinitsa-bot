@@ -11,6 +11,7 @@ export const KINDS = {
   shu: { label: "Шу пуэр", group: "puer", glyph: "熟" },
   sheng: { label: "Шэн пуэр", group: "puer", glyph: "生" },
   puer: { label: "Пуэр", group: "puer", glyph: "普" },
+  heicha: { label: "Хэйча · Любао", group: "puer", glyph: "黑" },
 };
 
 // [чай, вода, температура, первый пролив]
@@ -23,6 +24,7 @@ export const RECIPES = {
   shu: ["5 г", "100 мл", "95–100 °C", "10 секунд"],
   sheng: ["5–6 г", "100 мл", "90–92 °C", "10–20 секунд"],
   puer: ["5 г", "100 мл", "95–100 °C", "10 секунд"],
+  heicha: ["5 г", "100 мл", "95–100 °C", "10 секунд"],
 };
 
 export const TASTES = {
@@ -52,6 +54,7 @@ export const QUIZ = {
   shu: { familiar: ["coffee", "black"], bitter: 0, earthy: true, mug: true, caffeine: 2 },
   sheng: { familiar: ["green"], bitter: 2, earthy: false, mug: false, caffeine: 3 },
   puer: { familiar: ["coffee", "black"], bitter: 1, earthy: true, mug: true, caffeine: 2 },
+  heicha: { familiar: ["coffee", "black", "none"], bitter: 0, earthy: true, mug: true, caffeine: 1 },
 };
 export const QUIZ_OVERRIDES = {
   25: { bitter: 0 }, // Бирма: мягче и легче
@@ -69,6 +72,7 @@ export const MUG_RECIPES = {
   shu: "3–4 г на 250 мл, кипяток, 2–3 минуты; первую воду слить",
   sheng: "2–3 г на 250 мл, 85–90 °C, 1–2 минуты",
   puer: "3–4 г на 250 мл, кипяток, 2–3 минуты; первую воду слить",
+  heicha: "3–4 г на 250 мл, кипяток, 3 минуты; первую воду слить",
 };
 
 /**

@@ -241,3 +241,7 @@ form label.need { color: #ff5c5c; }
 
 .ask-us { text-align: center; margin: 10px 0 0; }
 .ask-us a { color: var(--gold); }
+
+/* Премиальные чаи */
+.prem { color: var(--gold); font-weight: 700; letter-spacing: .08em; }
+.card:has(.prem) { border-color: #edbe8266; }

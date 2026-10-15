@@ -120,7 +120,7 @@ test("готовый набор из 5 чаёв по 20 г получает ск
 
 test("промокод: работает на первый заказ, не работает на второй, неверный код — ошибка", async () => {
   const u = signInitData({ id: 777 }, TOKEN);
-  const body = (promo) => JSON.stringify({ items: [{ teaId: 13, pack: "50", qty: 2 }], name: "П", phone: "89001234567", delivery: "pickup", promo });
+  const body = (promo) => JSON.stringify({ items: [{ teaId: 13, pack: "50", qty: 2 }], name: "П", phone: "89005550101", delivery: "pickup", promo });
   let r = await call("/api/promo?code=синица10", { init: u });
   assert.equal(r.body.ok, true);
   r = await call("/api/orders", { method: "POST", init: u, body: body("НЕТТАКОГО") });
@@ -388,4 +388,26 @@ test("заказ с сайта: по ключу видно статус, пос�
   assert.match(sitePaymentMessage(store.getOrder(r.order.id)), new RegExp(`\\?order=${r.order.id}&t=${r.token}`));
   const paid = await fetch(`${base}/api/site-orders/${r.order.id}/paid?t=${r.token}`, { method: "POST" }).then((x) => x.json());
   assert.equal(paid.order.paidClaim, true);
+});
+
+test("промокод: «синица 10» в любом регистре; повторный покупатель не проходит и после удаления номера", async () => {
+  for (const code of ["синица10", "Синица 10", "СИНИЦА10", "sinitsa10"]) {
+    const r = await fetch(`${base}/api/site-promo?code=${encodeURIComponent(code)}`).then((x) => x.json());
+    assert.equal(r.ok, true, code);
+    assert.equal(r.code, "SINITSA10");
+  }
+  const post = (body) => fetch(base + "/api/site-orders", { method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ terms: true, consent: true, name: "Повтор", delivery: "yandex", address: "Москва, ПВЗ", items: [{ teaId: 1, pack: "50", qty: 1 }], ...body }) }).then(async (r) => ({ status: r.status, body: await r.json() }));
+  const a = await post({ phone: "+7 911 222-33-44", promo: "синица 10" });
+  assert.equal(a.status, 201);
+  store.setStatus(a.body.order.id, "done");
+  store.db.prepare("UPDATE orders SET updated_at = datetime('now','-400 days') WHERE id = ?").run(a.body.order.id);
+  store.anonymizeOldOrders(365);
+  assert.equal(store.getOrder(a.body.order.id).phone, "", "номер удалён");
+  const b = await post({ phone: "8 911 222 33 44", promo: "СИНИЦА10" });
+  assert.equal(b.status, 400, "по отпечатку номера видно, что заказ не первый");
+  // Вход через Telegram не обходит проверку: новый аккаунт, но тот же телефон
+  const fresh = signInitData({ id: 990077, first_name: "Новый" }, TOKEN);
+  const c = await call("/api/orders", { method: "POST", init: fresh, body: JSON.stringify({ name: "Новый", phone: "+79112223344", delivery: "yandex", address: "Москва, ПВЗ", items: [{ teaId: 1, pack: "50", qty: 1 }], promo: "SINITSA10" }) });
+  assert.equal(c.status, 400);
 });

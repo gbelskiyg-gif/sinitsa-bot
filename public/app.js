@@ -106,7 +106,7 @@ function renderCatalog() {
     <label class="search"><span aria-hidden="true">⌕</span><input id="q" type="search" placeholder="Найти свой чай" value="${esc(S.query)}" autocomplete="off"></label>
     <div class="chips scroll" id="groups">${GROUPS.map(([k, l]) => `<button class="chip" data-g="${k}" aria-pressed="${S.group === k}">${l}</button>`).join("")}</div>
     <div class="chips scroll sorts" id="sorts" aria-label="Сортировка">${SORTS.map(([k, l]) => `<button class="chip" data-sort="${k}" aria-pressed="${S.sort === k}">${l}</button>`).join("")}</div>
-    ${inTelegram() && !S.query && S.group === "all" ? `<div class="promo" id="promo"></div>` : ""}
+    ${inTelegram() && !S.query && S.group === "all" ? `<div class="sc" id="showcase"></div>` : ""}
     <p class="note">${list.length} из ${S.teas.length} · цены за 50 г · собираем под заказ</p>
     <div class="grid">${list.length ? list.map(cardHTML).join("") : `<p class="muted">Ничего не нашли. Попробуйте другое слово.</p>`}</div>
     <div class="opt-box"><span>🧑‍💼</span><span><b>Покупаете оптом?</b><small>Для кофейни, магазина или подарков — обсудим цены лично, в Москве можно встретиться и попробовать.</small></span><button class="btn ghost" data-opt="0">Я оптовик</button></div>`;
@@ -203,7 +203,7 @@ function promoSlides() {
   if (S.sets.length) {
     const from = Math.min(...S.sets.map((x) => setPrice(x).final));
     const pics = ["gaba", "shu", "dark_oolong"];
-    out.push({ cls: "sets", attr: `data-promo="sets"`, img: `<div class="promo-sets">${pics.map((k) => `<img src="/teas/kinds/${k}.webp" alt="" loading="lazy">`).join("")}<b>−10%</b></div>`,
+    out.push({ cls: "sets", attr: `data-promo="sets"`, img: `<div class="sc-sets">${pics.map((k) => `<img src="/teas/kinds/${k}.webp" alt="" loading="lazy">`).join("")}<b>−10%</b></div>`,
       eye: "🎁 Наборы чая", title: "Три чая в одной коробке — скидка 10%",
       text: "ГАБА, пуэры, улуны по 20, 50 или 100 г. Или соберите свой набор из любых 3–6 чаёв.", cta: `Наборы — от ${rub(from)}` });
   }
@@ -215,29 +215,29 @@ function promoSlides() {
 }
 let promoTimer = null;
 function mountPromo() {
-  const box = $("#promo"); if (!box) return;
+  const box = $("#showcase"); if (!box) return;
   clearInterval(promoTimer);
   const slides = promoSlides();
   if (!slides.length) { box.hidden = true; return; }
-  box.innerHTML = `<div class="promo-track">${slides.map((x, i) => `<button class="promo-slide ${x.cls}" ${x.attr} aria-roledescription="слайд" aria-label="${i + 1} из ${slides.length}: ${esc(x.title)}"${i ? ' tabindex="-1"' : ""}>
-      <span class="promo-img">${x.img}</span>
-      <span class="promo-txt"><small>${x.eye}</small><b>${esc(x.title)}</b><span>${esc(x.text)}</span><em>${x.cta} →</em></span></button>`).join("")}</div>
-    ${slides.length > 1 ? `<div class="promo-nav"><button class="promo-arr prev" aria-label="Назад">‹</button><button class="promo-arr next" aria-label="Вперёд">›</button></div>
-    <div class="promo-dots">${slides.map((_, i) => `<button aria-label="Слайд ${i + 1}" data-i="${i}"></button>`).join("")}</div>` : ""}`;
+  box.innerHTML = `<div class="sc-track">${slides.map((x, i) => `<button class="sc-slide ${x.cls}" ${x.attr} aria-roledescription="слайд" aria-label="${i + 1} из ${slides.length}: ${esc(x.title)}"${i ? ' tabindex="-1"' : ""}>
+      <span class="sc-img">${x.img}</span>
+      <span class="sc-txt"><small>${x.eye}</small><b>${esc(x.title)}</b><span>${esc(x.text)}</span><em>${x.cta} →</em></span></button>`).join("")}</div>
+    ${slides.length > 1 ? `<div class="sc-nav"><button class="sc-arr prev" aria-label="Назад">‹</button><button class="sc-arr next" aria-label="Вперёд">›</button></div>
+    <div class="sc-dots">${slides.map((_, i) => `<button aria-label="Слайд ${i + 1}" data-i="${i}"></button>`).join("")}</div>` : ""}`;
   box.setAttribute("aria-roledescription", "карусель");
-  const track_ = box.querySelector(".promo-track");
+  const track_ = box.querySelector(".sc-track");
   let cur = 0, paused = false;
   const go = (i) => {
     cur = (i + slides.length) % slides.length;
     track_.style.transform = `translateX(${-cur * 100}%)`;
-    box.querySelectorAll(".promo-slide").forEach((el, k) => (el.tabIndex = k === cur ? 0 : -1));
-    box.querySelectorAll(".promo-dots button").forEach((d, k) => d.setAttribute("aria-current", k === cur));
+    box.querySelectorAll(".sc-slide").forEach((el, k) => (el.tabIndex = k === cur ? 0 : -1));
+    box.querySelectorAll(".sc-dots button").forEach((d, k) => d.setAttribute("aria-current", k === cur));
   };
   go(0);
   if (slides.length < 2) return;
   box.querySelector(".prev").onclick = () => go(cur - 1);
   box.querySelector(".next").onclick = () => go(cur + 1);
-  box.querySelector(".promo-dots").onclick = (e) => { const d = e.target.closest("[data-i]"); if (d) go(Number(d.dataset.i)); };
+  box.querySelector(".sc-dots").onclick = (e) => { const d = e.target.closest("[data-i]"); if (d) go(Number(d.dataset.i)); };
   box.onmouseenter = () => (paused = true); box.onmouseleave = () => (paused = false);
   box.onfocusin = () => (paused = true); box.onfocusout = () => (paused = false);
   // листание пальцем
@@ -666,10 +666,10 @@ function renderCart() {
     ${discount ? `<div class="line"><div class="muted">Скидка на набор</div><div class="sum">−${rub(discount)}</div></div>` : ""}
     ${`<div class="promo">${S.promo
       ? (promoOff
-        ? `<div class="line" style="border:0"><div class="muted">Промокод ${esc(S.promo.code)} · ${esc(S.promo.label)}</div><div class="sum">−${rub(promoOff)}</div></div>`
+        ? `<p class="promo-ok">✓ Промокод ${esc(S.promo.shown || S.promo.code)} применён: ${esc(S.promo.label)}</p><div class="line" style="border:0"><div class="muted">Скидка по промокоду</div><div class="sum">−${rub(promoOff)}</div></div>${S.promo.note ? `<p class="muted small" style="margin:0;flex-basis:100%">${esc(S.promo.note)}</p>` : ""}`
         : `<p class="muted small" style="margin:0">Промокод ${esc(S.promo.code)} не складывается со скидкой набора. Он сработает на чаи, которые вы добавите отдельно.</p>`) +
         `<button class="link" id="promo-off">Убрать промокод</button>`
-      : `<label class="search"><input id="promo" placeholder="Промокод" autocomplete="off"></label><button class="btn ghost" id="promo-go">Применить</button>`}
+      : `<label class="search"><input id="promo" placeholder="Промокод, например СИНИЦА10" autocomplete="off" autocapitalize="characters" enterkeyhint="done" value="${esc(S.promoDraft || "")}"></label><button class="btn ghost" id="promo-go">Применить</button>`}
       <p class="error" id="promo-err"></p></div>`}
     <div class="total"><span>Итого</span><span>${rub(total)}</span></div>
     ${S.freeFrom ? `<p class="free-left">${total >= S.freeFrom ? "🎁 Доставка бесплатная — любой службой" : `🚚 До бесплатной доставки осталось ${rub(S.freeFrom - total)}`}</p>` : ""}
@@ -720,14 +720,24 @@ function renderCart() {
     S.checkout = true; renderCart();
   };
   $("#promo-off")?.addEventListener("click", () => { S.promo = null; renderCart(); });
-  $("#promo-go")?.addEventListener("click", async () => {
-    const code = $("#promo").value.trim(); if (!code) return;
+  const promoIn = $("#promo");
+  const applyPromo = async () => {
+    const btn = $("#promo-go"), err = $("#promo-err");
+    const code = promoIn.value.trim();
+    promoIn.classList.remove("bad"); err.textContent = "";
+    if (!code) { promoIn.classList.add("bad"); err.textContent = "Введите промокод."; promoIn.focus(); return; }
+    S.promoDraft = code;
+    btn.disabled = true; btn.textContent = "Проверяем…";
     try {
       const r = await api((authed() ? "/api/promo?code=" : "/api/site-promo?code=") + encodeURIComponent(code));
-      if (!r.ok) { $("#promo-err").textContent = r.error; return; }
-      S.promo = r; renderCart(); toast(cartLines().promoOff ? "Промокод применён" : "На наборы уже действует скидка");
-    } catch (err) { $("#promo-err").textContent = err.message; }
-  });
+      if (!r.ok) { promoIn.classList.add("bad"); err.textContent = "✕ " + r.error; return; }
+      S.promo = { ...r, shown: code.toUpperCase().replace(/\s+/g, "") }; S.promoDraft = ""; renderCart(); toast(cartLines().promoOff ? "✓ Промокод применён" : "На наборы уже действует скидка");
+    } catch (e) { promoIn.classList.add("bad"); err.textContent = "✕ " + e.message; }
+    finally { if (document.body.contains(btn)) { btn.disabled = false; btn.textContent = "Применить"; } }
+  };
+  $("#promo-go")?.addEventListener("click", applyPromo);
+  promoIn?.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); applyPromo(); } });
+  promoIn?.addEventListener("input", () => { S.promoDraft = promoIn.value; promoIn.classList.remove("bad"); $("#promo-err").textContent = ""; });
 }
 
 // Доставка: то же правило, что на сервере (src/catalog.js → deliveryCost)

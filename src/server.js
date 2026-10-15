@@ -103,7 +103,7 @@ function readJson(req, limit = 20_000) {
   });
 }
 
-const PROMOS_FIRST_NOTE = "Если промокод только на первый заказ, проверим по номеру телефона при оформлении.";
+const PROMOS_FIRST_NOTE = "Скидка на первый заказ: при оформлении проверим, что на этот номер телефона ещё не было заказов.";
 // Не больше N заказов с сайта в час с одного адреса (SITE_ORDERS_PER_HOUR, по умолчанию 5)
 const SITE_ORDERS_PER_HOUR = Number(process.env.SITE_ORDERS_PER_HOUR || 5);
 const siteHits = new Map();
@@ -239,7 +239,7 @@ async function api(req, res, url) {
     if (store.recentOrderCount(user.id, 60) >= 5)
       return send(res, 429, { error: "Слишком много заказов за час. Напишите нам в бот, поможем." });
     const body = await readJson(req);
-    const draft = buildOrder(body, user, { isFirstOrder: store.isFirstOrder(user.id) });
+    const draft = buildOrder(body, user, { isFirstOrder: store.isFirstOrder(user.id) && store.isFirstOrderByPhone(body.phone) });
     const order = store.createOrder(draft);
     store.logEvent(user.id, "order_sent", order.id);
     await notifyAdminsNew(order, user.username);

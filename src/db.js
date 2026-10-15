@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -77,6 +78,7 @@ for (const sql of [
   "ALTER TABLE users ADD COLUMN menu_v INTEGER NOT NULL DEFAULT 0",
   "ALTER TABLE orders ADD COLUMN paid_claim_at TEXT",
   "ALTER TABLE orders ADD COLUMN site_token TEXT",
+  "ALTER TABLE orders ADD COLUMN phone_key TEXT",
 ]) {
   try {
     db.exec(sql);
@@ -85,7 +87,12 @@ for (const sql of [
   }
 }
 
-const insertStock =db.prepare("INSERT OR IGNORE INTO stock (tea_id, available) VALUES (?, 1)");
+// Отпечатки телефонов для старых заказов (где номер ещё не удалён)
+for (const r of db.prepare("SELECT id, phone FROM orders WHERE phone_key IS NULL AND phone != ''").all()) {
+  db.prepare("UPDATE orders SET phone_key = ? WHERE id = ?").run(phoneKey(r.phone), r.id);
+}
+
+const insertStock = db.prepare("INSERT OR IGNORE INTO stock (tea_id, available) VALUES (?, 1)");
 for (const t of TEAS) insertStock.run(t.id);
 
 // ---------- наличие ----------
@@ -209,10 +216,10 @@ function rowToOrder(r) {
 export function createOrder(o) {
   const res = db
     .prepare(
-      `INSERT INTO orders (user_id, name, phone, delivery, address, comment, items_json, total, promo, consent_at, site_token)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)`
+      `INSERT INTO orders (user_id, name, phone, delivery, address, comment, items_json, total, promo, consent_at, site_token, phone_key)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?)`
     )
-    .run(o.userId, o.name, o.phone, o.delivery, o.address || "", o.comment || "", JSON.stringify(o.items), o.total, o.promo || "", o.siteToken || null);
+    .run(o.userId, o.name, o.phone, o.delivery, o.address || "", o.comment || "", JSON.stringify(o.items), o.total, o.promo || "", o.siteToken || null, phoneKey(o.phone));
   return getOrder(Number(res.lastInsertRowid));
 }
 /** Все заказы для таблицы: новые сверху, с ником покупателя. */
@@ -252,11 +259,26 @@ export function anonymizeOldOrders(days = 30) {
     .run(`-${days} days`).changes;
 }
 
-/** Для заказов с сайта: первый ли заказ на этот телефон (по любым каналам). */
-export function isFirstOrderByPhone(phone) {
+/**
+ * Отпечаток телефона: HMAC последних 10 цифр с секретной солью.
+ * Сам номер через 30 дней удаляется, а отпечаток остаётся — только чтобы
+ * промокод «на первый заказ» нельзя было использовать второй раз. Номер из него не восстановить.
+ */
+function phoneSalt() {
+  let s = getSetting("phone_salt");
+  if (!s) { s = crypto.randomBytes(32).toString("hex"); setSetting("phone_salt", s); }
+  return s;
+}
+export function phoneKey(phone) {
   const d = String(phone ?? "").replace(/\D/g, "").slice(-10);
-  if (d.length < 10) return true;
-  return !db.prepare("SELECT phone FROM orders WHERE status != 'cancelled'").all().some((r) => String(r.phone).replace(/\D/g, "").slice(-10) === d);
+  if (d.length < 10) return null;
+  return crypto.createHmac("sha256", phoneSalt()).update(d).digest("hex").slice(0, 32);
+}
+/** Первый ли заказ на этот телефон (по любым каналам: сайт и бот). */
+export function isFirstOrderByPhone(phone) {
+  const k = phoneKey(phone);
+  if (!k) return true;
+  return !db.prepare("SELECT 1 FROM orders WHERE phone_key = ? AND status != 'cancelled' LIMIT 1").get(k);
 }
 export function isFirstOrder(userId) {
   return db.prepare("SELECT COUNT(*) AS n FROM orders WHERE user_id = ? AND status != 'cancelled'").get(userId).n === 0;

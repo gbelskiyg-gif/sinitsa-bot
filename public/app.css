@@ -228,3 +228,13 @@ form label.consent.need input { outline: 2px solid #ff5c5c; outline-offset: 2px;
 .contact-opts label:has(input:checked) { border-color: var(--gold); color: var(--gold); }
 .contact-opts input { accent-color: var(--gold); margin: 0; }
 .hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+
+/* Незаполненное поле формы — красной рамкой */
+form input.bad, form textarea.bad { border-color: #ff5c5c; box-shadow: 0 0 0 3px #ff5c5c33; background: #ff5c5c12; }
+form label.need { color: #ff5c5c; }
+/* Выбор варианта (зайчик / тигр / дракон) */
+.variants { margin: 14px 0 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; }
+.variants.need, .var-pick.need { border-color: #ff5c5c; background: #ff5c5c12; }
+.var-pick { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; padding: 6px; border: 1px solid transparent; border-radius: 10px; }
+.var-pick .chip { padding: 5px 10px; font-size: 12px; color: var(--ink); }
+.var-pick .chip[aria-pressed="true"] { color: var(--on-gold); }

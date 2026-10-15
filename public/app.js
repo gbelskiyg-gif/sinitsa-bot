@@ -207,7 +207,8 @@ function cardHTML(t) {
 function openTea(id) {
   const t = tea(id); if (!t) return;
   track("tea_open", t.id);
-  let pack = "50", qty = 1;
+  let pack = "50", qty = 1, variant = "", needVariant = false;
+  const vars = t.variants || [];
   const r = S.recipes[t.kind];
   const body = $("#tea-body");
   const draw = () => {
@@ -216,7 +217,10 @@ function openTea(id) {
       <span class="type">${esc(S.kinds[t.kind].label)} · ${esc(t.region)}</span>
       <h2>${esc(t.name)}</h2><p class="muted">${esc(t.notes)}</p>
       <div class="tags"><span class="tag">Насыщенность: ${esc(t.strengthLabel.toLowerCase())}</span>${t.tastes.map((x) => `<span class="tag">${esc(S.tastes[x])}</span>`).join("")}</div>
-      ${t.available ? `
+      ${t.available ? `${vars.length ? `
+      <div class="variants${needVariant ? " need" : ""}" role="group" aria-label="Вариант"><span class="small">Какой выбираете?</span>
+        <div class="sizes" style="margin:6px 0 0">${vars.map((v) => `<button class="chip" data-v="${esc(v)}" aria-pressed="${v === variant}">${esc(v)}</button>`).join("")}</div>
+        ${needVariant ? `<p class="error" style="margin:6px 0 0">Выберите: ${esc(vars.join(", ").toLowerCase())}</p>` : ""}</div>` : ""}
       <div class="sizes" role="group" aria-label="Фасовка">${["20", "50", "100"].map((k) => `<button class="chip" data-p="${k}" aria-pressed="${k === pack}">${k} г</button>`).join("")}</div>
       <div class="big-price">${rub(p.price * qty)} <small>${esc(p.label)}${qty > 1 ? ` × ${qty}` : ""}</small></div>
       <div class="row-actions"><div class="qty"><button data-q="-1" aria-label="Меньше">−</button><b>${qty}</b><button data-q="1" aria-label="Больше">+</button></div>
@@ -232,17 +236,21 @@ function openTea(id) {
   body.onclick = (e) => {
     const b = e.target.closest("button"); if (!b) return;
     if (b.classList.contains("close")) return $("#tea").close();
+    if (b.dataset.v) { variant = b.dataset.v; needVariant = false; draw(); }
     if (b.dataset.p) { pack = b.dataset.p; draw(); }
     if (b.dataset.q) { qty = Math.min(20, Math.max(1, qty + Number(b.dataset.q))); draw(); }
-    if (b.id === "add") { addToCart(t.id, pack, qty); $("#tea").close(); }
+    if (b.id === "add") {
+      if (vars.length && !variant) { needVariant = true; draw(); body.querySelector(".variants")?.scrollIntoView({ behavior: "smooth", block: "center" }); return; }
+      addToCart(t.id, pack, qty, "", variant); $("#tea").close();
+    }
   };
   $("#tea").showModal();
 }
 $("#tea").addEventListener("click", (e) => { if (e.target.id === "tea") e.target.close(); });
 
-function addToCart(teaId, pack, qty, set = "") {
-  const ex = S.cart.find((i) => i.teaId === teaId && i.pack === pack && (i.set || "") === set);
-  if (ex) ex.qty = Math.min(20, ex.qty + qty); else S.cart.push({ teaId, pack, qty, set });
+function addToCart(teaId, pack, qty, set = "", variant = "") {
+  const ex = S.cart.find((i) => i.teaId === teaId && i.pack === pack && (i.set || "") === set && (i.variant || "") === variant);
+  if (ex) ex.qty = Math.min(20, ex.qty + qty); else S.cart.push({ teaId, pack, qty, set, ...(variant ? { variant } : {}) });
   saveCart(); toast("Добавлено в корзину");
   track("cart_add", `${tea(teaId)?.name || teaId} · ${pack} г`);
 }
@@ -546,10 +554,18 @@ function removeFromCart(idxs) {
   S.undo = { items, label: items.length > 1 ? `${items.length} чая из набора` : `«${names[0]}»` };
   saveCart();
 }
+// Чай с вариантами (зайчик / тигр / дракон): выбор прямо в корзине
+const varMissing = (i) => { const t = tea(i.teaId); return !i.removed && !!t?.variants?.length && !t.variants.includes(i.variant); };
+function varPick(idx, i, t) {
+  if (!t.variants?.length) return "";
+  const miss = !t.variants.includes(i.variant);
+  return `<div class="var-pick${miss && S.varNeed ? " need" : ""}">${t.variants.map((v) => `<button class="chip" data-cv="${idx}" data-val="${esc(v)}" aria-pressed="${v === i.variant}">${esc(v)}</button>`).join("")}
+    ${miss ? `<span class="small ${S.varNeed ? "error" : "muted"}">выберите вариант</span>` : ""}</div>`;
+}
 function cartBlocks(lines) {
   const done = new Set();
   return lines.map((l) => {
-    if (!l.i.set) return `<div class="line"><div><h3>${esc(l.t.name)}</h3><div class="muted small">${esc(l.label)}${l.t.available ? "" : " · <span class=error>нет в наличии</span>"}</div>
+    if (!l.i.set) return `<div class="line"><div><h3>${esc(l.t.name)}${l.i.variant ? ` — ${esc(l.i.variant)}` : ""}</h3><div class="muted small">${esc(l.label)}${l.t.available ? "" : " · <span class=error>нет в наличии</span>"}</div>${varPick(l.idx, l.i, l.t)}
       <div class="qty" style="margin-top:8px"><button data-d="-1" data-i="${l.idx}" aria-label="Меньше">−</button><b>${l.i.qty}</b><button data-d="1" data-i="${l.idx}" aria-label="Больше">+</button></div></div>
       <div class="sum">${rub(l.sum)}</div></div>`;
     if (done.has(l.i.set)) return "";
@@ -562,7 +578,7 @@ function cartBlocks(lines) {
       <div class="muted small">${g.length} ${g.length >= 5 ? "чаёв" : g.length === 1 ? "чай" : "чая"} по ${esc(g[0].label)}${ok ? " · скидка 10%" : ""}</div>
       <ul class="set-items">${all.map((x) => x.i.removed
         ? `<li class="off"><s>${esc(x.t.name)}</s><button class="link back" data-toggle="${x.idx}">вернуть</button></li>`
-        : `<li><span>${esc(x.t.name)}${x.t.available ? "" : " · <span class=error>нет в наличии</span>"}</span><button class="link" data-toggle="${x.idx}" aria-label="Убрать из набора">убрать</button></li>`).join("")}</ul>
+        : `<li><span>${esc(x.t.name)}${x.i.variant ? ` — ${esc(x.i.variant)}` : ""}${x.t.available ? "" : " · <span class=error>нет в наличии</span>"}${varPick(x.idx, x.i, x.t)}</span><button class="link" data-toggle="${x.idx}" aria-label="Убрать из набора">убрать</button></li>`).join("")}</ul>
       ${ok ? "" : `<p class="small" style="color:var(--gold);margin:6px 0 0">В наборе нужно от 3 разных чаёв одной фасовки и количества — сейчас скидка не действует.</p>`}
       <div style="display:flex;align-items:center;gap:14px;margin-top:8px"><div class="qty"><button data-sq="-1" data-set="${esc(l.i.set)}" aria-label="Меньше наборов">−</button><b>${g[0].i.qty}</b><button data-sq="1" data-set="${esc(l.i.set)}" aria-label="Больше наборов">+</button></div>
       <button class="link" data-rm="${all.map((x) => x.idx).join(",")}">Убрать набор</button></div></div>
@@ -602,6 +618,8 @@ function renderCart() {
   clearTimeout(S.undoTimer);
   if (S.undo) { $("#toast").hidden = true; S.undoTimer = setTimeout(() => { S.undo = null; $(".undo")?.remove(); }, 8000); }
   $("#view").onclick = (e) => {
+    const cv = e.target.closest("[data-cv]");
+    if (cv) { S.cart[Number(cv.dataset.cv)].variant = cv.dataset.val; if (!S.cart.some(varMissing)) S.varNeed = false; saveCart(); return renderCart(); }
     if (e.target.closest("#undo")) {
       // Возвращаем убранное на прежние места
       for (const { at, item } of [...S.undo.items].sort((x, y) => x.at - y.at)) S.cart.splice(Math.min(at, S.cart.length), 0, item);
@@ -633,7 +651,11 @@ function renderCart() {
     it.qty = Math.min(it.qty + Number(b.dataset.d), 20);
     S.undo = null; saveCart(); renderCart();
   };
-  $("#go").onclick = () => { S.checkout = true; renderCart(); };
+  $("#go").onclick = () => {
+    // Не выбран вариант у блина — подсвечиваем строку и не пускаем дальше
+    if (S.cart.some(varMissing)) { S.varNeed = true; renderCart(); document.querySelector(".var-pick.need")?.scrollIntoView({ behavior: "smooth", block: "center" }); toast("Выберите вариант: зайчик, тигр или дракон"); return; }
+    S.checkout = true; renderCart();
+  };
   $("#promo-off")?.addEventListener("click", () => { S.promo = null; renderCart(); });
   $("#promo-go")?.addEventListener("click", async () => {
     const code = $("#promo").value.trim(); if (!code) return;
@@ -710,6 +732,19 @@ function renderCheckout(total) {
       $("#err").textContent = text; l.scrollIntoView({ behavior: "smooth", block: "center" });
       $(id).addEventListener("change", () => { l.classList.remove("need"); $("#err").textContent = ""; }, { once: true });
     };
+    // Незаполненное поле загорается красным, к нему прокручиваем — не надо искать глазами
+    const bad = (id, text) => {
+      const el = $(id); el.classList.add("bad"); el.closest("label")?.classList.add("need");
+      $("#err").textContent = text; el.scrollIntoView({ behavior: "smooth", block: "center" }); el.focus({ preventScroll: true });
+      el.addEventListener("input", () => { el.classList.remove("bad"); el.closest("label")?.classList.remove("need"); $("#err").textContent = ""; }, { once: true });
+    };
+    document.querySelectorAll("#f .bad").forEach((x) => x.classList.remove("bad"));
+    document.querySelectorAll("#f label.need").forEach((x) => x.classList.remove("need"));
+    const dl = S.delivery[data.delivery];
+    if (!String(data.name || "").trim()) return bad("#f-name", "Укажите имя.");
+    const digits = String(data.phone || "").replace(/\D/g, "");
+    if (digits.length < 10 || digits.length > 15) return bad("#f-phone", "Проверьте телефон: нужно от 10 до 15 цифр.");
+    if (dl?.address && String(data.address || "").trim().length < 5) return bad("#f-address", "Укажите город и адрес пункта выдачи.");
     if (!data.terms) return need("#f-terms", "Отметьте, что согласны с условиями доставки и возврата.");
     if (!data.consent) return need("#f-consent", "Отметьте согласие на обработку персональных данных.");
     try { localStorage.setItem("form", JSON.stringify({ name: data.name, phone: data.phone, delivery: data.delivery, address: data.address, contact: data.contact, contactNick: data.contactNick })); } catch {}
@@ -727,7 +762,13 @@ function renderCheckout(total) {
           <a class="btn" href="/blog">Почитать о чае, пока ждёте</a></div>`;
       }
       try { tgApp?.HapticFeedback?.notificationOccurred("success"); } catch {}
-    } catch (err) { $("#err").textContent = err.message; $("#send").disabled = false; track("order_error", err.message); }
+    } catch (err) {
+      $("#err").textContent = err.message; $("#send").disabled = false; track("order_error", err.message);
+      // Ошибка с сервера — тоже подсвечиваем нужное поле
+      const m = err.message.toLowerCase();
+      const id = m.includes("имя") ? "#f-name" : m.includes("телефон") ? "#f-phone" : m.includes("адрес") ? "#f-address" : "";
+      if (id && $(id)) { $(id).classList.add("bad"); $(id).scrollIntoView({ behavior: "smooth", block: "center" }); $(id).addEventListener("input", () => $(id).classList.remove("bad"), { once: true }); }
+    }
   };
 }
 
@@ -793,7 +834,7 @@ async function renderOrders() {
         for (const i of o.items) {
           const t = tea(i.teaId); if (!t || !t.available) continue;
           const set = i.set ? (setIds[i.set] ||= "rep-" + Math.random().toString(36).slice(2, 8)) : "";
-          S.cart.push({ teaId: i.teaId, pack: i.pack, qty: i.qty, set }); added++;
+          S.cart.push({ teaId: i.teaId, pack: i.pack, qty: i.qty, set, ...(i.variant ? { variant: i.variant } : {}) }); added++;
         }
         saveCart();
         if (!added) return toast("Этих чаёв сейчас нет в наличии");

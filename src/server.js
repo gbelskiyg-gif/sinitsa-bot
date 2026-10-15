@@ -103,7 +103,8 @@ function readJson(req, limit = 20_000) {
 }
 
 const PROMOS_FIRST_NOTE = "Если промокод только на первый заказ, проверим по номеру телефона при оформлении.";
-// Не больше 5 заказов с сайта в час с одного адреса
+// Не больше N заказов с сайта в час с одного адреса (SITE_ORDERS_PER_HOUR, по умолчанию 5)
+const SITE_ORDERS_PER_HOUR = Number(process.env.SITE_ORDERS_PER_HOUR || 5);
 const siteHits = new Map();
 function clientIp(req) {
   return String(req.headers["x-forwarded-for"] || "").split(",")[0].trim() || req.socket.remoteAddress || "";
@@ -111,7 +112,7 @@ function clientIp(req) {
 function siteRateOk(ip) {
   const now = Date.now();
   const list = (siteHits.get(ip) || []).filter((t) => now - t < 3600_000);
-  if (list.length >= 5) return false;
+  if (list.length >= SITE_ORDERS_PER_HOUR) return false;
   list.push(now); siteHits.set(ip, list);
   if (siteHits.size > 5000) siteHits.clear();
   return true;

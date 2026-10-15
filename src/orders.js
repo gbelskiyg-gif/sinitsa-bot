@@ -48,7 +48,13 @@ export function buildOrder(body, user, { isFirstOrder = false } = {}) {
     if (avail[tea.id] === false) throw new OrderError(`«${tea.name}» сейчас нет в наличии. Удалите его из корзины.`);
     const p = packInfo(tea, pack);
     const set = typeof it.set === "string" ? it.set.slice(0, 40) : "";
-    items.push({ teaId: tea.id, name: tea.name, pack, label: p.label, grams: p.grams, price: p.price, qty, sum: p.price * qty, set });
+    // Чай с вариантами (например, блины «зайчик / тигр / дракон»): вариант обязателен
+    let variant = "";
+    if (Array.isArray(tea.variants) && tea.variants.length) {
+      variant = tea.variants.find((v) => v === it.variant) || "";
+      if (!variant) throw new OrderError(`Выберите вариант для «${tea.name}»: ${tea.variants.join(", ").toLowerCase()}.`);
+    }
+    items.push({ teaId: tea.id, name: variant ? `${tea.name} — ${variant}` : tea.name, pack, label: p.label, grams: p.grams, price: p.price, qty, sum: p.price * qty, set, ...(variant ? { variant } : {}) });
   }
   // Набор: 3–6 разных чаёв по 20 г в одинаковом количестве, скидка 10%
   const sets = {};
@@ -232,7 +238,7 @@ export function publicOrder(o) {
     status: o.status,
     statusLabel: STATUS[o.status],
     createdAt: o.created_at,
-    items: o.items.map(({ teaId, name, label, qty, sum, pack, set }) => ({ teaId, name, label, qty, sum, pack, set })),
+    items: o.items.map(({ teaId, name, label, qty, sum, pack, set, variant }) => ({ teaId, name, label, qty, sum, pack, set, variant: variant || "" })),
     total: o.total,
     delivery: o.delivery,
     canCancel: o.status === "new",

@@ -9,6 +9,7 @@ process.env.BOT_TOKEN = TOKEN;
 process.env.PUBLIC_URL = "https://example.test";
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "sinitsa-"));
 process.env.ADMIN_IDS = "";
+process.env.SITE_ORDERS_PER_HOUR = "100";
 
 const { signInitData, verifyInitData } = await import("../src/auth.js");
 const { startServer } = await import("../src/server.js");
@@ -353,4 +354,18 @@ test("вход на сайте через Telegram: сессия, заказ в 
   assert.equal(store.getOrder(mine.orders[0].id).user_id, 880044);
   const forged = await fetch(base + "/api/orders", { headers: { "x-site-auth": ok.body.token.replace(/.$/, (c) => (c === "A" ? "B" : "A")) } });
   assert.equal(forged.status, 401);
+});
+
+test("блины «зайчик / тигр / дракон»: без выбора заказ не проходит, вариант попадает в название", async () => {
+  const post = (items) => fetch(base + "/api/site-orders", { method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ terms: true, consent: true, name: "Блин", phone: "+7 900 123-45-01", delivery: "yandex", address: "Москва, ПВЗ", items }) }).then(async (r) => ({ status: r.status, body: await r.json() }));
+  const no = await post([{ teaId: 10, pack: "100", qty: 1 }]);
+  assert.equal(no.status, 400);
+  assert.match(no.body.error, /зайчик, тигр, дракон/);
+  const fake = await post([{ teaId: 10, pack: "100", qty: 1, variant: "Слон" }]);
+  assert.equal(fake.status, 400);
+  const ok = await post([{ teaId: 10, pack: "100", qty: 1, variant: "Тигр" }]);
+  assert.equal(ok.status, 201);
+  assert.match(ok.body.order.items[0].name, /— Тигр$/);
+  assert.equal(ok.body.order.items[0].variant, "Тигр");
 });

@@ -222,6 +222,15 @@ async function api(req, res, url) {
     return send(res, 200, await requestWholesale(user, Number(body.teaId) || 0));
   }
 
+  // Заказы, оформленные на этом устройстве до входа, — в профиль
+  if (req.method === "POST" && url.pathname === "/api/claim-orders") {
+    const body = await readJson(req, 4000);
+    const list = Array.isArray(body.orders) ? body.orders.slice(0, 20) : [];
+    let n = 0;
+    for (const x of list) if (store.claimSiteOrder(Number(x?.id), x?.token, user.id)) n++;
+    return send(res, 200, { claimed: n });
+  }
+
   if (req.method === "GET" && url.pathname === "/api/orders") {
     return send(res, 200, { orders: store.userOrders(user.id).map(publicOrder) });
   }
@@ -254,7 +263,7 @@ async function api(req, res, url) {
   const pm = url.pathname.match(/^\/api\/orders\/(\d+)\/paid$/);
   if (req.method === "POST" && pm) {
     const order = store.getOrder(Number(pm[1]));
-    if (!order || order.user_id !== user.id) return send(res, 404, { error: "Заказ не найден." });
+    if (!order || (order.user_id || order.tg_chat) !== user.id) return send(res, 404, { error: "Заказ не найден." });
     const r = await claimPaid(order, user.username);
     if (!r.ok) return send(res, 409, { error: r.error });
     return send(res, 200, { order: publicOrder(r.order) });
@@ -263,7 +272,7 @@ async function api(req, res, url) {
   const m = url.pathname.match(/^\/api\/orders\/(\d+)\/cancel$/);
   if (req.method === "POST" && m) {
     const order = store.getOrder(Number(m[1]));
-    if (!order || order.user_id !== user.id) return send(res, 404, { error: "Заказ не найден." });
+    if (!order || (order.user_id || order.tg_chat) !== user.id) return send(res, 404, { error: "Заказ не найден." });
     if (order.status !== "new") return send(res, 409, { error: "Заказ уже принят. Чтобы отменить, напишите нам в бот." });
     const updated = store.setStatus(order.id, "cancelled");
     await refreshAdminMessages(updated, user.username);

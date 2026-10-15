@@ -63,6 +63,7 @@ window.onTelegramAuth = async (user) => {
   try {
     const r = await api("/api/login", { method: "POST", body: JSON.stringify(user) });
     S.auth = { token: r.token, user: r.user }; saveAuth();
+    await claimLocalOrders();
     api("/api/me").then((me) => (S.me = me)).catch(() => {});
     toast(`Вы вошли, ${r.user.first_name || "добро пожаловать"}!`);
     route();
@@ -894,6 +895,16 @@ async function siteOrderStatus(x) {
   if (!x.token) return null;
   try { return (await api(`/api/site-orders/${x.id}?t=${encodeURIComponent(x.token)}`)).order; } catch { return null; }
 }
+// После входа через Telegram заказы, оформленные на этом устройстве без входа, переходят в профиль
+async function claimLocalOrders() {
+  if (inTelegram()) return;
+  const list = loadSiteOrders().filter((x) => x.token);
+  if (!list.length) return;
+  try {
+    await api("/api/claim-orders", { method: "POST", body: JSON.stringify({ orders: list.map(({ id, token }) => ({ id, token })) }) });
+    localStorage.removeItem("siteOrders");
+  } catch {}
+}
 async function renderOrders() {
   if (!authed()) {
     const list = loadSiteOrders();
@@ -907,8 +918,10 @@ async function renderOrders() {
           ${o ? stepsHTML(o) : x.token ? "" : `<p class="muted small" style="margin:8px 0 0">Статус этого заказа пришлём в выбранный мессенджер.</p>`}
           ${o ? (o.status === "new" ? `<p class="muted small" style="margin:8px 0 0">Проверяем наличие. Как только подтвердим, здесь появятся QR-код и реквизиты для оплаты.</p>` : payHTML(o, x.token)) : ""}
           ${o && !o.tgLinked && !["done", "cancelled"].includes(o.status) && x.token ? `<a class="btn ghost sm tg-link" href="${tgStartLink(x.id, x.token)}" target="_blank" rel="noopener">✈️ Получать статус в Telegram</a>` : ""}
-          ${o?.tgLinked ? `<p class="small muted" style="margin:8px 0 0">✈️ Статусы приходят вам в Telegram</p>` : ""}</div>`;
+          ${o?.tgLinked ? `<p class="small muted" style="margin:8px 0 0">✈️ Статусы приходят вам в Telegram</p>` : ""}
+          ${x.token ? `<button class="link order-link" data-copy="${esc(`${location.origin}/?order=${x.id}&t=${x.token}`)}" data-copy-msg="Ссылка скопирована — откройте её на любом устройстве">🔗 Скопировать ссылку на заказ</button>` : ""}</div>`;
       }).join("") : `<p class="muted">На этом устройстве заказов пока нет.</p>`}
+      ${list.length ? `<p class="muted small">Заказы без входа видны только на этом устройстве. Чтобы открыть заказ на другом — скопируйте ссылку на него. Или войдите через Telegram: эти заказы перейдут в ваш профиль и будут видны везде.</p>` : ""}
       ${loginBox("Чтобы видеть заказы с любого телефона и компьютера, а статусы получать в Telegram.")}`;
       mountLogin();
     };
@@ -925,13 +938,14 @@ async function renderOrders() {
         return;
       }
       const cp = e.target.closest("[data-copy]");
-      if (cp) { try { await navigator.clipboard.writeText(cp.dataset.copy); toast("Скопировано"); } catch { toast(cp.dataset.copy); } }
+      if (cp) { try { await navigator.clipboard.writeText(cp.dataset.copy); toast(cp.dataset.copyMsg || "Скопировано"); } catch { toast(cp.dataset.copy); } }
     };
     return;
   }
   const who = !inTelegram() && S.auth?.user ? `<p class="muted small site-only">Вы вошли как ${esc(S.auth.user.first_name || "")}${S.auth.user.username ? ` (@${esc(S.auth.user.username)})` : ""} · <button class="link" id="logout" style="padding:0">Выйти</button></p>` : "";
   $("#view").innerHTML = `<h2 class="section-title">Мои заказы</h2><p class="muted">Загружаем…</p>`;
   try {
+    await claimLocalOrders();
     const { orders } = await api("/api/orders");
     if (!orders.length) {
       $("#view").innerHTML = who + `<div class="empty"><h2>Пока нет заказов</h2><p>После оформления заказ появится здесь, а статусы будут приходить в чат.</p><a class="btn" href="#catalog">В каталог</a></div>`;

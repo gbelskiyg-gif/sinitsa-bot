@@ -201,6 +201,15 @@ export function linkOrderChat(id, chatId) {
   db.prepare("UPDATE orders SET tg_chat = ? WHERE id = ?").run(chatId, id);
   return getOrder(id);
 }
+/** Вошёл на сайте через Telegram: заказы, оформленные раньше без входа, переходят в его профиль. */
+export function claimSiteOrder(id, token, userId) {
+  const o = getOrder(id);
+  if (!o || o.user_id || !o.site_token || typeof token !== "string" || token.length !== o.site_token.length) return false;
+  if (!crypto.timingSafeEqual(Buffer.from(token), Buffer.from(o.site_token))) return false;
+  if (o.tg_chat && o.tg_chat !== userId) return false;
+  if (!o.tg_chat) db.prepare("UPDATE orders SET tg_chat = ? WHERE id = ?").run(userId, id);
+  return true;
+}
 /** Покупатель нажал «Я оплатил» (или сброс, если продавец не нашёл перевод). */
 export function setPaidClaim(id, on) {
   db.prepare("UPDATE orders SET paid_claim_at = CASE WHEN ? THEN datetime('now') ELSE NULL END, updated_at = datetime('now') WHERE id = ?").run(on ? 1 : 0, id);
@@ -236,7 +245,8 @@ export function getOrder(id) {
   return rowToOrder(db.prepare("SELECT * FROM orders WHERE id = ?").get(id));
 }
 export function userOrders(userId) {
-  return db.prepare("SELECT * FROM orders WHERE user_id = ? ORDER BY id DESC LIMIT 50").all(userId).map(rowToOrder);
+  // Свои заказы из бота + заказы с сайта, привязанные к этому Telegram (вход на сайте или кнопка в боте)
+  return db.prepare("SELECT * FROM orders WHERE user_id = ? OR tg_chat = ? ORDER BY id DESC LIMIT 50").all(userId, userId).map(rowToOrder);
 }
 export function activeOrders() {
   return db

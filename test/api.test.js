@@ -426,3 +426,22 @@ test("заказ с сайта можно привязать к Telegram: клю
   assert.equal(customerChat(store.getOrder(o.id)), 5550001);
   assert.equal((await get()).order.tgLinked, true);
 });
+
+test("вход на сайте: заказы, оформленные без входа, переходят в профиль и видны с любого устройства", async () => {
+  const { signLoginWidget, signSession } = await import("../src/auth.js");
+  const r = await fetch(base + "/api/site-orders", { method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ terms: true, consent: true, name: "Гость", phone: "+7 913 000-22-33", contact: "call", delivery: "yandex", address: "Москва, ПВЗ", items: [{ teaId: 1, pack: "50", qty: 1 }] }) }).then((x) => x.json());
+  const sess = signSession({ id: 880077, first_name: "Гость" }, TOKEN);
+  const as = (p, opts = {}) => fetch(base + p, { ...opts, headers: { "content-type": "application/json", "x-site-auth": sess } }).then(async (x) => ({ status: x.status, body: await x.json() }));
+  assert.equal((await as("/api/orders")).body.orders.length, 0);
+  const bad = await as("/api/claim-orders", { method: "POST", body: JSON.stringify({ orders: [{ id: r.order.id, token: "0".repeat(24) }] }) });
+  assert.equal(bad.body.claimed, 0, "без ключа чужой заказ не забрать");
+  const ok = await as("/api/claim-orders", { method: "POST", body: JSON.stringify({ orders: [{ id: r.order.id, token: r.token }] }) });
+  assert.equal(ok.body.claimed, 1);
+  const mine = (await as("/api/orders")).body.orders;
+  assert.equal(mine.length, 1); assert.equal(mine[0].id, r.order.id); assert.equal(mine[0].tgLinked, true);
+  // другой аккаунт тот же заказ уже не заберёт
+  const other = signSession({ id: 880078, first_name: "Чужой" }, TOKEN);
+  const o2 = await fetch(base + "/api/claim-orders", { method: "POST", headers: { "content-type": "application/json", "x-site-auth": other }, body: JSON.stringify({ orders: [{ id: r.order.id, token: r.token }] }) }).then((x) => x.json());
+  assert.equal(o2.claimed, 0);
+});

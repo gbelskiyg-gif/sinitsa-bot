@@ -73,7 +73,11 @@ export function sendMail({ to, subject, text, html }) {
     };
     const sock = tls.connect({ host: HOST, port: PORT, servername: HOST });
     sock.setTimeout(20000, () => finish(false, "timeout"));
-    sock.on("error", (e) => finish(false, e.message));
+    sock.on("error", (e) => {
+      // При неудачном подключении Node отдаёт AggregateError с пустым message — показываем коды
+      const codes = [e.code, ...(e.errors || []).map((x) => `${x.code || x.message} ${x.address || ""}:${x.port || ""}`)].filter(Boolean).join("; ");
+      finish(false, `${HOST}:${PORT} — ${e.message || "нет соединения"}${codes ? ` (${codes})` : ""}`);
+    });
     let buf = "", i = 0;
     sock.on("data", (chunk) => {
       buf += chunk.toString("utf8");

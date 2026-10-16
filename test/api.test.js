@@ -50,7 +50,7 @@ test("подпись Telegram: верная принимается, поддел
 test("каталог доступен без входа", async () => {
   const r = await call("/api/catalog", { init: "" });
   assert.equal(r.status, 200);
-  assert.equal(r.body.teas.length, 38);
+  assert.equal(r.body.teas.length, 37);
   assert.ok(r.body.teas.every((t) => t.quiz && t.effect && t.prices["20"] > 0));
 });
 
@@ -302,7 +302,7 @@ test("сайт: главная, каталог, чай, блог и статьи
 test("сайт: sitemap и robots", async () => {
   const sm = await (await fetch(base + "/sitemap.xml")).text();
   assert.match(sm, /<loc>https:\/\/example\.test\/blog\/chai-tajvanya<\/loc>/);
-  assert.equal((sm.match(/\/chai\//g) || []).length, 38, "все чаи в карте сайта");
+  assert.equal((sm.match(/\/chai\//g) || []).length, 37, "все чаи в карте сайта");
   const rb = await (await fetch(base + "/robots.txt")).text();
   assert.match(rb, /Sitemap: https:\/\/example\.test\/sitemap\.xml/);
   assert.match(rb, /Disallow: \/api\//);

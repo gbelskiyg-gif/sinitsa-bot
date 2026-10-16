@@ -283,7 +283,11 @@ export const TEAS = [
  {
   "id": 10,
   "name": "Пуэр зайчик, тигр, дракон по годам",
-  "variants": ["Зайчик", "Тигр", "Дракон"],
+  "variants": [
+   "Зайчик",
+   "Тигр",
+   "Дракон"
+  ],
   "kind": "puer",
   "region": "Китай, Юньнань, Мэнхай",
   "notes": "Ореховые и древесные ноты, классический вкус пуэра.",
@@ -1037,8 +1041,8 @@ export const TEAS = [
    "100": 2190
   },
   "wholesale": {
-   "grams": 250,
-   "price": 4320,
+   "grams": 500,
+   "price": 8650,
    "perKg": 17300
   },
   "effect": {
@@ -1130,8 +1134,8 @@ export const TEAS = [
    "100": 2190
   },
   "wholesale": {
-   "grams": 250,
-   "price": 4320,
+   "grams": 500,
+   "price": 8650,
    "perKg": 17300
   },
   "effect": {

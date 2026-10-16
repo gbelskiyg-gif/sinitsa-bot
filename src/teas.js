@@ -10,6 +10,7 @@ export const TEAS = [
   "name": "Габа Шаньлинси",
   "kind": "gaba",
   "region": "Тайвань, Шаньлинси",
+  "premium": true,
   "notes": "Сухофрукты, мёд, мягкая фруктовая кислинка.",
   "tastes": [
    "fruity",
@@ -39,6 +40,7 @@ export const TEAS = [
   "name": "Габа ЖиЮэТан",
   "kind": "gaba",
   "region": "Тайвань, Жи Юэ Тань",
+  "premium": true,
   "notes": "Печёные фрукты, сладость, ягодная кислинка.",
   "tastes": [
    "fruity",
@@ -68,6 +70,7 @@ export const TEAS = [
   "name": "Габа ЧанШу Алишань",
   "kind": "gaba",
   "region": "Тайвань, Алишань",
+  "premium": true,
   "notes": "Медовая выпечка, сухофрукты, ягодная кислинка.",
   "tastes": [
    "fruity",
@@ -130,6 +133,7 @@ export const TEAS = [
   "name": "Габа Дунфанмейжень",
   "kind": "gaba",
   "region": "Таиланд, Мае Салонг",
+  "premium": true,
   "notes": "Мёд, спелые фрукты, цветы.",
   "tastes": [
    "honey",
@@ -221,6 +225,7 @@ export const TEAS = [
   "name": "Дахунпао Байжуйсян — Белая Дафна",
   "kind": "dark_oolong",
   "region": "Китай, Фуцзянь, Уишань",
+  "premium": true,
   "notes": "Цветы, печёные фрукты, пряности, мягкая сладость.",
   "tastes": [
    "floral",

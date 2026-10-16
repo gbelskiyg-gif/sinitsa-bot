@@ -116,7 +116,7 @@ if (/tgWebAppData/.test(location.hash)) location.replace("/" + location.search +
   <div class="ft-col"><b>Блог</b><a href="/blog">Все статьи</a>${ARTICLES.slice(0, 3).map((a) => `<a href="/blog/${a.slug}">${esc(a.h1.split(":")[0])}</a>`).join("")}</div>
   <div class="ft-col"><b>Мы на связи</b>${peopleLinks()}<a href="mailto:${esc(LEGAL.email)}">${esc(LEGAL.email)}</a><a href="${BOT}">Telegram-бот @sinitsa_chai_bot</a><a href="${CHANNEL}">Канал о чае</a><a href="${INSTAGRAM}">Instagram</a></div>
 </div><div class="wrap ft-legal small muted">
-  <a href="/terms">Условия доставки и возврата</a> · <a href="/privacy">Политика конфиденциальности</a> · <a href="/consent">Согласие на обработку данных</a>
+  <a href="/terms">Условия доставки и возврата</a> · <a href="/privacy">Политика конфиденциальности</a> · <a href="/consent">Согласие на обработку данных</a><br>Продавец: ${esc(LEGAL.name)}, ИНН ${esc(LEGAL.inn)}${LEGAL.ogrnip ? `, ОГРНИП ${esc(LEGAL.ogrnip)}` : ""}, ${esc(LEGAL.address)}
 </div></footer>
 </body>
 </html>`;
@@ -170,7 +170,7 @@ function siteFooter() {
   <div class="s-col"><b>Покупателям</b><a href="/#catalog">Каталог</a><a href="/#quiz">Подбор чая</a><a href="/#sets">Наборы</a><a href="/#cart">Корзина</a></div>
   <div class="s-col"><b>Блог</b><a href="/blog">Все статьи</a>${ARTICLES.slice(0, 3).map((a) => `<a href="/blog/${a.slug}">${esc(a.h1.split(":")[0])}</a>`).join("")}</div>
   <div class="s-col"><b>Мы на связи</b>${peopleLinks()}<a href="mailto:${esc(LEGAL.email)}">${esc(LEGAL.email)}</a><a href="${BOT}">Telegram-бот @sinitsa_chai_bot</a><a href="${CHANNEL}">Канал о чае</a><a href="${INSTAGRAM}">Instagram</a></div>
-</div><p class="s-legal small muted"><a href="/terms">Условия доставки и возврата</a> · <a href="/privacy">Политика конфиденциальности</a> · <a href="/consent">Согласие на обработку данных</a></p></footer>`;
+</div><p class="s-legal small muted"><a href="/terms">Условия доставки и возврата</a> · <a href="/privacy">Политика конфиденциальности</a> · <a href="/consent">Согласие на обработку данных</a><br>Продавец: ${esc(LEGAL.name)}, ИНН ${esc(LEGAL.inn)}${LEGAL.ogrnip ? `, ОГРНИП ${esc(LEGAL.ogrnip)}` : ""}, ${esc(LEGAL.address)}</p></footer>`;
 }
 
 function homePage() {

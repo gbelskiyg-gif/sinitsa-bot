@@ -31,9 +31,10 @@ export const notifyChats = () => (ORDERS_CHAT_ID ? [ORDERS_CHAT_ID] : ADMIN_IDS)
 // Данные оператора персональных данных для страниц /consent и /privacy.
 // Значения из .env (OPERATOR_*) важнее этих.
 export const LEGAL = {
-  name: process.env.OPERATOR_NAME || "Бельский Александр Георгиевич",
-  inn: process.env.OPERATOR_INN || "",
+  name: process.env.OPERATOR_NAME || "ИП Ульянов Даниил Владимирович",
+  inn: process.env.OPERATOR_INN || "771822694100",
+  ogrnip: process.env.OPERATOR_OGRNIP || "325774600613692",
   email: process.env.OPERATOR_EMAIL || "Sinitsa-chai@yandex.ru",
   address: process.env.OPERATOR_ADDRESS || "г. Москва",
-  date: process.env.LEGAL_DATE || "11.10.2026",
+  date: process.env.LEGAL_DATE || "16.10.2026",
 };

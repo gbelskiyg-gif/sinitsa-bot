@@ -6,6 +6,7 @@ const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<
 function operatorLine() {
   const parts = [LEGAL.name || "Продавец магазина «Синица»"];
   if (LEGAL.inn) parts.push(`ИНН ${LEGAL.inn}`);
+  if (LEGAL.ogrnip) parts.push(`ОГРНИП ${LEGAL.ogrnip}`);
   if (LEGAL.address) parts.push(`адрес: ${LEGAL.address}`);
   return parts.map(esc).join(", ");
 }

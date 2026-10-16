@@ -198,7 +198,7 @@ function addSet(key) {
 function promoSlides() {
   const out = [];
   const t = S.teas.filter((x) => x.unusual && x.available).sort((a, b) => a.prices["20"] - b.prices["20"])[0];
-  if (t) out.push({ cls: "cat", attr: `data-tea="${t.id}"`, img: `<img src="/teas/35.webp" alt="Гусеничный чай чунши: крошечные тёмные гранулы и тёмный настой" width="800" height="800">`,
+  if (t) out.push({ cls: "cat", attr: `data-tea="${t.id}"`, img: `<img src="/promo/caterpillar.svg" alt="Гусеница на чайном листе и горка тёмных гранул чая" width="800" height="500">`,
     eye: "🐛 Самый необычный чай", title: "Чай, который сделали гусеницы",
     text: "Гусеницы едят чайный лист, а из их гранул получается густой сладкий настой. Звучит странно — вкус удивляет.", cta: `Попробовать — от ${rub(t.prices["20"])}` });
   if (S.sets.length) {

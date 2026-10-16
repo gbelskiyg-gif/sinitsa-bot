@@ -12,6 +12,7 @@ import {
   buildOrder,
   claimPaid,
   checkPromo,
+  emailCustomer,
   notifyAdminsNew,
   publicOrder,
   refreshAdminMessages,
@@ -178,6 +179,7 @@ async function api(req, res, url) {
     const token = crypto.randomBytes(12).toString("hex");
     const order = store.createOrder({ ...draft, siteToken: token });
     await notifyAdminsNew(order, "");
+    emailCustomer(order, "created").catch(() => {});
     return send(res, 201, { order: publicOrder(order), token });
   }
   // Заказ с сайта по ссылке-ключу: статус, а после подтверждения — QR и реквизиты
@@ -252,6 +254,7 @@ async function api(req, res, url) {
     const order = store.createOrder(draft);
     store.logEvent(user.id, "order_sent", order.id);
     await notifyAdminsNew(order, user.username);
+    emailCustomer(order, "created").catch(() => {});
     await tgSafe("sendMessage", {
       chat_id: user.id,
       text: `Заказ №${order.id} получили 🍵\nПроверим наличие и напишем вам здесь. Как только подтвердим, бот пришлёт сумму и реквизиты для оплаты.`,

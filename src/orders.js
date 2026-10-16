@@ -1,4 +1,5 @@
 import { PUBLIC_URL, notifyChats } from "./config.js";
+import { EMAIL_RE, sendMail } from "./mail.js";
 import { DELIVERY, KINDS, PACKS, PROMOS, STATUS, deliveryCost, findTea, normalizePromo, packInfo, rub } from "./catalog.js";
 import * as store from "./db.js";
 import { esc, tgSafe } from "./telegram.js";
@@ -90,6 +91,10 @@ export function buildOrder(body, user, { isFirstOrder = false } = {}) {
   if (body.terms !== true) throw new OrderError("Отметьте, что согласны с условиями доставки и возврата.");
   if (body.consent !== true) throw new OrderError("Отметьте согласие на обработку персональных данных.");
   if (!name) throw new OrderError("Укажите имя.");
+  const email = clean(body.email, 120).toLowerCase();
+  if (email && !EMAIL_RE.test(email)) throw new OrderError("Проверьте почту: похоже, в адресе ошибка.");
+  if (!user.id && ["wa", "call"].includes(body.contact) && !email)
+    throw new OrderError("Укажите почту — пришлём на неё подтверждение, реквизиты и QR для оплаты.");
   if (phoneDigits.length < 10 || phoneDigits.length > 15) throw new OrderError("Проверьте телефон: нужно от 10 до 15 цифр.");
   if (!DELIVERY[delivery]) throw new OrderError("Выберите способ доставки.");
   const needAddress = !!DELIVERY[delivery].address;
@@ -108,6 +113,7 @@ export function buildOrder(body, user, { isFirstOrder = false } = {}) {
     items,
     total: Math.max(0, items.reduce((s, i) => s + i.sum, 0)),
     promo: code || "",
+    email,
   };
 }
 
@@ -262,7 +268,60 @@ async function helpAdminsWithSitePayment(o) {
     await tgSafe("sendMessage", { chat_id: chat, text: `🌐 Заказ №${o.id} с сайта принят.\n${hint}\n\nТекст для покупателя:\n\n${msg}`, ...(buttons.length ? { reply_markup: { inline_keyboard: buttons } } : {}), disable_web_page_preview: true });
 }
 
+// ---------- письма покупателю (дублируют Telegram; для WhatsApp и звонка — главный канал) ----------
+const escH = (x) => String(x ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const orderPageUrl = (o) => siteOrderUrl(o) || `${PUBLIC_URL}/#orders`;
+function itemsText(o) {
+  return o.items.map((i) => (i.teaId ? `• ${i.name}, ${i.label} × ${i.qty} — ${rub(i.sum)}` : `• ${i.name}: ${i.sum < 0 ? "−" : ""}${rub(Math.abs(i.sum))}`)).join("\n");
+}
+function mailLayout(title, bodyHtml, o) {
+  const rows = o.items.map((i) => `<tr><td style="padding:6px 0;border-bottom:1px solid #eee">${escH(i.name)}${i.teaId ? `<br><span style="color:#888;font-size:13px">${escH(i.label)} × ${i.qty}</span>` : ""}</td><td style="padding:6px 0;border-bottom:1px solid #eee;text-align:right;white-space:nowrap">${i.sum < 0 ? "−" : ""}${escH(rub(Math.abs(i.sum)))}</td></tr>`).join("");
+  return `<!doctype html><html><body style="margin:0;background:#f4efe8;font-family:Arial,sans-serif;color:#222">
+<div style="max-width:560px;margin:0 auto;padding:24px">
+<div style="background:#100f15;color:#edbe82;padding:18px 22px;border-radius:14px 14px 0 0;font:italic 26px Georgia,serif">Синица</div>
+<div style="background:#fff;padding:22px;border-radius:0 0 14px 14px">
+<h2 style="margin:0 0 12px;font:22px Georgia,serif">${escH(title)}</h2>
+${bodyHtml}
+<table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px">${rows}
+<tr><td style="padding:10px 0;font-weight:bold">Итого</td><td style="padding:10px 0;text-align:right;font-weight:bold">${escH(rub(o.total))}</td></tr></table>
+<p style="margin:16px 0 0"><a href="${escH(orderPageUrl(o))}" style="display:inline-block;background:#edbe82;color:#21141a;text-decoration:none;font-weight:bold;padding:12px 20px;border-radius:999px">Открыть заказ на сайте</a></p>
+<p style="color:#888;font-size:12px;margin:18px 0 0">Вопросы — просто ответьте на это письмо или напишите нам в Telegram: @alpha_omega_Y, @Ont_hefly.</p>
+</div></div></body></html>`;
+}
+export function orderEmail(o, event) {
+  const p = getPayment();
+  const page = orderPageUrl(o);
+  const head = { created: `Заказ №${o.id} получили`, accepted: `Заказ №${o.id} подтверждён — можно оплатить`, paid: `Оплату по заказу №${o.id} получили`, shipped: `Заказ №${o.id} отправлен`, done: `Заказ №${o.id} завершён`, cancelled: `Заказ №${o.id} отменён` }[event];
+  if (!head) return null;
+  let text = "", html = "";
+  if (event === "created") {
+    text = `Спасибо за заказ! Проверим наличие и пришлём на эту почту сумму и реквизиты для оплаты.`;
+    html = `<p>${escH(text)}</p>`;
+  } else if (event === "accepted") {
+    const pay = p ? [`Переведите ${rub(o.total)} по СБП:`, `📱 ${p.phone}`, `🏦 ${p.bank}`, `👤 ${p.name}`, `В комментарии к переводу: «Заказ ${o.id}».`] : [`Реквизиты для оплаты пришлём отдельно.`];
+    text = [`Заказ подтвердили, всё есть в наличии. К оплате: ${rub(o.total)}.`, "", ...pay, ...(p?.link ? ["", `Оплатить в приложении банка: ${p.link}`] : []), "", `QR-код для оплаты и кнопка «Я оплатил» — на странице заказа: ${page}`].join("\n");
+    html = `<p>Заказ подтвердили, всё есть в наличии. К оплате: <b>${escH(rub(o.total))}</b>.</p>
+${p ? `<div style="background:#faf6ef;border:1px solid #edbe82;border-radius:12px;padding:14px 16px;margin:12px 0">
+<div style="font-weight:bold;margin-bottom:6px">Перевод по СБП</div>
+<div>📱 ${escH(p.phone)}<br>🏦 ${escH(p.bank)}<br>👤 ${escH(p.name)}</div>
+<div style="color:#888;font-size:13px;margin-top:8px">В комментарии к переводу: «Заказ ${o.id}»</div>
+${p.link ? `<p style="margin:12px 0 0"><a href="${escH(p.link)}" style="color:#7a4b8f;font-weight:bold">Открыть оплату в приложении банка →</a></p>` : ""}</div>` : ""}
+<p>QR-код для оплаты и кнопка «Я оплатил» — на странице заказа (кнопка ниже).</p>`;
+  } else {
+    text = (CUSTOMER_STATUS[event] || "").replace("{id}", o.id).replace(/ сюда/g, " нам").replace("напишите нам сюда", "напишите нам");
+    html = `<p>${escH(text).replace(/\n/g, "<br>")}</p>`;
+  }
+  const full = `${head}\n\n${text}\n\nСостав заказа:\n${itemsText(o)}\nИтого: ${rub(o.total)}\n\nЗаказ на сайте: ${page}\n\n— «Синица», китайский чай`;
+  return { subject: `«Синица»: ${head}`, text: full, html: mailLayout(head, html, o) };
+}
+export async function emailCustomer(o, event) {
+  if (!o?.email) return false;
+  const m = orderEmail(o, event);
+  return m ? sendMail({ to: o.email, ...m }) : false;
+}
+
 export async function notifyCustomer(order) {
+  emailCustomer(order, order.status).catch(() => {});
   const chat = customerChat(order);
   // Заказ с сайта, покупатель не подключил бота — помогаем продавцу отправить реквизиты вручную
   if (!chat) {

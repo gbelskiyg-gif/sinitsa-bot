@@ -793,6 +793,7 @@ function renderCheckout(total) {
     <form id="f" novalidate>
       <label>Имя<input id="f-name" name="name" required maxlength="80" value="${esc(f.name || u?.first_name || S.auth?.user?.first_name || "")}"></label>
       <label>Телефон<input id="f-phone" name="phone" type="tel" required maxlength="30" placeholder="+7 900 000-00-00" value="${esc(f.phone || "")}"></label>
+      <label>Почта <span class="muted small" id="email-hint"></span><input id="f-email" name="email" type="email" inputmode="email" autocomplete="email" maxlength="120" placeholder="name@mail.ru" value="${esc(f.email || "")}"></label>
       ${authed() ? "" : `<fieldset class="dl"><legend>Как с вами связаться, чтобы подтвердить заказ</legend>
         <div class="contact-opts">${[["tg", "Telegram"], ["wa", "WhatsApp"], ["call", "Звонок"]].map(([k, l]) => `<label><input type="radio" name="contact" value="${k}" ${(f.contact || "tg") === k ? "checked" : ""}>${l}</label>`).join("")}</div>
         <label id="nick-wrap" style="margin-top:10px">Ник в Telegram (необязательно)<input id="f-nick" name="contactNick" maxlength="60" placeholder="@username" value="${esc(f.contactNick || "")}"></label>
@@ -812,7 +813,7 @@ function renderCheckout(total) {
       <p class="muted small" id="dl-note" style="margin:0 0 10px"></p>
       <p class="error" id="err"></p>
       <button class="btn wide" id="send">Отправить заказ</button>
-      <p class="muted small ask-us">Остались вопросы? Напишите нам в Telegram: <a href="https://t.me/alpha_omega_Y">Яна</a> · <a href="https://t.me/Ont_hefly">Александр</a></p>
+      <p class="muted small ask-us">Остались вопросы? Напишите нам в Telegram: <a href="https://t.me/alpha_omega_Y">Яна</a> · <a href="https://t.me/Ont_hefly">Александр</a> · или на почту <a href="mailto:Sinitsa-chai@yandex.ru">Sinitsa-chai@yandex.ru</a></p>
       <button class="link" type="button" id="back">← Вернуться в корзину</button>
     </form>`;
   const sync = () => {
@@ -821,6 +822,8 @@ function renderCheckout(total) {
     $("#addr-wrap").hidden = !d || !d.address;
     const ct = $("#f input[name=contact]:checked")?.value;
     if ($("#nick-wrap")) $("#nick-wrap").hidden = ct !== "tg";
+    const needMail = !authed() && (ct === "wa" || ct === "call");
+    $("#email-hint").textContent = needMail ? "— пришлём подтверждение, реквизиты и QR для оплаты" : "(необязательно) — продублируем подтверждение и статусы";
     if (d?.address) $("#addr-label").textContent = d.address;
     const c = d && deliveryCost(k, total);
     $("#dl-sum").textContent = !c ? "—" : c.cost ? rub(c.cost) : "бесплатно";
@@ -852,10 +855,13 @@ function renderCheckout(total) {
     if (!String(data.name || "").trim()) return bad("#f-name", "Укажите имя.");
     const digits = String(data.phone || "").replace(/\D/g, "");
     if (digits.length < 10 || digits.length > 15) return bad("#f-phone", "Проверьте телефон: нужно от 10 до 15 цифр.");
+    const mail = String(data.email || "").trim();
+    if (!authed() && (data.contact === "wa" || data.contact === "call") && !mail) return bad("#f-email", "Укажите почту — пришлём на неё подтверждение, реквизиты и QR для оплаты.");
+    if (mail && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(mail)) return bad("#f-email", "Проверьте почту: похоже, в адресе ошибка.");
     if (dl?.address && String(data.address || "").trim().length < 5) return bad("#f-address", "Укажите город и адрес пункта выдачи.");
     if (!data.terms) return need("#f-terms", "Отметьте, что согласны с условиями доставки и возврата.");
     if (!data.consent) return need("#f-consent", "Отметьте согласие на обработку персональных данных.");
-    try { localStorage.setItem("form", JSON.stringify({ name: data.name, phone: data.phone, delivery: data.delivery, address: data.address, contact: data.contact, contactNick: data.contactNick })); } catch {}
+    try { localStorage.setItem("form", JSON.stringify({ name: data.name, phone: data.phone, delivery: data.delivery, address: data.address, contact: data.contact, contactNick: data.contactNick, email: data.email })); } catch {}
     $("#send").disabled = true; $("#err").textContent = "";
     try {
       const { order, token } = await api(authed() ? "/api/orders" : "/api/site-orders", { method: "POST", body: JSON.stringify({ ...data, items: S.cart.filter((i) => !i.removed).map(({ removed, ...i }) => i), promo: S.promo?.code || "" }) });
@@ -870,7 +876,7 @@ function renderCheckout(total) {
         $("#view").innerHTML = `<div class="empty"><h2>Заказ №${order.id} отправлен 🍵</h2>
           ${tg ? `<p>Нажмите кнопку ниже и «Старт» в боте — подтверждение, сумма к оплате и статусы будут приходить вам в Telegram автоматически.</p>
             <div class="row" style="justify-content:center;flex-wrap:wrap;gap:10px"><a class="btn tg-btn" href="${tgStartLink(order.id, token)}" target="_blank" rel="noopener">✈️ Получать статус в Telegram</a><a class="btn ghost" href="#orders">Мои заказы</a></div>`
-          : `<p>Проверим наличие и свяжемся с вами ${how}. Как только подтвердим, в разделе «Заказы» здесь, на сайте, появятся QR-код и реквизиты для оплаты — никуда переходить не нужно.</p>
+          : `<p>Проверим наличие и свяжемся с вами ${how}.${data.email ? ` Подтверждение, сумму и реквизиты пришлём и на почту ${esc(data.email)}.` : ""} Как только подтвердим, в разделе «Заказы» здесь, на сайте, появятся QR-код и реквизиты для оплаты — никуда переходить не нужно.</p>
             <a class="btn" href="#orders">Мои заказы</a>
             <p class="small muted" style="margin-top:14px">Удобнее получать новости в Telegram? <a href="${tgStartLink(order.id, token)}" target="_blank" rel="noopener">Подключите бота</a> — одно нажатие.</p>`}</div>`;
       }
@@ -879,7 +885,7 @@ function renderCheckout(total) {
       $("#err").textContent = err.message; $("#send").disabled = false; track("order_error", err.message);
       // Ошибка с сервера — тоже подсвечиваем нужное поле
       const m = err.message.toLowerCase();
-      const id = m.includes("имя") ? "#f-name" : m.includes("телефон") ? "#f-phone" : m.includes("адрес") ? "#f-address" : "";
+      const id = m.includes("имя") ? "#f-name" : m.includes("почт") ? "#f-email" : m.includes("телефон") ? "#f-phone" : m.includes("адрес") ? "#f-address" : "";
       if (id && $(id)) { $(id).classList.add("bad"); $(id).scrollIntoView({ behavior: "smooth", block: "center" }); $(id).addEventListener("input", () => $(id).classList.remove("bad"), { once: true }); }
     }
   };

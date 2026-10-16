@@ -8,7 +8,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { PUBLIC_URL } from "./config.js";
+import { LEGAL, PUBLIC_URL } from "./config.js";
 import { DELIVERY, FREE_DELIVERY_FROM, KINDS, RECIPES, TEAS } from "./catalog.js";
 import { ARTICLES, REGIONS, articleBySlug } from "./articles.js";
 import * as store from "./db.js";
@@ -114,7 +114,7 @@ if (/tgWebAppData/.test(location.hash)) location.replace("/" + location.search +
     <p class="muted small">Китайский чай с доставкой по России.<br>Каждый чай можно взять по 20 г на пробу.</p></div>
   <div class="ft-col"><b>Покупателям</b><a href="/">Каталог</a><a href="/#quiz">Подбор чая</a><a href="/#sets">Наборы</a><a href="/chai">Все чаи списком</a></div>
   <div class="ft-col"><b>Блог</b><a href="/blog">Все статьи</a>${ARTICLES.slice(0, 3).map((a) => `<a href="/blog/${a.slug}">${esc(a.h1.split(":")[0])}</a>`).join("")}</div>
-  <div class="ft-col"><b>Мы на связи</b>${peopleLinks()}<a href="${BOT}">Telegram-бот @sinitsa_chai_bot</a><a href="${CHANNEL}">Канал о чае</a><a href="${INSTAGRAM}">Instagram</a></div>
+  <div class="ft-col"><b>Мы на связи</b>${peopleLinks()}<a href="mailto:${esc(LEGAL.email)}">${esc(LEGAL.email)}</a><a href="${BOT}">Telegram-бот @sinitsa_chai_bot</a><a href="${CHANNEL}">Канал о чае</a><a href="${INSTAGRAM}">Instagram</a></div>
 </div><div class="wrap ft-legal small muted">
   <a href="/terms">Условия доставки и возврата</a> · <a href="/privacy">Политика конфиденциальности</a> · <a href="/consent">Согласие на обработку данных</a>
 </div></footer>
@@ -169,7 +169,7 @@ function siteFooter() {
     <p class="muted small">Китайский чай с доставкой по России.<br>Каждый чай можно взять по 20 г на пробу.</p></div>
   <div class="s-col"><b>Покупателям</b><a href="/#catalog">Каталог</a><a href="/#quiz">Подбор чая</a><a href="/#sets">Наборы</a><a href="/#cart">Корзина</a></div>
   <div class="s-col"><b>Блог</b><a href="/blog">Все статьи</a>${ARTICLES.slice(0, 3).map((a) => `<a href="/blog/${a.slug}">${esc(a.h1.split(":")[0])}</a>`).join("")}</div>
-  <div class="s-col"><b>Мы на связи</b>${peopleLinks()}<a href="${BOT}">Telegram-бот @sinitsa_chai_bot</a><a href="${CHANNEL}">Канал о чае</a><a href="${INSTAGRAM}">Instagram</a></div>
+  <div class="s-col"><b>Мы на связи</b>${peopleLinks()}<a href="mailto:${esc(LEGAL.email)}">${esc(LEGAL.email)}</a><a href="${BOT}">Telegram-бот @sinitsa_chai_bot</a><a href="${CHANNEL}">Канал о чае</a><a href="${INSTAGRAM}">Instagram</a></div>
 </div><p class="s-legal small muted"><a href="/terms">Условия доставки и возврата</a> · <a href="/privacy">Политика конфиденциальности</a> · <a href="/consent">Согласие на обработку данных</a></p></footer>`;
 }
 

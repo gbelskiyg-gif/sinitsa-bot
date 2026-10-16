@@ -80,6 +80,7 @@ for (const sql of [
   "ALTER TABLE orders ADD COLUMN site_token TEXT",
   "ALTER TABLE orders ADD COLUMN phone_key TEXT",
   "ALTER TABLE orders ADD COLUMN tg_chat INTEGER",
+  "ALTER TABLE orders ADD COLUMN email TEXT NOT NULL DEFAULT ''",
 ]) {
   try {
     db.exec(sql);
@@ -231,10 +232,10 @@ function rowToOrder(r) {
 export function createOrder(o) {
   const res = db
     .prepare(
-      `INSERT INTO orders (user_id, name, phone, delivery, address, comment, items_json, total, promo, consent_at, site_token, phone_key)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?)`
+      `INSERT INTO orders (user_id, name, phone, delivery, address, comment, items_json, total, promo, consent_at, site_token, phone_key, email)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, ?)`
     )
-    .run(o.userId, o.name, o.phone, o.delivery, o.address || "", o.comment || "", JSON.stringify(o.items), o.total, o.promo || "", o.siteToken || null, phoneKey(o.phone));
+    .run(o.userId, o.name, o.phone, o.delivery, o.address || "", o.comment || "", JSON.stringify(o.items), o.total, o.promo || "", o.siteToken || null, phoneKey(o.phone), o.email || "");
   return getOrder(Number(res.lastInsertRowid));
 }
 /** Все заказы для таблицы: новые сверху, с ником покупателя. */
@@ -269,8 +270,8 @@ export function setStatus(id, status) {
 export function anonymizeOldOrders(days = 30) {
   return db
     .prepare(
-      `UPDATE orders SET name = '', phone = '', address = '', comment = ''
-       WHERE status IN ('done','cancelled') AND updated_at < datetime('now', ?) AND (phone != '' OR name != '')`
+      `UPDATE orders SET name = '', phone = '', address = '', comment = '', email = ''
+       WHERE status IN ('done','cancelled') AND updated_at < datetime('now', ?) AND (phone != '' OR name != '' OR email != '')`
     )
     .run(`-${days} days`).changes;
 }

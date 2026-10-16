@@ -33,7 +33,7 @@ export const notifyChats = () => (ORDERS_CHAT_ID ? [ORDERS_CHAT_ID] : ADMIN_IDS)
 export const LEGAL = {
   name: process.env.OPERATOR_NAME || "Бельский Александр Георгиевич",
   inn: process.env.OPERATOR_INN || "",
-  email: process.env.OPERATOR_EMAIL || "belsciy@list.ru",
+  email: process.env.OPERATOR_EMAIL || "Sinitsa-chai@yandex.ru",
   address: process.env.OPERATOR_ADDRESS || "г. Москва",
   date: process.env.LEGAL_DATE || "11.10.2026",
 };

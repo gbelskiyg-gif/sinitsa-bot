@@ -323,7 +323,7 @@ test("заказ с сайта без Telegram: сумма по каталогу
   const post = (body) => fetch(base + "/api/site-orders", { method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ terms: true, consent: true, name: "Сайт", delivery: "yandex", address: "Москва, ПВЗ", ...body }) }).then(async (r) => ({ status: r.status, body: await r.json() }));
   const items = [{ teaId: 1, pack: "50", qty: 1 }];
-  const a = await post({ phone: "+7 999 555-44-33", items, contact: "wa", promo: "SINITSA10" });
+  const a = await post({ phone: "+7 999 555-44-33", items, contact: "wa", email: "buyer@mail.ru", promo: "SINITSA10" });
   assert.equal(a.status, 201);
   const o = store.getOrder(a.body.order.id);
   assert.equal(o.user_id, 0);
@@ -372,7 +372,7 @@ test("блины «зайчик / тигр / дракон»: без выбора
 
 test("заказ с сайта: по ключу видно статус, после подтверждения — реквизиты и ссылка на оплату, «Я оплатил»", async () => {
   const r = await fetch(base + "/api/site-orders", { method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ terms: true, consent: true, name: "Оплата", phone: "8 900 555-00-11", delivery: "yandex", address: "Москва, ПВЗ", contact: "wa", items: [{ teaId: 1, pack: "20", qty: 1 }] }) }).then((x) => x.json());
+    body: JSON.stringify({ terms: true, consent: true, name: "Оплата", phone: "8 900 555-00-11", delivery: "yandex", address: "Москва, ПВЗ", contact: "wa", email: "pay@mail.ru", items: [{ teaId: 1, pack: "20", qty: 1 }] }) }).then((x) => x.json());
   assert.ok(r.token && r.token.length >= 20);
   const get = (t) => fetch(`${base}/api/site-orders/${r.order.id}?t=${t}`).then(async (x) => ({ status: x.status, body: await x.json() }));
   assert.equal((await get("chuzhoy")).status, 404, "без ключа заказ не открыть");
@@ -430,7 +430,7 @@ test("заказ с сайта можно привязать к Telegram: клю
 test("вход на сайте: заказы, оформленные без входа, переходят в профиль и видны с любого устройства", async () => {
   const { signLoginWidget, signSession } = await import("../src/auth.js");
   const r = await fetch(base + "/api/site-orders", { method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ terms: true, consent: true, name: "Гость", phone: "+7 913 000-22-33", contact: "call", delivery: "yandex", address: "Москва, ПВЗ", items: [{ teaId: 1, pack: "50", qty: 1 }] }) }).then((x) => x.json());
+    body: JSON.stringify({ terms: true, consent: true, name: "Гость", phone: "+7 913 000-22-33", contact: "call", email: "guest@ya.ru", delivery: "yandex", address: "Москва, ПВЗ", items: [{ teaId: 1, pack: "50", qty: 1 }] }) }).then((x) => x.json());
   const sess = signSession({ id: 880077, first_name: "Гость" }, TOKEN);
   const as = (p, opts = {}) => fetch(base + p, { ...opts, headers: { "content-type": "application/json", "x-site-auth": sess } }).then(async (x) => ({ status: x.status, body: await x.json() }));
   assert.equal((await as("/api/orders")).body.orders.length, 0);
@@ -444,4 +444,29 @@ test("вход на сайте: заказы, оформленные без вх
   const other = signSession({ id: 880078, first_name: "Чужой" }, TOKEN);
   const o2 = await fetch(base + "/api/claim-orders", { method: "POST", headers: { "content-type": "application/json", "x-site-auth": other }, body: JSON.stringify({ orders: [{ id: r.order.id, token: r.token }] }) }).then((x) => x.json());
   assert.equal(o2.claimed, 0);
+});
+
+test("почта: обязательна для WhatsApp и звонка, проверяется, письмо собирается с реквизитами и ссылкой на заказ", async () => {
+  const { orderEmail } = await import("../src/orders.js");
+  const post = (body) => fetch(base + "/api/site-orders", { method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ terms: true, consent: true, name: "Почта", phone: "+7 914 111-22-33", delivery: "yandex", address: "Москва, ПВЗ", items: [{ teaId: 1, pack: "50", qty: 1 }], ...body }) }).then(async (r) => ({ status: r.status, body: await r.json() }));
+  let r = await post({ contact: "wa" });
+  assert.equal(r.status, 400); assert.match(r.body.error, /почт/i);
+  r = await post({ contact: "call", email: "не-почта" });
+  assert.equal(r.status, 400); assert.match(r.body.error, /почт/i);
+  r = await post({ contact: "tg" });
+  assert.equal(r.status, 201, "для Telegram почта необязательна");
+  r = await post({ contact: "call", email: "Client@Mail.ru", phone: "+7 914 111-22-44" });
+  assert.equal(r.status, 201);
+  const o = store.getOrder(r.body.order.id);
+  assert.equal(o.email, "client@mail.ru");
+  const m = orderEmail({ ...o, status: "accepted" }, "accepted");
+  assert.match(m.subject, /подтверждён/);
+  assert.match(m.text, /Заказ \d+/);
+  assert.ok(m.text.includes(`?order=${o.id}&t=`), "ссылка на страницу заказа с QR");
+  assert.match(m.html, /Открыть заказ на сайте/);
+  store.setStatus(o.id, "done");
+  store.db.prepare("UPDATE orders SET updated_at = datetime('now','-400 days') WHERE id = ?").run(o.id);
+  store.anonymizeOldOrders(365);
+  assert.equal(store.getOrder(o.id).email, "", "почта удаляется вместе с телефоном");
 });

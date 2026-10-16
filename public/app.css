@@ -342,3 +342,20 @@ form label.need { color: #ff5c5c; }
   .mc-free { margin: 0; font-size: 12px; color: var(--gold); }
 }
 @media (max-width: 999px) { body[data-tab="catalog"].has-cart .toast { bottom: calc(136px + env(safe-area-inset-bottom)); } }
+
+/* выбор веса и количество прямо на карточке */
+.qc { margin-top: 8px; }
+.qc .quick { margin-top: 0; }
+.qc-packs { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 4px; }
+.qc-packs button { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 44px; padding: 4px 2px; border: 1px solid var(--gold); border-radius: 10px; background: transparent; color: var(--ink); font: inherit; cursor: pointer; }
+.qc-packs button b { font-size: 13px; color: var(--gold); }
+.qc-packs button small { font-size: 10px; color: var(--muted); white-space: nowrap; }
+.qc-packs button:hover { background: #edbe8218; }
+.qc-packs .qc-x { border-color: var(--line); color: var(--muted); font-size: 18px; padding: 0 8px; }
+.qc-step { display: flex; align-items: center; justify-content: space-between; min-height: 38px; border-radius: 999px; background: var(--gold); color: var(--on-gold); padding: 0 4px; }
+.qc-step button { width: 34px; height: 34px; border: 0; border-radius: 50%; background: #21141a1f; color: var(--on-gold); font-size: 20px; line-height: 1; cursor: pointer; }
+.qc-step span { font-size: 13px; }
+.qc-more { display: block; width: 100%; margin-top: 4px; border: 0; background: none; color: var(--muted); font: 12px var(--body); text-decoration: underline; cursor: pointer; }
+.mc-step { grid-column: 1 / -1; display: inline-flex; align-items: center; gap: 10px; }
+.mc-step button { width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--line); background: none; color: var(--ink); cursor: pointer; font-size: 16px; line-height: 1; }
+.mc-step button:hover { border-color: var(--gold); color: var(--gold); }

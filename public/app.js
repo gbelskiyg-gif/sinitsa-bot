@@ -286,19 +286,48 @@ function openPromo(kind) {
   setTimeout(() => $("#groups")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
 }
 function cardHTML(t) {
-  const inCart = S.cart.filter((i) => !i.removed && i.teaId === t.id).reduce((n, i) => n + i.qty, 0);
   return `<article class="card${t.available ? "" : " off"}" data-tea="${t.id}" role="button" tabindex="0" aria-label="${esc(t.name)}">${art(t)}
     <div class="card-body"><span class="type">${t.premium ? `<b class="prem">✦ Премиум</b> · ` : ""}${esc(S.kinds[t.kind].label)}</span><h3>${esc(t.name)}</h3>
     <div class="price">${t.available ? rub(t.prices["50"]) : "Нет в наличии"}<small>${t.available ? "50 г" : ""}</small></div>
-    ${t.available ? `<button class="quick${inCart ? " in" : ""}" data-quick="${t.id}" aria-label="Положить ${esc(t.name)}, 50 г, в корзину">${inCart ? `✓ В корзине · ${inCart}` : "В корзину"}</button>` : ""}</div></article>`;
+    ${t.available ? `<div class="qc" data-qc="${t.id}">${qcHTML(t)}</div>` : ""}</div></article>`;
 }
-// Быстрое добавление с карточки: 50 г. Блины с выбором (зайчик / тигр / дракон) — через карточку чая
-function quickAdd(id, btn) {
-  const t = tea(id); if (!t) return;
-  if (t.variants?.length) return openTea(id);
-  addToCart(t.id, "50", 1);
-  const n = S.cart.filter((i) => !i.removed && i.teaId === t.id).reduce((k, i) => k + i.qty, 0);
-  if (btn) { btn.classList.add("in", "pop"); btn.textContent = `✓ В корзине · ${n}`; setTimeout(() => btn.classList.remove("pop"), 400); }
+// Управление корзиной прямо на карточке: «В корзину» → выбор веса 20/50/100 → «− 2 +»
+const QC = { open: null, pack: {} };
+function qcLine(t) {
+  const lines = S.cart.filter((i) => !i.removed && !i.set && i.teaId === t.id && !i.variant);
+  return lines.find((i) => i.pack === QC.pack[t.id]) || lines[lines.length - 1] || null;
+}
+function qcHTML(t) {
+  if (QC.open === t.id) {
+    return `<div class="qc-packs" role="group" aria-label="Выберите вес">${["20", "50", "100"].map((p) => `<button data-qc-pack="${p}"><b>${p} г</b><small>${rub(t.prices[p])}</small></button>`).join("")}<button class="qc-x" data-qc-close aria-label="Отмена">×</button></div>`;
+  }
+  const line = qcLine(t);
+  if (line) {
+    const other = S.cart.filter((i) => !i.removed && i.teaId === t.id && i !== line).reduce((n, i) => n + i.qty, 0);
+    return `<div class="qc-step"><button data-qc-minus aria-label="Меньше">−</button><span><b>${line.qty}</b> × ${line.pack} г</span><button data-qc-plus aria-label="Больше">+</button></div>
+      <button class="qc-more" data-qc-open>${other ? `ещё ${other} в корзине · ` : ""}другой вес</button>`;
+  }
+  return `<button class="quick" data-qc-open>В корзину</button>`;
+}
+function qcRefresh(id) { const t = tea(id); if (t) document.querySelectorAll(`[data-qc="${id}"]`).forEach((el) => (el.innerHTML = qcHTML(t))); }
+function qcClick(e, box) {
+  const id = Number(box.dataset.qc), t = tea(id); if (!t) return;
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.hasAttribute("data-qc-open")) {
+    if (t.variants?.length) return openTea(id);
+    const prev = QC.open; QC.open = id; if (prev) qcRefresh(prev);
+  } else if (b.hasAttribute("data-qc-close")) {
+    QC.open = null;
+  } else if (b.dataset.qcPack) {
+    QC.open = null; QC.pack[id] = b.dataset.qcPack;
+    addToCart(id, b.dataset.qcPack, 1);
+  } else if (b.hasAttribute("data-qc-plus") || b.hasAttribute("data-qc-minus")) {
+    const line = qcLine(t); if (!line) return;
+    if (b.hasAttribute("data-qc-plus")) line.qty = Math.min(20, line.qty + 1);
+    else if (--line.qty <= 0) S.cart.splice(S.cart.indexOf(line), 1);
+    saveCart();
+  }
+  qcRefresh(id);
 }
 // Корзина рядом с каталогом: на компьютере — колонка справа, на телефоне — полоса над меню
 function renderMiniCart() {
@@ -312,7 +341,7 @@ function renderMiniCart() {
   const count = lines.reduce((n, l) => n + l.i.qty, 0);
   const left = S.freeFrom ? S.freeFrom - total : 0;
   box.innerHTML = `<div class="mc-head"><b>Ваш заказ</b><span>${count} ${plural(count, "позиция", "позиции", "позиций")}</span></div>
-    <ul class="mc-list">${lines.map((l) => `<li><span class="mc-name">${esc(l.t.name)}${l.i.variant ? ` — ${esc(l.i.variant)}` : ""}<small>${esc(l.label)} × ${l.i.qty}${l.i.set ? " · набор" : ""}</small></span><span class="mc-sum">${rub(l.sum)}</span><button class="mc-del" data-mc-del="${l.idx}" aria-label="Убрать ${esc(l.t.name)}">×</button></li>`).join("")}</ul>
+    <ul class="mc-list">${lines.map((l) => `<li><span class="mc-name">${esc(l.t.name)}${l.i.variant ? ` — ${esc(l.i.variant)}` : ""}<small>${esc(l.label)} × ${l.i.qty}${l.i.set ? " · набор" : ""}</small></span><span class="mc-sum">${rub(l.sum)}</span><button class="mc-del" data-mc-del="${l.idx}" aria-label="Убрать ${esc(l.t.name)}">×</button>${l.i.set ? "" : `<span class="mc-step"><button data-mc-qty="-1" data-i="${l.idx}" aria-label="Меньше">−</button><b>${l.i.qty}</b><button data-mc-qty="1" data-i="${l.idx}" aria-label="Больше">+</button></span>`}</li>`).join("")}</ul>
     ${discount ? `<div class="mc-row"><span>Скидка на набор</span><span>−${rub(discount)}</span></div>` : ""}
     ${promoOff ? `<div class="mc-row"><span>Промокод</span><span>−${rub(promoOff)}</span></div>` : ""}
     <div class="mc-total"><span>Итого</span><b>${rub(total)}</b></div>
@@ -1091,13 +1120,19 @@ document.addEventListener("click", (e) => {
   if (pr) return openPromo(pr.dataset.promo);
   const op = e.target.closest("[data-opt]");
   if (op) return wholesale(Number(op.dataset.opt), op);
-  const q = e.target.closest("[data-quick]");
-  if (q) { e.stopPropagation(); return quickAdd(Number(q.dataset.quick), q); }
+  const qc = e.target.closest("[data-qc]");
+  if (qc) { e.stopPropagation(); return qcClick(e, qc); }
+  const mq = e.target.closest("[data-mc-qty]");
+  if (mq) {
+    const i = S.cart[Number(mq.dataset.i)]; if (!i) return;
+    i.qty = Math.min(20, i.qty + Number(mq.dataset.mcQty));
+    if (i.qty <= 0) S.cart.splice(Number(mq.dataset.i), 1);
+    saveCart(); qcRefresh(i.teaId); return;
+  }
   const md = e.target.closest("[data-mc-del]");
   if (md) {
     const i = S.cart[Number(md.dataset.mcDel)]; if (!i) return;
-    S.cart.splice(Number(md.dataset.mcDel), 1); saveCart();
-    document.querySelectorAll(`[data-quick="${i.teaId}"]`).forEach((b) => { const n = S.cart.filter((x) => !x.removed && x.teaId === i.teaId).reduce((k, x) => k + x.qty, 0); b.classList.toggle("in", !!n); b.textContent = n ? `✓ В корзине · ${n}` : "В корзину"; });
+    S.cart.splice(Number(md.dataset.mcDel), 1); saveCart(); qcRefresh(i.teaId);
     return;
   }
   const c = e.target.closest("[data-tea]");

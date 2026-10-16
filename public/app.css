@@ -225,10 +225,12 @@ form label.consent.need input { outline: 2px solid #ff5c5c; outline-offset: 2px;
 .sitenav a:hover { color: var(--gold); }
 .tg .sitenav, .site-hide { display: none !important; }
 .tg .site-hide { display: revert !important; }
-.contact-opts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
-.contact-opts label { display: flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; cursor: pointer; }
-.contact-opts label:has(input:checked) { border-color: var(--gold); color: var(--gold); }
-.contact-opts input { accent-color: var(--gold); margin: 0; }
+/* способ связи — три ровные кнопки-плашки, сам кружок радио скрыт */
+.contact-opts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 6px; }
+.contact-opts label { position: relative; display: flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px 6px; border: 1px solid var(--line); border-radius: 999px; cursor: pointer; font-size: 14px; text-align: center; white-space: nowrap; }
+.contact-opts label:has(input:checked) { border-color: var(--gold); color: var(--on-gold); background: var(--gold); font-weight: 700; }
+.contact-opts input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; padding: 0; pointer-events: none; }
+.contact-opts label:has(input:focus-visible) { outline: 2px solid var(--lilac); outline-offset: 2px; }
 .hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
 
 /* Незаполненное поле формы — красной рамкой */

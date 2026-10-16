@@ -12,7 +12,7 @@ const S = { teas: [], kinds: {}, recipes: {}, mugRecipes: {}, tastes: {}, sets: 
 
 // ---------- хранение корзины ----------
 function loadCart() { try { S.cart = JSON.parse(localStorage.getItem("cart") || "[]"); } catch { S.cart = []; } }
-function saveCart() { try { localStorage.setItem("cart", JSON.stringify(S.cart)); } catch {} updateBadge(); }
+function saveCart() { try { localStorage.setItem("cart", JSON.stringify(S.cart)); } catch {} updateBadge(); if (typeof renderMiniCart === "function") renderMiniCart(); }
 function updateBadge() {
   const n = S.cart.reduce((s, i) => s + (i.removed ? 0 : i.qty), 0);
   const b = $("#cart-count"); b.hidden = !n; b.textContent = n;
@@ -109,9 +109,11 @@ function renderCatalog() {
     <div class="chips scroll" id="groups">${GROUPS.map(([k, l]) => `<button class="chip" data-g="${k}" aria-pressed="${S.group === k}">${l}</button>`).join("")}</div>
     <div class="chips scroll sorts" id="sorts" aria-label="Сортировка">${SORTS.map(([k, l]) => `<button class="chip" data-sort="${k}" aria-pressed="${S.sort === k}">${l}</button>`).join("")}</div>
     <p class="note">${list.length} из ${S.teas.length} · цены за 50 г · собираем под заказ</p>
-    <div class="grid">${list.length ? list.map(cardHTML).join("") : `<p class="muted">Ничего не нашли. Попробуйте другое слово.</p>`}</div>
+    <div class="cat-wrap"><div class="grid">${list.length ? list.map(cardHTML).join("") : `<p class="muted">Ничего не нашли. Попробуйте другое слово.</p>`}</div>
+    <aside class="mini-cart" id="mini-cart" aria-label="Ваша корзина"></aside></div>
     <div class="opt-box"><span>🧑‍💼</span><span><b>Покупаете оптом?</b><small>Для кофейни, магазина или подарков — обсудим цены лично, в Москве можно встретиться и попробовать.</small></span><button class="btn ghost" data-opt="0">Я оптовик</button></div>`;
   if (inTelegram()) mountPromo();
+  renderMiniCart();
   $("#q").addEventListener("input", (e) => { S.query = e.target.value.trim().toLowerCase(); const pos = e.target.selectionStart; renderCatalog(); const q = $("#q"); q.focus(); q.setSelectionRange(pos, pos); });
   $("#sorts").addEventListener("click", (e) => {
     const b = e.target.closest("button"); if (!b) return;
@@ -262,10 +264,41 @@ function openPromo(kind) {
   setTimeout(() => $("#groups")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
 }
 function cardHTML(t) {
-  return `<button class="card${t.available ? "" : " off"}" data-tea="${t.id}">${art(t)}
+  const inCart = S.cart.filter((i) => !i.removed && i.teaId === t.id).reduce((n, i) => n + i.qty, 0);
+  return `<article class="card${t.available ? "" : " off"}" data-tea="${t.id}" role="button" tabindex="0" aria-label="${esc(t.name)}">${art(t)}
     <div class="card-body"><span class="type">${t.premium ? `<b class="prem">✦ Премиум</b> · ` : ""}${esc(S.kinds[t.kind].label)}</span><h3>${esc(t.name)}</h3>
-    <div class="price">${t.available ? rub(t.prices["50"]) : "Нет в наличии"}<small>${t.available ? "50 г" : ""}</small></div></div></button>`;
+    <div class="price">${t.available ? rub(t.prices["50"]) : "Нет в наличии"}<small>${t.available ? "50 г" : ""}</small></div>
+    ${t.available ? `<button class="quick${inCart ? " in" : ""}" data-quick="${t.id}" aria-label="Положить ${esc(t.name)}, 50 г, в корзину">${inCart ? `✓ В корзине · ${inCart}` : "В корзину"}</button>` : ""}</div></article>`;
 }
+// Быстрое добавление с карточки: 50 г. Блины с выбором (зайчик / тигр / дракон) — через карточку чая
+function quickAdd(id, btn) {
+  const t = tea(id); if (!t) return;
+  if (t.variants?.length) return openTea(id);
+  addToCart(t.id, "50", 1);
+  const n = S.cart.filter((i) => !i.removed && i.teaId === t.id).reduce((k, i) => k + i.qty, 0);
+  if (btn) { btn.classList.add("in", "pop"); btn.textContent = `✓ В корзине · ${n}`; setTimeout(() => btn.classList.remove("pop"), 400); }
+}
+// Корзина рядом с каталогом: на компьютере — колонка справа, на телефоне — полоса над меню
+function renderMiniCart() {
+  const box = $("#mini-cart"); if (!box) return;
+  const { lines, discount, promoOff, total } = cartLines();
+  document.body.classList.toggle("has-cart", lines.length > 0);
+  if (!lines.length) {
+    box.innerHTML = `<div class="mc-empty"><b>Корзина пока пуста</b><span>Нажмите «В корзину» на любом чае — он появится здесь вместе с суммой.</span><a class="btn ghost wide" href="#quiz">🍵 Подобрать чай</a></div>`;
+    return;
+  }
+  const count = lines.reduce((n, l) => n + l.i.qty, 0);
+  const left = S.freeFrom ? S.freeFrom - total : 0;
+  box.innerHTML = `<div class="mc-head"><b>Ваш заказ</b><span>${count} ${plural(count, "позиция", "позиции", "позиций")}</span></div>
+    <ul class="mc-list">${lines.map((l) => `<li><span class="mc-name">${esc(l.t.name)}${l.i.variant ? ` — ${esc(l.i.variant)}` : ""}<small>${esc(l.label)} × ${l.i.qty}${l.i.set ? " · набор" : ""}</small></span><span class="mc-sum">${rub(l.sum)}</span><button class="mc-del" data-mc-del="${l.idx}" aria-label="Убрать ${esc(l.t.name)}">×</button></li>`).join("")}</ul>
+    ${discount ? `<div class="mc-row"><span>Скидка на набор</span><span>−${rub(discount)}</span></div>` : ""}
+    ${promoOff ? `<div class="mc-row"><span>Промокод</span><span>−${rub(promoOff)}</span></div>` : ""}
+    <div class="mc-total"><span>Итого</span><b>${rub(total)}</b></div>
+    ${S.freeFrom ? `<p class="mc-free">${left <= 0 ? "🎁 Доставка бесплатная" : `🚚 До бесплатной доставки ${rub(left)}`}</p>` : ""}
+    <a class="btn wide" href="#cart">Оформить заказ</a>
+    <a class="mc-bar" href="#cart"><span>🛒 ${count} · <b>${rub(total)}</b></span><span>Оформить →</span></a>`;
+}
+function plural(n, a, b, c) { const m = n % 10, h = n % 100; return m === 1 && h !== 11 ? a : m >= 2 && m <= 4 && (h < 12 || h > 14) ? b : c; }
 
 // ---------- карточка чая ----------
 function openTea(id) {
@@ -1030,12 +1063,25 @@ document.addEventListener("click", (e) => {
   if (pr) return openPromo(pr.dataset.promo);
   const op = e.target.closest("[data-opt]");
   if (op) return wholesale(Number(op.dataset.opt), op);
+  const q = e.target.closest("[data-quick]");
+  if (q) { e.stopPropagation(); return quickAdd(Number(q.dataset.quick), q); }
+  const md = e.target.closest("[data-mc-del]");
+  if (md) {
+    const i = S.cart[Number(md.dataset.mcDel)]; if (!i) return;
+    S.cart.splice(Number(md.dataset.mcDel), 1); saveCart();
+    document.querySelectorAll(`[data-quick="${i.teaId}"]`).forEach((b) => { const n = S.cart.filter((x) => !x.removed && x.teaId === i.teaId).reduce((k, x) => k + x.qty, 0); b.classList.toggle("in", !!n); b.textContent = n ? `✓ В корзине · ${n}` : "В корзину"; });
+    return;
+  }
   const c = e.target.closest("[data-tea]");
   if (c) return openTea(c.dataset.tea);
   const st = e.target.closest("[data-set]");
   if (st) addSet(st.dataset.set);
 });
 window.addEventListener("hashchange", route);
+// Карточка чая открывается и с клавиатуры
+document.addEventListener("keydown", (e) => {
+  if ((e.key === "Enter" || e.key === " ") && e.target.matches?.("article.card[data-tea]")) { e.preventDefault(); openTea(e.target.dataset.tea); }
+});
 
 (async function init() {
   loadCart(); updateBadge(); loadAuth(); updateAccount();

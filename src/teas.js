@@ -10,7 +10,6 @@ export const TEAS = [
   "name": "Габа Шаньлинси",
   "kind": "gaba",
   "region": "Тайвань, Шаньлинси",
-  "premium": true,
   "notes": "Сухофрукты, мёд, мягкая фруктовая кислинка.",
   "tastes": [
    "fruity",
@@ -40,7 +39,6 @@ export const TEAS = [
   "name": "Габа ЖиЮэТан",
   "kind": "gaba",
   "region": "Тайвань, Жи Юэ Тань",
-  "premium": true,
   "notes": "Печёные фрукты, сладость, ягодная кислинка.",
   "tastes": [
    "fruity",
@@ -70,7 +68,6 @@ export const TEAS = [
   "name": "Габа ЧанШу Алишань",
   "kind": "gaba",
   "region": "Тайвань, Алишань",
-  "premium": true,
   "notes": "Медовая выпечка, сухофрукты, ягодная кислинка.",
   "tastes": [
    "fruity",
@@ -133,7 +130,6 @@ export const TEAS = [
   "name": "Габа Дунфанмейжень",
   "kind": "gaba",
   "region": "Таиланд, Мае Салонг",
-  "premium": true,
   "notes": "Мёд, спелые фрукты, цветы.",
   "tastes": [
    "honey",
@@ -225,7 +221,6 @@ export const TEAS = [
   "name": "Дахунпао Байжуйсян — Белая Дафна",
   "kind": "dark_oolong",
   "region": "Китай, Фуцзянь, Уишань",
-  "premium": true,
   "notes": "Цветы, печёные фрукты, пряности, мягкая сладость.",
   "tastes": [
    "floral",
@@ -1029,7 +1024,6 @@ export const TEAS = [
   "name": "Габа Любао",
   "kind": "gaba",
   "region": "Китай, Гуанси",
-  "premium": true,
   "notes": "Необычный ГАБА: мягкий, сладкий, с древесными и ореховыми нотами.",
   "tastes": [
    "woody",
@@ -1122,7 +1116,6 @@ export const TEAS = [
   "name": "Хэйча Любао «Бинлансян» 2013",
   "kind": "heicha",
   "region": "Китай, Гуанси, Любао",
-  "premium": true,
   "notes": "Выдержанный с 2013 года любао с узнаваемым ароматом ореха бетеля (бинлансян): древесный, сладковатый, мягкий.",
   "tastes": [
    "woody",

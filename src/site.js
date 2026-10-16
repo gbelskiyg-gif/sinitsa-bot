@@ -102,18 +102,18 @@ if (/tgWebAppData/.test(location.hash)) location.replace("/" + location.search +
 </head>
 <body>
 <header class="hd"><div class="wrap hd-in">
-  <a class="logo" href="/"><img src="/emblem.jpg" alt="Синица — логотип" width="44" height="44"><span>Синица</span></a>
   <nav class="menu" aria-label="Разделы">
-    <a href="/">Каталог</a><a href="/#quiz">Подбор</a><a href="/#sets">Наборы</a><a href="/blog">О чае</a>
+    <a href="/">Каталог</a><a href="/#quiz">Подбор</a><a href="/#sets">Наборы</a><a href="/blog">Блог</a>
   </nav>
-  <a class="btn sm" href="/#cart">Корзина</a>
+  <a class="logo" href="/"><img src="/emblem.jpg" alt="Синица — логотип" width="44" height="44"><span>Синица</span></a>
+  <a class="btn sm hd-cart" href="/#cart">Корзина</a>
 </div></header>
 <main>${body}</main>
 <footer class="ft"><div class="wrap ft-in">
   <div><a class="logo" href="/"><img src="/emblem.jpg" alt="" width="36" height="36"><span>Синица</span></a>
     <p class="muted small">Китайский чай с доставкой по России.<br>Каждый чай можно взять по 20 г на пробу.</p></div>
   <div class="ft-col"><b>Покупателям</b><a href="/">Каталог</a><a href="/#quiz">Подбор чая</a><a href="/#sets">Наборы</a><a href="/chai">Все чаи списком</a></div>
-  <div class="ft-col"><b>О чае</b><a href="/blog">Блог</a>${ARTICLES.slice(0, 3).map((a) => `<a href="/blog/${a.slug}">${esc(a.h1.split(":")[0])}</a>`).join("")}</div>
+  <div class="ft-col"><b>Блог</b><a href="/blog">Все статьи</a>${ARTICLES.slice(0, 3).map((a) => `<a href="/blog/${a.slug}">${esc(a.h1.split(":")[0])}</a>`).join("")}</div>
   <div class="ft-col"><b>Мы на связи</b>${peopleLinks()}<a href="${BOT}">Telegram-бот @sinitsa_chai_bot</a><a href="${CHANNEL}">Канал о чае</a><a href="${INSTAGRAM}">Instagram</a></div>
 </div><div class="wrap ft-legal small muted">
   <a href="/terms">Условия доставки и возврата</a> · <a href="/privacy">Политика конфиденциальности</a> · <a href="/consent">Согласие на обработку данных</a>
@@ -168,7 +168,7 @@ function siteFooter() {
   <div><a class="brand" href="/"><img src="/emblem.jpg" alt="" width="36" height="36"><span>Синица</span></a>
     <p class="muted small">Китайский чай с доставкой по России.<br>Каждый чай можно взять по 20 г на пробу.</p></div>
   <div class="s-col"><b>Покупателям</b><a href="/#catalog">Каталог</a><a href="/#quiz">Подбор чая</a><a href="/#sets">Наборы</a><a href="/#cart">Корзина</a></div>
-  <div class="s-col"><b>О чае</b><a href="/blog">Блог</a>${ARTICLES.slice(0, 3).map((a) => `<a href="/blog/${a.slug}">${esc(a.h1.split(":")[0])}</a>`).join("")}</div>
+  <div class="s-col"><b>Блог</b><a href="/blog">Все статьи</a>${ARTICLES.slice(0, 3).map((a) => `<a href="/blog/${a.slug}">${esc(a.h1.split(":")[0])}</a>`).join("")}</div>
   <div class="s-col"><b>Мы на связи</b>${peopleLinks()}<a href="${BOT}">Telegram-бот @sinitsa_chai_bot</a><a href="${CHANNEL}">Канал о чае</a><a href="${INSTAGRAM}">Instagram</a></div>
 </div><p class="s-legal small muted"><a href="/terms">Условия доставки и возврата</a> · <a href="/privacy">Политика конфиденциальности</a> · <a href="/consent">Согласие на обработку данных</a></p></footer>`;
 }
@@ -320,7 +320,7 @@ function teaPage(t) {
 function blogPage(region) {
   const list = region ? ARTICLES.filter((a) => a.region === region) : ARTICLES;
   const body = `<div class="wrap sec">
-  ${crumbsHTML([["Главная", "/"], ["О чае", "/blog"]])}
+  ${crumbsHTML([["Главная", "/"], ["Блог", "/blog"]])}
   <h1>О чае: где он растёт и как его пить</h1>
   <p class="lead">Рассказываем о чайных регионах Китая и Тайваня, о том, чем отличаются виды чая и как их заваривать.</p>
   <div class="chips"><a class="chip" href="/blog" aria-current="${!region}">Все</a>${REGIONS.map((r) => `<a class="chip" href="/blog?r=${encodeURIComponent(r)}" aria-current="${region === r}">${esc(r)}</a>`).join("")}</div>
@@ -331,7 +331,7 @@ function blogPage(region) {
     title: "Блог о китайском чае: регионы, виды, заваривание — Синица",
     description: "Статьи о китайском чае: где растут улуны, пуэр и красный чай, чем отличаются Фуцзянь, Гуандун, Юньнань и Тайвань, как заваривать.",
     canonical: "/blog",
-    jsonld: [crumbs([["Главная", "/"], ["О чае", "/blog"]]), { "@context": "https://schema.org", "@type": "Blog", name: "О чае — блог «Синицы»", url: abs("/blog") }],
+    jsonld: [crumbs([["Главная", "/"], ["Блог", "/blog"]]), { "@context": "https://schema.org", "@type": "Blog", name: "О чае — блог «Синицы»", url: abs("/blog") }],
     body,
   });
 }
@@ -339,7 +339,7 @@ function blogPage(region) {
 function articlePage(a) {
   const teas = a.teas.map((id) => TEAS.find((t) => t.id === id)).filter(Boolean);
   const others = ARTICLES.filter((x) => x.slug !== a.slug).slice(0, 3);
-  const trail = [["Главная", "/"], ["О чае", "/blog"], [a.h1, `/blog/${a.slug}`]];
+  const trail = [["Главная", "/"], ["Блог", "/blog"], [a.h1, `/blog/${a.slug}`]];
   const date = new Date(a.date + "T12:00:00Z").toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
   const body = `<article class="wrap sec article">
   ${crumbsHTML(trail)}

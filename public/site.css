@@ -32,7 +32,10 @@ p { margin: 0 0 14px; }
 
 /* шапка и подвал */
 .hd { position: sticky; top: 0; z-index: 10; background: #100f15ee; backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
-.hd-in { display: flex; align-items: center; gap: 20px; height: 68px; }
+.hd-in { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 20px; height: 72px; }
+.hd-in .menu { grid-column: 1; grid-row: 1; margin: 0; justify-self: start; }
+.hd-in .logo { grid-column: 2; grid-row: 1; }
+.hd-in .hd-cart { grid-column: 3; grid-row: 1; justify-self: end; }
 .logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
 .logo img { border-radius: 10px; }
 .logo span { font: italic 28px/1 var(--display); color: var(--lilac); }
@@ -135,8 +138,8 @@ p { margin: 0 0 14px; }
 }
 @media (max-width: 640px) {
   body { font-size: 15px; }
-  .hd-in { flex-wrap: wrap; height: auto; gap: 8px 12px; padding-top: 10px; padding-bottom: 8px; justify-content: space-between; }
-  .menu { order: 3; width: 100%; margin: 0; gap: 20px; overflow-x: auto; font-size: 15px; }
+  .hd-in { grid-template-columns: 1fr auto 1fr; height: auto; gap: 8px 12px; padding-top: 10px; padding-bottom: 8px; }
+  .hd-in .menu { grid-column: 1 / -1; grid-row: 2; width: 100%; gap: 20px; overflow-x: auto; font-size: 15px; justify-content: center; }
   .logo span { font-size: 24px; }
   .hero-in { padding: 28px 16px; }
   .kinds, .grid, .posts, .ways, .article .grid, .article .posts { grid-template-columns: 1fr; }

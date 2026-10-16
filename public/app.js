@@ -97,7 +97,8 @@ function renderCatalog() {
   if (S.sort === "new") list = [...list].sort((a, b) => b.id - a.id); // новые чаи добавляем в конец каталога
   list = [...list].sort((a, b) => b.available - a.available);
   // На сайте свой заголовок над каталогом (для поиска), этот — только в Telegram
-  $("#view").innerHTML = `${inTelegram() ? `
+  const showTop = inTelegram() && !S.query && S.group === "all";
+  $("#view").innerHTML = `${showTop ? `<div class="sc sc-tg" id="showcase-tg"></div>` : ""}${inTelegram() ? `
     <section class="hero">
       <div class="eyebrow">Китайский чай. Свой ритм.</div>
       <h1>Хороший чай. <em>Время для себя.</em></h1>
@@ -107,7 +108,6 @@ function renderCatalog() {
     <label class="search"><span aria-hidden="true">⌕</span><input id="q" type="search" placeholder="Найти свой чай" value="${esc(S.query)}" autocomplete="off"></label>
     <div class="chips scroll" id="groups">${GROUPS.map(([k, l]) => `<button class="chip" data-g="${k}" aria-pressed="${S.group === k}">${l}</button>`).join("")}</div>
     <div class="chips scroll sorts" id="sorts" aria-label="Сортировка">${SORTS.map(([k, l]) => `<button class="chip" data-sort="${k}" aria-pressed="${S.sort === k}">${l}</button>`).join("")}</div>
-    ${inTelegram() && !S.query && S.group === "all" ? `<div class="sc" id="showcase"></div>` : ""}
     <p class="note">${list.length} из ${S.teas.length} · цены за 50 г · собираем под заказ</p>
     <div class="grid">${list.length ? list.map(cardHTML).join("") : `<p class="muted">Ничего не нашли. Попробуйте другое слово.</p>`}</div>
     <div class="opt-box"><span>🧑‍💼</span><span><b>Покупаете оптом?</b><small>Для кофейни, магазина или подарков — обсудим цены лично, в Москве можно встретиться и попробовать.</small></span><button class="btn ghost" data-opt="0">Я оптовик</button></div>`;
@@ -216,7 +216,7 @@ function promoSlides() {
 }
 let promoTimer = null;
 function mountPromo() {
-  const box = $("#showcase"); if (!box) return;
+  const box = inTelegram() ? $("#showcase-tg") : $("#showcase"); if (!box) return;
   clearInterval(promoTimer);
   const slides = promoSlides();
   if (!slides.length) { box.hidden = true; return; }

@@ -299,3 +299,5 @@ form label.need { color: #ff5c5c; }
 .steps li.ok span { color: var(--ink); }
 .steps-off { margin: 10px 0 0; color: var(--muted); font-size: 13px; }
 .order-link { display: block; margin-top: 10px; font-size: 13px; }
+.sc-tg { margin: 14px 0 4px; }
+.sc-tg + .hero { padding-top: 14px; }

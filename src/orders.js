@@ -93,6 +93,10 @@ export function buildOrder(body, user, { isFirstOrder = false } = {}) {
   if (!name) throw new OrderError("Укажите имя.");
   const email = clean(body.email, 120).toLowerCase();
   if (email && !EMAIL_RE.test(email)) throw new OrderError("Проверьте почту: похоже, в адресе ошибка.");
+  if (!user.id && body.contact === "tg") {
+    const nick = clean(body.contactNick, 60).replace(/^@/, "").replace(/^https?:\/\/t\.me\//i, "");
+    if (!/^[A-Za-z0-9_]{4,32}$/.test(nick)) throw new OrderError("Укажите ник в Telegram (например, @username) — по нему мы с вами свяжемся.");
+  }
   if (!user.id && ["wa", "call"].includes(body.contact) && !email)
     throw new OrderError("Укажите почту — пришлём на неё подтверждение, реквизиты и QR для оплаты.");
   if (phoneDigits.length < 10 || phoneDigits.length > 15) throw new OrderError("Проверьте телефон: нужно от 10 до 15 цифр.");

@@ -847,7 +847,7 @@ function renderCheckout(total) {
       <label>Почта <span class="muted small" id="email-hint"></span><input id="f-email" name="email" type="email" inputmode="email" autocomplete="email" maxlength="120" placeholder="name@mail.ru" value="${esc(f.email || "")}"></label>
       ${authed() ? "" : `<fieldset class="dl"><legend>Как с вами связаться, чтобы подтвердить заказ</legend>
         <div class="contact-opts">${[["tg", "Telegram"], ["wa", "WhatsApp"], ["call", "Звонок"]].map(([k, l]) => `<label><input type="radio" name="contact" value="${k}" ${(f.contact || "tg") === k ? "checked" : ""}>${l}</label>`).join("")}</div>
-        <label id="nick-wrap" style="margin-top:10px">Ник в Telegram (необязательно)<input id="f-nick" name="contactNick" maxlength="60" placeholder="@username" value="${esc(f.contactNick || "")}"></label>
+        <label id="nick-wrap" style="margin-top:10px">Ник в Telegram — по нему мы вам напишем<input id="f-nick" name="contactNick" maxlength="60" placeholder="@username" value="${esc(f.contactNick || "")}"></label>
         <label class="hp" aria-hidden="true">Не заполняйте<input name="website" tabindex="-1" autocomplete="off"></label></fieldset>`}
       <fieldset class="dl"><legend>Доставка</legend>${Object.entries(S.delivery).map(([k, d]) => {
         const c = deliveryCost(k, total);
@@ -906,6 +906,8 @@ function renderCheckout(total) {
     if (!String(data.name || "").trim()) return bad("#f-name", "Укажите имя.");
     const digits = String(data.phone || "").replace(/\D/g, "");
     if (digits.length < 10 || digits.length > 15) return bad("#f-phone", "Проверьте телефон: нужно от 10 до 15 цифр.");
+    if (!authed() && data.contact === "tg" && !/^@?[A-Za-z0-9_]{4,32}$/.test(String(data.contactNick || "").trim().replace(/^https?:\/\/t\.me\//i, "")))
+      return bad("#f-nick", "Укажите ник в Telegram (например, @username) — по нему мы с вами свяжемся.");
     const mail = String(data.email || "").trim();
     if (!authed() && (data.contact === "wa" || data.contact === "call") && !mail) return bad("#f-email", "Укажите почту — пришлём на неё подтверждение, реквизиты и QR для оплаты.");
     if (mail && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(mail)) return bad("#f-email", "Проверьте почту: похоже, в адресе ошибка.");
@@ -936,7 +938,7 @@ function renderCheckout(total) {
       $("#err").textContent = err.message; $("#send").disabled = false; track("order_error", err.message);
       // Ошибка с сервера — тоже подсвечиваем нужное поле
       const m = err.message.toLowerCase();
-      const id = m.includes("имя") ? "#f-name" : m.includes("почт") ? "#f-email" : m.includes("телефон") ? "#f-phone" : m.includes("адрес") ? "#f-address" : "";
+      const id = m.includes("имя") ? "#f-name" : m.includes("ник") ? "#f-nick" : m.includes("почт") ? "#f-email" : m.includes("телефон") ? "#f-phone" : m.includes("адрес") ? "#f-address" : "";
       if (id && $(id)) { $(id).classList.add("bad"); $(id).scrollIntoView({ behavior: "smooth", block: "center" }); $(id).addEventListener("input", () => $(id).classList.remove("bad"), { once: true }); }
     }
   };

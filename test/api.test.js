@@ -415,7 +415,7 @@ test("промокод: «синица 10» в любом регистре; по
 test("заказ с сайта можно привязать к Telegram: ключ ссылки, чат сохраняется, статус видно на сайте", async () => {
   const { siteStartPayload, customerChat } = await import("../src/orders.js");
   const r = await fetch(base + "/api/site-orders", { method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ terms: true, consent: true, name: "ТГ", phone: "+7 912 000-11-22", contact: "tg", nick: "@buyer", delivery: "yandex", address: "Москва, ПВЗ", items: [{ teaId: 1, pack: "50", qty: 1 }] }) }).then((x) => x.json());
+    body: JSON.stringify({ terms: true, consent: true, name: "ТГ", phone: "+7 912 000-11-22", contact: "tg", contactNick: "@buyer", delivery: "yandex", address: "Москва, ПВЗ", items: [{ teaId: 1, pack: "50", qty: 1 }] }) }).then((x) => x.json());
   const o = store.getOrder(r.order.id);
   assert.equal(siteStartPayload(o), `o${o.id}_${r.token.slice(0, 16)}`);
   assert.ok(siteStartPayload(o).length <= 64, "лимит Telegram на параметр start");
@@ -455,6 +455,8 @@ test("почта: обязательна для WhatsApp и звонка, про
   r = await post({ contact: "call", email: "не-почта" });
   assert.equal(r.status, 400); assert.match(r.body.error, /почт/i);
   r = await post({ contact: "tg" });
+  assert.equal(r.status, 400, "для Telegram нужен ник"); assert.match(r.body.error, /ник/);
+  r = await post({ contact: "tg", contactNick: "@sinitsa_fan" });
   assert.equal(r.status, 201, "для Telegram почта необязательна");
   r = await post({ contact: "call", email: "Client@Mail.ru", phone: "+7 914 111-22-44" });
   assert.equal(r.status, 201);

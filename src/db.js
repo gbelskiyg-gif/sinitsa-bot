@@ -81,6 +81,7 @@ for (const sql of [
   "ALTER TABLE orders ADD COLUMN phone_key TEXT",
   "ALTER TABLE orders ADD COLUMN tg_chat INTEGER",
   "ALTER TABLE orders ADD COLUMN email TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE events ADD COLUMN src TEXT NOT NULL DEFAULT 'tg'",
 ]) {
   try {
     db.exec(sql);
@@ -116,8 +117,8 @@ export function markMenu(id, v) {
 }
 
 // ---------- аналитика: что делают люди в приложении ----------
-export function logEvent(userId, name, data = "") {
-  db.prepare("INSERT INTO events (user_id, name, data) VALUES (?, ?, ?)").run(userId, name, String(data).slice(0, 200));
+export function logEvent(userId, name, data = "", src = "tg") {
+  db.prepare("INSERT INTO events (user_id, name, data, src) VALUES (?, ?, ?, ?)").run(userId, name, String(data).slice(0, 200), src === "site" ? "site" : "tg");
 }
 export function hasRecentEvent(userId, name, minutes) {
   return !!db.prepare("SELECT 1 FROM events WHERE user_id = ? AND name = ? AND created_at > datetime('now', ?)").get(userId, name, `-${minutes} minutes`);
@@ -126,10 +127,10 @@ export function recentEventCount(userId, minutes) {
   return db.prepare("SELECT COUNT(*) AS n FROM events WHERE user_id = ? AND created_at > datetime('now', ?)").get(userId, `-${minutes} minutes`).n;
 }
 /** Сколько разных людей дошло до каждого шага за последние days дней. */
-export function funnel(days) {
+export function funnel(days, src = "tg") {
   const rows = db.prepare(
-    "SELECT name, COUNT(DISTINCT user_id) AS n FROM events WHERE created_at > datetime('now', ?) GROUP BY name"
-  ).all(`-${days} days`);
+    "SELECT name, COUNT(DISTINCT user_id) AS n FROM events WHERE created_at > datetime('now', ?) AND src = ? GROUP BY name"
+  ).all(`-${days} days`, src);
   return Object.fromEntries(rows.map((r) => [r.name, r.n]));
 }
 /** До какого вопроса подбора дошли люди, которые его не закончили. */
@@ -159,7 +160,7 @@ export function abandonedCarts(days) {
      LEFT JOIN users u ON u.id = e.user_id
      LEFT JOIN events c ON c.user_id = e.user_id AND c.name = 'checkout_open' AND c.created_at >= e.created_at
      LEFT JOIN reminders r ON r.user_id = e.user_id
-     WHERE e.name = 'cart_add' AND e.created_at > datetime('now', ?)
+     WHERE e.name = 'cart_add' AND e.created_at > datetime('now', ?) AND e.user_id > 0
        AND NOT EXISTS (SELECT 1 FROM orders o WHERE o.user_id = e.user_id AND o.created_at >= e.created_at)
      GROUP BY e.user_id ORDER BY last_at DESC LIMIT 20`
   ).all(`-${days} days`, `-${days} days`);
@@ -170,7 +171,7 @@ export function cartsToRemind(afterHours = 3, beforeHours = 72) {
     `SELECT e.user_id, MAX(e.created_at) AS last_at,
             (SELECT GROUP_CONCAT(d, ' | ') FROM (SELECT DISTINCT data AS d FROM events x WHERE x.user_id = e.user_id AND x.name = 'cart_add' AND x.created_at > datetime('now', ?))) AS items
      FROM events e
-     WHERE e.name = 'cart_add'
+     WHERE e.name = 'cart_add' AND e.user_id > 0
        AND e.created_at > datetime('now', ?)
        AND NOT EXISTS (SELECT 1 FROM orders o WHERE o.user_id = e.user_id AND o.created_at >= e.created_at)
        AND NOT EXISTS (SELECT 1 FROM reminders r WHERE r.user_id = e.user_id AND r.sent_at > datetime('now', '-14 days'))

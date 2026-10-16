@@ -67,6 +67,8 @@ const EVENTS = new Set([
   "quiz_more", "cart_add", "cart_open", "checkout_open", "order_error",
 ]);
 
+const SITE_EVENTS = new Set([...EVENTS, "order_sent", "login", "contact_choice", "showcase"]);
+
 function html(res, body) {
   res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" });
   res.end(body);
@@ -208,6 +210,16 @@ async function api(req, res, url) {
     }
   }
 
+  // Обезличенная статистика сайта: где посетители «отваливаются» (без входа — по случайному номеру браузера)
+  if (req.method === "POST" && url.pathname === "/api/site-event") {
+    const body = await readJson(req, 1000);
+    const v = String(body.v || "");
+    if (!/^[0-9a-f]{16}$/.test(v) || !SITE_EVENTS.has(body.name)) return send(res, 204, {});
+    const uid = -parseInt(v.slice(0, 13), 16) || -1;
+    if (store.recentEventCount(uid, 60) < 300) store.logEvent(uid, body.name, body.data ?? "", "site");
+    return send(res, 204, {});
+  }
+
   // Вход на сайте через бота: код → ссылка на бота → «Да, войти» → сессия
   if (req.method === "POST" && url.pathname === "/api/login-link") {
     if (!loginRateOk(clientIp(req))) return send(res, 429, { error: "Слишком много попыток. Подождите немного." });
@@ -240,7 +252,7 @@ async function api(req, res, url) {
   if (req.method === "POST" && url.pathname === "/api/event") {
     const body = await readJson(req, 2000);
     if (!EVENTS.has(body.name)) return send(res, 400, { error: "event" });
-    if (store.recentEventCount(user.id, 60) < 300) store.logEvent(user.id, body.name, body.data ?? "");
+    if (store.recentEventCount(user.id, 60) < 300) store.logEvent(user.id, body.name, body.data ?? "", req.headers["x-telegram-init-data"] ? "tg" : "site");
     return send(res, 204, {});
   }
 

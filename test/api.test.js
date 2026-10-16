@@ -487,3 +487,18 @@ test("вход через бота: код → подтверждение в б�
   const me = await fetch(base + "/api/orders", { headers: { "x-site-auth": ok.token } });
   assert.equal(me.status, 200);
 });
+
+test("статистика сайта без входа: события по номеру браузера, отдельный блок в /stats", async () => {
+  const { _test } = await import("../src/bot.js");
+  const ev = (v, name, data = "") => fetch(base + "/api/site-event", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ v, name, data }) });
+  for (const v of ["a1b2c3d4e5f60718", "0f1e2d3c4b5a6978"]) { await ev(v, "app_open"); await ev(v, "tea_open", 1); }
+  await ev("a1b2c3d4e5f60718", "cart_add", "Габа · 50 г");
+  await ev("a1b2c3d4e5f60718", "checkout_open");
+  assert.equal((await ev("bad", "app_open")).status, 204, "мусор молча игнорируем");
+  await ev("0f1e2d3c4b5a6978", "rm -rf");
+  const f = store.funnel(30, "site");
+  assert.equal(f.app_open, 2); assert.equal(f.cart_add, 1); assert.equal(f.checkout_open, 1); assert.equal(f["rm -rf"], undefined);
+  const { text } = _test.statsText(30);
+  assert.match(text, /🌐 Сайт/); assert.match(text, /Начали оформление — 1/);
+  assert.ok(!store.abandonedCarts(30).some((c) => c.user_id < 0), "посетителям сайта напоминания не шлём");
+});

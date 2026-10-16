@@ -92,8 +92,21 @@ window.onTelegramAuth = async (user, done = null) => {
   } catch (err) { toast(err.message); }
 };
 // Аналитика: отмечаем шаги, чтобы видеть, где люди уходят. Только в Telegram, тихо, без ожидания ответа.
+// Номер браузера для обезличенной статистики сайта (без имени и телефона)
+function visitorId() {
+  try {
+    let v = localStorage.getItem("vid");
+    if (!/^[0-9a-f]{16}$/.test(v || "")) { v = [...crypto.getRandomValues(new Uint8Array(8))].map((b) => b.toString(16).padStart(2, "0")).join(""); localStorage.setItem("vid", v); }
+    return v;
+  } catch { return ""; }
+}
 function track(name, data = "") {
-  if (!authed()) return;
+  if (!authed()) {
+    if (inTelegram()) return;
+    const v = visitorId(); if (!v) return;
+    try { fetch("/api/site-event", { method: "POST", keepalive: true, headers: { "content-type": "application/json" }, body: JSON.stringify({ v, name, data: String(data) }) }).catch(() => {}); } catch {}
+    return;
+  }
   try { fetch("/api/event", { method: "POST", keepalive: true, headers: { "content-type": "application/json", "x-telegram-init-data": tgApp?.initData || "", "x-site-auth": inTelegram() ? "" : S.auth.token }, body: JSON.stringify({ name, data: String(data) }) }).catch(() => {}); } catch {}
 }
 
@@ -923,7 +936,7 @@ function renderCheckout(total) {
         $("#view").innerHTML = `<div class="empty"><h2>Заказ №${order.id} отправлен 🍵</h2><p>Проверим наличие и напишем вам в Telegram, в чате с ботом @${BOT_NAME}. Как только подтвердим, придут сумма и реквизиты для оплаты.</p>
           <a class="btn" href="#orders">Мои заказы</a></div>`;
       } else {
-        saveSiteOrder(order, token);
+        saveSiteOrder(order, token); track("order_sent", order.id);
         const how = { tg: "в Telegram", wa: "в WhatsApp", call: "по телефону" }[data.contact] || "по телефону";
         const tg = data.contact === "tg";
         $("#view").innerHTML = `<div class="empty"><h2>Заказ №${order.id} отправлен 🍵</h2>

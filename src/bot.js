@@ -214,17 +214,25 @@ function ago(sqlTime) {
   return h < 1 ? "только что" : h < 24 ? `${h} ч назад` : `${Math.round(h / 24)} дн. назад`;
 }
 export function statsText(days) {
-  const f = store.funnel(days);
-  const n = (k) => f[k] || 0;
-  const lines = [`📊 <b>Статистика за ${days} дн.</b>`, "", "<b>Путь покупателя</b> (разные люди):"];
-  lines.push(`Открыли магазин — ${n("app_open")}`);
-  lines.push(`Начали подбор — ${n("quiz_start")}, дошли до конца — ${n("quiz_done")}${pct(n("quiz_done"), n("quiz_start"))}`);
-  lines.push(`Открыли наборы — ${n("sets_open")}, свой набор — ${n("builder_open")}`);
-  lines.push(`Положили в корзину — ${n("cart_add")}`);
-  lines.push(`Начали оформление — ${n("checkout_open")}${pct(n("checkout_open"), n("cart_add"))}`);
-  lines.push(`Отправили заказ — ${n("order_sent")}${pct(n("order_sent"), n("cart_add"))}`);
-  if (n("wholesale")) lines.push(`Нажали «Я оптовик» — ${n("wholesale")}`);
-  if (n("order_error")) lines.push(`Ошибка при оформлении — ${n("order_error")} (стоит посмотреть, что не так)`);
+  const lines = [`📊 <b>Статистика за ${days} дн.</b>`];
+  const block = (title, src) => {
+    const f = store.funnel(days, src);
+    const n = (k) => f[k] || 0;
+    if (!n("app_open") && !n("cart_add")) { lines.push("", `<b>${title}</b>: заходов пока нет.`); return; }
+    lines.push("", `<b>${title}</b> (разные люди):`);
+    lines.push(`Открыли — ${n("app_open")}`);
+    lines.push(`Смотрели чай — ${n("tea_open")}${pct(n("tea_open"), n("app_open"))}`);
+    lines.push(`Начали подбор — ${n("quiz_start")}, дошли до конца — ${n("quiz_done")}${pct(n("quiz_done"), n("quiz_start"))}`);
+    lines.push(`Открыли наборы — ${n("sets_open")}`);
+    lines.push(`Положили в корзину — ${n("cart_add")}${pct(n("cart_add"), n("app_open"))}`);
+    lines.push(`Открыли корзину — ${n("cart_open")}`);
+    lines.push(`Начали оформление — ${n("checkout_open")}${pct(n("checkout_open"), n("cart_add"))}`);
+    lines.push(`Отправили заказ — ${n("order_sent")}${pct(n("order_sent"), n("checkout_open"))}`);
+    if (n("order_error")) lines.push(`Ошибка при оформлении — ${n("order_error")} (стоит посмотреть, что не так)`);
+    if (n("wholesale")) lines.push(`Нажали «Я оптовик» — ${n("wholesale")}`);
+  };
+  block("📱 Мини-приложение в Telegram", "tg");
+  block("🌐 Сайт", "site");
   const drop = store.quizDropoff(days);
   if (drop.length) {
     lines.push("", "<b>Где бросили подбор:</b>");

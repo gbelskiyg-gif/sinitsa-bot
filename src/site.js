@@ -146,7 +146,8 @@ function articleCard(a) {
   return `<a class="post" href="/blog/${a.slug}">
     <img src="${esc(a.cover)}" alt="${esc(a.h1)}" loading="lazy" width="600" height="400">
     <span class="post-b">${a.region ? `<span class="tag">${esc(a.region)}</span>` : `<span class="tag">Обзор</span>`}
-    <h3>${esc(a.h1)}</h3><span class="muted small">${esc(a.description)}</span></span></a>`;
+    <h3>${esc(a.h1)}</h3><span class="muted small">${esc(a.description)}</span>
+    <span class="btn sm ghost post-go">Читать статью →</span></span></a>`;
 }
 
 // ---------- главная = магазин ----------
@@ -212,7 +213,7 @@ ${ld.map((x) => `<script type="application/ld+json">${JSON.stringify(x).replace(
   <p>🎁 От ${rub(FREE_DELIVERY_FROM)} доставка бесплатная любой службой. Отправляем по всей России. Чай собираем под заказ, оплата — переводом после подтверждения. <a href="/terms">Условия доставки и возврата</a>.</p>
 </section>
 <section><div class="s-head"><h2>О чае: где он растёт</h2><a href="/blog">Все статьи →</a></div>
-  <div class="s-posts">${ARTICLES.slice(0, 3).map((a) => `<a class="s-post" href="/blog/${a.slug}"><img src="${esc(a.cover)}" alt="${esc(a.h1)}" loading="lazy" width="600" height="400"><span><b>${esc(a.h1)}</b><small class="muted">${esc(a.description)}</small></span></a>`).join("")}</div>
+  <div class="s-posts">${ARTICLES.slice(0, 3).map((a) => `<a class="s-post" href="/blog/${a.slug}"><img src="${esc(a.cover)}" alt="${esc(a.h1)}" loading="lazy" width="600" height="400"><span><b>${esc(a.h1)}</b><small class="muted">${esc(a.description)}</small><em class="s-post-go">Читать →</em></span></a>`).join("")}</div>
 </section>
 <section class="s-faq"><h2>Частые вопросы</h2>
   ${FAQ.map(([q, a]) => `<details><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join("")}

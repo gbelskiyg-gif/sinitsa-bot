@@ -75,7 +75,9 @@ p { margin: 0 0 14px; }
 .post { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 18px; overflow: hidden; background: var(--card); text-decoration: none; color: var(--ink); }
 .post:hover { border-color: var(--gold); }
 .post img { aspect-ratio: 3 / 2; object-fit: cover; width: 100%; }
-.post-b { padding: 14px 16px 18px; display: flex; flex-direction: column; gap: 4px; }
+.post-b { padding: 14px 16px 18px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.post-go { align-self: flex-start; margin-top: auto; transform: translateY(8px); }
+.post:hover .post-go { border-color: var(--gold); color: var(--gold); }
 .post h3 { margin: 0; }
 
 .quiz-cta { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 28px; margin: 24px 0; border-radius: 22px;

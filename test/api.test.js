@@ -470,3 +470,18 @@ test("почта: обязательна для WhatsApp и звонка, про
   store.anonymizeOldOrders(365);
   assert.equal(store.getOrder(o.id).email, "", "почта удаляется вместе с телефоном");
 });
+
+test("вход через бота: код → подтверждение в боте → сессия, код одноразовый", async () => {
+  const { confirmLoginCode } = await import("../src/loginlink.js");
+  const r = await fetch(base + "/api/login-link", { method: "POST" }).then((x) => x.json());
+  assert.match(r.code, /^[0-9a-f]{32}$/);
+  assert.equal(r.url, `https://t.me/sinitsa_chai_bot?start=login_${r.code}`);
+  const get = () => fetch(`${base}/api/login-link/${r.code}`).then((x) => x.json());
+  assert.equal((await get()).status, "pending");
+  assert.ok(confirmLoginCode(r.code, { id: 770011, first_name: "Бот" }));
+  const ok = await get();
+  assert.equal(ok.status, "ok"); assert.ok(ok.token); assert.equal(ok.user.id, 770011);
+  assert.equal((await get()).status, "expired", "второй раз забрать нельзя");
+  const me = await fetch(base + "/api/orders", { headers: { "x-site-auth": ok.token } });
+  assert.equal(me.status, 200);
+});

@@ -2,6 +2,7 @@ import { ADMIN_IDS, ORDERS_CHAT_ID, PUBLIC_URL, isAdmin, notifyChats } from "./c
 import { DELIVERY_INFO, STATUS, TEAS, findTea, rub } from "./catalog.js";
 import * as store from "./db.js";
 import crypto from "node:crypto";
+import { confirmLoginCode, loginCodeValid } from "./loginlink.js";
 import { adminKeyboard, canMove, claimPaid, getPayment, linkedText, notifyCustomer, orderText, refreshAdminMessages, rejectPaid, siteStartPayload } from "./orders.js";
 import { esc, poll, tg, tgSafe } from "./telegram.js";
 import { BTN, MENU_VERSION, menuKeyboard } from "./menu.js";
@@ -110,6 +111,21 @@ async function onStart(msg) {
   const chat = msg.chat.id;
   const payload = String(msg.text || "").split(/\s+/)[1] || "";
   if (payload.startsWith("o") && (await linkSiteOrder(msg, payload))) { store.markMenu(msg.from.id, MENU_VERSION); return; }
+  // Вход на сайт через бота
+  const lm = /^login_([0-9a-f]{32})$/.exec(payload);
+  if (lm) {
+    if (!loginCodeValid(lm[1])) {
+      await tgSafe("sendMessage", { chat_id: chat, text: "Ссылка для входа устарела. Вернитесь на сайт и нажмите «Войти через Telegram» ещё раз." });
+      return;
+    }
+    await tgSafe("sendMessage", {
+      chat_id: chat,
+      text: "Войти на сайт «Синицы» с этим аккаунтом Telegram?\n\nСайт увидит только ваше имя и ник. Заказы будут видны с любого устройства, а статусы — приходить сюда.",
+      reply_markup: { inline_keyboard: [[{ text: "✅ Да, войти", callback_data: `login:${lm[1]}` }], [{ text: "Отмена", callback_data: "login:no" }]] },
+    });
+    store.markMenu(msg.from.id, MENU_VERSION);
+    return;
+  }
   const photo = await tgSafe("sendPhoto", {
     chat_id: chat,
     photo: `${PUBLIC_URL}/emblem.jpg`,
@@ -411,6 +427,17 @@ async function onCallback(q) {
       return answer("Спасибо!");
     }
     return answer();
+  }
+
+  // Вход на сайт через бота
+  if (data.startsWith("login:")) {
+    const code = data.slice(6);
+    await tgSafe("editMessageReplyMarkup", { chat_id: chat, message_id: q.message.message_id, reply_markup: { inline_keyboard: [] } });
+    if (code === "no") { await tgSafe("sendMessage", { chat_id: chat, text: "Хорошо, вход отменён." }); return answer(); }
+    store.upsertUser(q.from);
+    if (!confirmLoginCode(code, q.from)) { await tgSafe("sendMessage", { chat_id: chat, text: "Ссылка для входа устарела. Нажмите «Войти через Telegram» на сайте ещё раз." }); return answer(); }
+    await tgSafe("sendMessage", { chat_id: chat, text: "Готово, вы вошли ✅ Вернитесь на сайт — страница обновится сама.", reply_markup: menuKeyboard(q.from.id) });
+    return answer("Вы вошли");
   }
 
   // Покупатель: «Я оплатил»

@@ -49,19 +49,41 @@ function updateAccount() {
   a.textContent = S.auth?.user ? `👤 ${S.auth.user.first_name || "Мой профиль"}` : "Войти";
 }
 const loginBox = (text) => `<div class="login-box site-only"><div><b>Войдите через Telegram</b><small>${text}</small></div><div class="tg-login"></div></div>`;
-// Кнопку Telegram вставляем только туда, где она видна (скрипт Telegram рисует её сам)
-function mountLogin() {
-  document.querySelectorAll(".tg-login:empty").forEach((el) => {
-    const sc = document.createElement("script");
-    sc.async = true;
-    sc.src = "https://telegram.org/js/telegram-widget.js?22";
-    Object.assign(sc.dataset, { telegramLogin: BOT_NAME, size: "large", radius: "20", onauth: "onTelegramAuth(user)", requestAccess: "write" });
-    el.appendChild(sc);
-  });
+// Вход через бота: кнопка открывает @бот по одноразовой ссылке, покупатель жмёт «Да, войти» — сайт входит сам
+const LOGIN = { code: "", url: "", at: 0, timer: null };
+async function loginLink(fresh = false) {
+  if (!fresh && LOGIN.code && Date.now() - LOGIN.at < 8 * 60 * 1000) return LOGIN;
+  const r = await api("/api/login-link", { method: "POST" });
+  Object.assign(LOGIN, { code: r.code, url: r.url, at: Date.now() });
+  return LOGIN;
 }
-window.onTelegramAuth = async (user) => {
+function mountLogin() {
+  const boxes = [...document.querySelectorAll(".tg-login:empty")];
+  if (!boxes.length) return;
+  loginLink().then((L) => boxes.forEach((el) => {
+    el.innerHTML = `<a class="btn tg-btn" href="${esc(L.url)}" target="_blank" rel="noopener" data-login>✈️ Войти через Telegram</a><small class="login-wait" hidden>Подтвердите вход в боте — эта страница обновится сама</small>`;
+  })).catch(() => boxes.forEach((el) => (el.innerHTML = `<small class="muted">Вход сейчас недоступен, попробуйте позже.</small>`)));
+}
+function pollLogin() {
+  clearInterval(LOGIN.timer);
+  document.querySelectorAll(".login-wait").forEach((x) => (x.hidden = false));
+  const code = LOGIN.code, started = Date.now();
+  const check = async () => {
+    if (Date.now() - started > 10 * 60 * 1000) return clearInterval(LOGIN.timer);
+    try {
+      const r = await api(`/api/login-link/${code}`);
+      if (r.status === "ok") { clearInterval(LOGIN.timer); LOGIN.code = ""; await onTelegramAuth(null, r); }
+      else if (r.status === "expired") { clearInterval(LOGIN.timer); LOGIN.code = ""; document.querySelectorAll(".tg-login").forEach((x) => (x.innerHTML = "")); mountLogin(); }
+    } catch {}
+  };
+  LOGIN.timer = setInterval(check, 2000);
+  LOGIN.check = check;
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden && LOGIN.timer) LOGIN.check?.(); });
+document.addEventListener("click", (e) => { if (e.target.closest("[data-login]")) pollLogin(); });
+window.onTelegramAuth = async (user, done = null) => {
   try {
-    const r = await api("/api/login", { method: "POST", body: JSON.stringify(user) });
+    const r = done || await api("/api/login", { method: "POST", body: JSON.stringify(user) });
     S.auth = { token: r.token, user: r.user }; saveAuth();
     await claimLocalOrders();
     api("/api/me").then((me) => (S.me = me)).catch(() => {});
@@ -703,7 +725,7 @@ function renderCart() {
         ? `<p class="promo-ok">✓ Промокод ${esc(S.promo.shown || S.promo.code)} применён: ${esc(S.promo.label)}</p><div class="line" style="border:0"><div class="muted">Скидка по промокоду</div><div class="sum">−${rub(promoOff)}</div></div>${S.promo.note ? `<p class="muted small" style="margin:0;flex-basis:100%">${esc(S.promo.note)}</p>` : ""}`
         : `<p class="muted small" style="margin:0">Промокод ${esc(S.promo.code)} не складывается со скидкой набора. Он сработает на чаи, которые вы добавите отдельно.</p>`) +
         `<button class="link" id="promo-off">Убрать промокод</button>`
-      : `<label class="search"><input id="promo" placeholder="Промокод, например СИНИЦА10" autocomplete="off" autocapitalize="characters" enterkeyhint="done" value="${esc(S.promoDraft || "")}"></label><button class="btn ghost" id="promo-go">Применить</button>`}
+      : `<label class="search"><input id="promo" placeholder="Промокод" autocomplete="off" autocapitalize="characters" enterkeyhint="done" value="${esc(S.promoDraft || "")}"></label><button class="btn ghost" id="promo-go">Применить</button>`}
       <p class="error" id="promo-err"></p></div>`}
     <div class="total"><span>Итого</span><span>${rub(total)}</span></div>
     ${S.freeFrom ? `<p class="free-left">${total >= S.freeFrom ? "🎁 Доставка бесплатная — любой службой" : `🚚 До бесплатной доставки осталось ${rub(S.freeFrom - total)}`}</p>` : ""}

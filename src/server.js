@@ -18,6 +18,8 @@ import {
   refreshAdminMessages,
 } from "./orders.js";
 import { tgSafe } from "./telegram.js";
+import { createLoginCode, takeLoginCode } from "./loginlink.js";
+const BOT_USERNAME = process.env.BOT_USERNAME || "sinitsa_chai_bot";
 import { consentPage, privacyPage, termsPage } from "./legal.js";
 import { menuKeyboard } from "./menu.js";
 import { requestWholesale } from "./wholesale.js";
@@ -111,6 +113,15 @@ const siteHits = new Map();
 function clientIp(req) {
   return String(req.headers["x-forwarded-for"] || "").split(",")[0].trim() || req.socket.remoteAddress || "";
 }
+const loginHits = new Map();
+function loginRateOk(ip) {
+  const now = Date.now();
+  const list = (loginHits.get(ip) || []).filter((t) => now - t < 600_000);
+  if (list.length >= 30) return false;
+  list.push(now); loginHits.set(ip, list);
+  if (loginHits.size > 5000) loginHits.clear();
+  return true;
+}
 function siteRateOk(ip) {
   const now = Date.now();
   const list = (siteHits.get(ip) || []).filter((t) => now - t < 3600_000);
@@ -195,6 +206,21 @@ async function api(req, res, url) {
       if (!r.ok) return send(res, 409, { error: r.error });
       return send(res, 200, { order: publicOrder(r.order) });
     }
+  }
+
+  // Вход на сайте через бота: код → ссылка на бота → «Да, войти» → сессия
+  if (req.method === "POST" && url.pathname === "/api/login-link") {
+    if (!loginRateOk(clientIp(req))) return send(res, 429, { error: "Слишком много попыток. Подождите немного." });
+    const code = createLoginCode();
+    if (!code) return send(res, 503, { error: "Попробуйте через минуту." });
+    return send(res, 200, { code, url: `https://t.me/${BOT_USERNAME}?start=login_${code}` });
+  }
+  const ll = url.pathname.match(/^\/api\/login-link\/([0-9a-f]{32})$/);
+  if (req.method === "GET" && ll) {
+    const r = takeLoginCode(ll[1]);
+    if (r.status !== "ok") return send(res, 200, { status: r.status });
+    store.upsertUser(r.user);
+    return send(res, 200, { status: "ok", token: signSession(r.user, BOT_TOKEN), user: r.user });
   }
 
   // Вход на сайте через Telegram: проверяем подпись и выдаём сессию

@@ -102,3 +102,6 @@ html:not(.tg) .top .site-acc { font-size: 14px; text-decoration: none; }
 .tg-login { min-height: 40px; }
 /* без белой подложки: у тёмной страницы и светлого окна Telegram разная цветовая схема — уравниваем */
 .tg-login iframe { color-scheme: light; background: transparent !important; }
+
+.tg-login { display: flex; flex-direction: column; gap: 6px; }
+.login-wait { color: var(--gold); font-size: 12px; }

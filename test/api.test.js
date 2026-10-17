@@ -60,7 +60,7 @@ test("заказы без подписи запрещены", async () => {
 });
 
 test("сумма считается по каталогу, а не по клиенту; набор даёт скидку 10%", async () => {
-  const items = [1, 9, 13].map((id) => ({ teaId: id, pack: "20", qty: 1, set: "s1", price: 1 }));
+  const items = [1, 9, 14].map((id) => ({ teaId: id, pack: "20", qty: 1, set: "s1", price: 1 }));
   const r = await call("/api/orders", { method: "POST", body: JSON.stringify({ items, name: "Тест", phone: "+7 900 123-45-67", delivery: "pickup" }) });
   assert.equal(r.status, 201, JSON.stringify(r.body));
   const sum = 690 + 290 + 290;
@@ -120,7 +120,7 @@ test("готовый набор из 5 чаёв по 20 г получает ск
 
 test("промокод: работает на первый заказ, не работает на второй, неверный код — ошибка", async () => {
   const u = signInitData({ id: 777 }, TOKEN);
-  const body = (promo) => JSON.stringify({ items: [{ teaId: 13, pack: "50", qty: 2 }], name: "П", phone: "89005550101", delivery: "pickup", promo });
+  const body = (promo) => JSON.stringify({ items: [{ teaId: 14, pack: "50", qty: 2 }], name: "П", phone: "89005550101", delivery: "pickup", promo });
   let r = await call("/api/promo?code=синица10", { init: u });
   assert.equal(r.body.ok, true);
   r = await call("/api/orders", { method: "POST", init: u, body: body("НЕТТАКОГО") });
@@ -227,18 +227,18 @@ test("доставка: фиксированная цена входит в ит
   assert.equal(deliveryCost("post", FREE_DELIVERY_FROM - 10).cost, 450);
   assert.equal(deliveryCost("meet", 100), null, "личной встречи больше нет");
   const send = (id, items, delivery) => call("/api/orders", { method: "POST", init: signInitData({ id }, TOKEN), body: JSON.stringify(withConsent({ items, name: "Д", phone: "89001234567", delivery, address: "Москва, ул. Чайная, 1" })) });
-  let r = await send(801, [{ teaId: 13, pack: "50", qty: 1 }], "ozon");
+  let r = await send(801, [{ teaId: 14, pack: "50", qty: 1 }], "ozon");
   assert.equal(r.status, 201, JSON.stringify(r.body));
   assert.equal(r.body.order.delivery, "ozon");
   assert.equal(r.body.order.total, 590 + 290);
-  r = await send(802, [{ teaId: 13, pack: "100", qty: 4 }], "cdek");
+  r = await send(802, [{ teaId: 14, pack: "100", qty: 4 }], "cdek");
   assert.equal(r.body.order.total, 990 * 4);
 });
 
 test("оплата переводом: реквизиты в заказе, «Я оплатил», подтверждение продавцом", async () => {
   store.setSetting("payment", { phone: "+7 900 123-45-67", bank: "Т-Банк", name: "Александр Б." });
   const u = signInitData({ id: 901 }, TOKEN);
-  let r = await call("/api/orders", { method: "POST", init: u, body: JSON.stringify({ items: [{ teaId: 13, pack: "50", qty: 1 }], name: "О", phone: "89001234567", delivery: "yandex", address: "Москва, ПВЗ 1" }) });
+  let r = await call("/api/orders", { method: "POST", init: u, body: JSON.stringify({ items: [{ teaId: 14, pack: "50", qty: 1 }], name: "О", phone: "89001234567", delivery: "yandex", address: "Москва, ПВЗ 1" }) });
   const id = r.body.order.id;
   r = await call(`/api/orders/${id}/paid`, { method: "POST", init: u });
   assert.equal(r.status, 409, "новый заказ ещё не ждёт оплаты");

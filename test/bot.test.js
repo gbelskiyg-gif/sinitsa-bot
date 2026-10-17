@@ -38,7 +38,7 @@ test("продавец задаёт реквизиты в боте, покупа
   assert.deepEqual(store.getSetting("payment"), { phone: "+7 900 123-45-67", bank: "Т-Банк", name: "Александр Б." });
 
   const draft = buildOrder(
-    { items: [{ teaId: 13, pack: "50", qty: 1 }], name: "Покупатель", phone: "89001234567", delivery: "ozon", address: "Москва, ПВЗ", consent: true, terms: true },
+    { items: [{ teaId: 14, pack: "50", qty: 1 }], name: "Покупатель", phone: "89001234567", delivery: "ozon", address: "Москва, ПВЗ", consent: true, terms: true },
     { id: 500 },
     { isFirstOrder: false }
   );

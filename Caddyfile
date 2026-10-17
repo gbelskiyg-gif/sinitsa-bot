@@ -1,0 +1,12 @@
+# Caddy сам выпускает HTTPS-сертификаты для всех адресов ниже.
+# DOMAIN — основной адрес сайта (из .env).
+{$DOMAIN} {
+	encode gzip
+	reverse_proxy app:3000
+}
+
+# Старые и дополнительные адреса (www, прежний sslip.io) навсегда перенаправляем на основной,
+# чтобы работали старые ссылки и кнопки в чатах. Список — REDIRECT_FROM в .env через пробел.
+{$REDIRECT_FROM} {
+	redir https://{$DOMAIN}{uri} permanent
+}

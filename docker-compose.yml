@@ -1,4 +1,4 @@
-# Запуск на своём сервере: бот + Caddy (сам выпускает HTTPS-сертификат для DOMAIN)
+# Запуск на своём сервере: бот + Caddy (сам выпускает HTTPS-сертификаты, настройки — Caddyfile)
 services:
   app:
     build: .
@@ -15,8 +15,12 @@ services:
     ports:
       - "80:80"
       - "443:443"
-    command: caddy reverse-proxy --from ${DOMAIN} --to app:3000
+    environment:
+      DOMAIN: ${DOMAIN}
+      # куда ещё могут зайти (www, старый адрес) — всё перенаправляется на DOMAIN
+      REDIRECT_FROM: ${REDIRECT_FROM:-www.${DOMAIN}}
     volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
     depends_on:
       - app

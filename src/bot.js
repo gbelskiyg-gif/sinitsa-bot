@@ -9,6 +9,13 @@ import { BTN, MENU_VERSION, menuKeyboard } from "./menu.js";
 import { requestWholesale } from "./wholesale.js";
 import { sheetFormula } from "./export.js";
 
+// «37 чаёв», «31 чай», «32 чая» — число берём из каталога, чтобы не устаревало
+function teasCount(n = TEAS.length) {
+  const a = n % 10, b = n % 100;
+  const w = a === 1 && b !== 11 ? "чай" : a >= 2 && a <= 4 && (b < 12 || b > 14) ? "чая" : "чаёв";
+  return `${n} ${w}`;
+}
+
 // Раздел передаём через ?tab=, потому что после # Telegram дописывает свои параметры запуска
 const shopButton = (text, hash = "") => ({
   text,
@@ -322,7 +329,7 @@ async function onMessage(msg) {
   if (text === BTN.quiz)
     return tgSafe("sendMessage", { chat_id: msg.chat.id, text: "Шесть коротких вопросов — и мы предложим три чая под ваш вкус, себе или в подарок.", reply_markup: openButton("🍵 Начать подбор", "#quiz") });
   if (text === BTN.shop)
-    return tgSafe("sendMessage", { chat_id: msg.chat.id, text: "29 чаёв и наборы по 20, 50 и 100 г. Каждый чай можно взять на пробу.", reply_markup: openButton("🛍 Открыть каталог", "") });
+    return tgSafe("sendMessage", { chat_id: msg.chat.id, text: `${teasCount()} и наборы по 20, 50 и 100 г. Каждый чай можно взять на пробу.`, reply_markup: openButton("🛍 Открыть каталог", "") });
   if (text === BTN.orders) return myOrders(msg);
   if (text === BTN.delivery || text.startsWith("/delivery")) return tgSafe("sendMessage", { chat_id: msg.chat.id, text: DELIVERY_INFO, reply_markup: menuKeyboard(from.id) });
   if (text === BTN.about) return tgSafe("sendMessage", { chat_id: msg.chat.id, text: ABOUT, reply_markup: menuKeyboard(from.id) });

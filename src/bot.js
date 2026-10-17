@@ -1,9 +1,9 @@
-import { ADMIN_IDS, ORDERS_CHAT_ID, PUBLIC_URL, isAdmin, notifyChats } from "./config.js";
+import { ADMIN_IDS, LEGAL, ORDERS_CHAT_ID, PUBLIC_URL, isAdmin, notifyChats } from "./config.js";
 import { DELIVERY_INFO, STATUS, TEAS, findTea, rub } from "./catalog.js";
 import * as store from "./db.js";
 import crypto from "node:crypto";
 import { confirmLoginCode, loginCodeValid } from "./loginlink.js";
-import { adminKeyboard, canMove, claimPaid, getPayment, linkedText, notifyCustomer, orderText, refreshAdminMessages, rejectPaid, siteStartPayload } from "./orders.js";
+import { accountValid, isAccount, payLines, adminKeyboard, canMove, claimPaid, getPayment, linkedText, notifyCustomer, orderText, refreshAdminMessages, rejectPaid, siteStartPayload } from "./orders.js";
 import { esc, poll, tg, tgSafe } from "./telegram.js";
 import { BTN, MENU_VERSION, menuKeyboard } from "./menu.js";
 import { requestWholesale } from "./wholesale.js";
@@ -166,16 +166,42 @@ async function sendMenuToOldUsers() {
 const awaitingPayment = new Set();
 function paymentInfo() {
   const p = getPayment();
+  if (isAccount(p)) return `Сейчас покупатели видят:\n${payLines(p, { id: "N", total: 0 }).join("\n")}\n\n🔳 На сайте и в мини-приложении — QR-код с суммой заказа: приложение банка само заполнит реквизиты.`;
   return p ? `Сейчас покупатели видят:\n📱 ${p.phone}\n🏦 ${p.bank}\n👤 ${p.name}${p.link ? `\n🔗 ${p.link} (на сайте — QR-код)` : "\n🔗 ссылки на оплату нет — QR-код на сайте не показывается"}` : "Реквизиты ещё не заданы — покупателям пишется, что продавец пришлёт их в чате.";
 }
 async function askPayment(msg) {
   awaitingPayment.add(msg.from.id);
   return tgSafe("sendMessage", {
     chat_id: msg.chat.id,
-    text: `💳 Реквизиты для оплаты переводом\n\n${paymentInfo()}\n\nЧтобы изменить, отправьте одним сообщением три строки:\n1) номер телефона для СБП\n2) банк\n3) получатель (имя и первая буква фамилии)\n4) по желанию — ссылка на оплату из приложения банка (например, «Ссылка для перевода» в Т-Банке). Из неё сайт сделает QR-код.\n\nНапример:\n+7 900 123-45-67\nТ-Банк\nАлександр Б.\nhttps://tbank.ru/cf/…\n\nОтмена — /cancel`,
+    text: `💳 Реквизиты для оплаты переводом\n\n${paymentInfo()}\n\nРасчётный счёт ИП (рекомендуем): скопируйте реквизиты счёта в приложении банка (кнопка «копировать» в разделе «Реквизиты счёта») и вставьте сюда одним сообщением. Нужны расчётный счёт, БИК, корр. счёт и название банка. Получатель и ИНН возьмём из данных ИП: ${LEGAL.name}, ИНН ${LEGAL.inn}.\n\nИли СБП по телефону — одним сообщением три строки:\n1) номер телефона для СБП\n2) банк\n3) получатель (имя и первая буква фамилии)\n4) по желанию — ссылка на оплату из приложения банка (например, «Ссылка для перевода» в Т-Банке). Из неё сайт сделает QR-код.\n\nНапример:\n+7 900 123-45-67\nТ-Банк\nАлександр Б.\nhttps://tbank.ru/cf/…\n\nОтмена — /cancel`,
   });
 }
+/** Реквизиты счёта из текста, скопированного в банке: счёт 408…, БИК 04…, корр. счёт 301…, банк. */
+const BANKS = { "044525225": ["ПАО Сбербанк", "30101810400000000225"], "044525593": ["АО «Альфа-Банк»", "30101810200000000593"], "044525974": ["АО «ТБанк»", "30101810145250000974"] };
+export function parseAccount(text) {
+  // цифры в банке часто разбиты пробелами: «40802 810 1 0000 0012345»
+  const num = (start, n) => {
+    const m = text.match(new RegExp(`(?<!\\d)${[...start].join("[ \\u00a0]?")}(?:[ \\u00a0]?\\d){${n - start.length}}(?!\\d)`));
+    return m ? m[0].replace(/\D/g, "") : "";
+  };
+  const acc = num("408", 20) || num("407", 20);
+  if (!acc) return null;
+  const bic = num("04", 9);
+  const corr = num("301", 20) || BANKS[bic]?.[1] || "";
+  const bankLine = text.split("\n").map((s) => s.trim()).find((s) => /банк/i.test(s) && !/^получатель|БИК|корр/i.test(s) && !/\d{5}/.test(s));
+  const bank = (bankLine || "").replace(/^(наименование|банк(\s+получателя)?)\s*:?\s*/i, "").slice(0, 80) || BANKS[bic]?.[0] || "";
+  return { acc, bic, corr, bank };
+}
 async function savePayment(msg) {
+  const a = parseAccount(msg.text);
+  if (a) {
+    const miss = [!a.bic && "БИК", !a.corr && "корр. счёт", !a.bank && "название банка"].filter(Boolean);
+    if (miss.length) return tgSafe("sendMessage", { chat_id: msg.chat.id, text: `Не хватает: ${miss.join(", ")}. Пришлите реквизиты целиком или /cancel.` });
+    if (!accountValid(a.acc, a.bic)) return tgSafe("sendMessage", { chat_id: msg.chat.id, text: "Номер счёта не сходится с БИК — похоже, опечатка. Проверьте и пришлите ещё раз или /cancel." });
+    store.setSetting("payment", { type: "account", name: LEGAL.name, inn: LEGAL.inn, ...a });
+    awaitingPayment.delete(msg.from.id);
+    return tgSafe("sendMessage", { chat_id: msg.chat.id, text: `Сохранили ✅\n\n${paymentInfo()}\n\nТеперь, когда вы принимаете заказ, бот сам отправит покупателю сумму, реквизиты и кнопку «Я оплатил».`, reply_markup: menuKeyboard(msg.from.id) });
+  }
   const all = msg.text.split("\n").map((s) => s.trim()).filter(Boolean);
   const link = (all.find((s) => /^https:\/\/\S+$/.test(s)) || "").slice(0, 300);
   const [phone, bank, name] = all.filter((s) => s !== link);

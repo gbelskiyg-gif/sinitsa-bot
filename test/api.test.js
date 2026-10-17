@@ -502,3 +502,15 @@ test("статистика сайта без входа: события по н�
   assert.match(text, /🌐 Сайт/); assert.match(text, /Начали оформление — 1/);
   assert.ok(!store.abandonedCarts(30).some((c) => c.user_id < 0), "посетителям сайта напоминания не шлём");
 });
+
+test("оплата на расчётный счёт: QR по ГОСТ и проверка счёта", async () => {
+  const { accountQr, accountValid, payLines } = await import("../src/orders.js");
+  const p = { type: "account", name: "ИП Тестов Тест Тестович", inn: "771822694100", acc: "40802810100000012345", bic: "044525225", corr: "30101810400000000225", bank: "ПАО Сбербанк" };
+  assert.equal(accountValid(p.acc, p.bic), true);
+  assert.equal(accountValid("40802810100000012346", p.bic), false);
+  const qr = accountQr(p, { id: 7, total: 1290 });
+  assert.match(qr, /^ST00012\|Name=ИП Тестов/);
+  assert.match(qr, /\|Sum=129000\|/);
+  assert.match(qr, /Purpose=Оплата заказа №7/);
+  assert.ok(payLines(p, { id: 7, total: 1290 }).some((l) => l.includes("40802810100000012345")));
+});

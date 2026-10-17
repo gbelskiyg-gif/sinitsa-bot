@@ -164,11 +164,38 @@ export function adminKeyboard(o) {
 // Реквизиты по умолчанию; кнопка «💳 Реквизиты» в боте их заменяет
 const DEFAULT_PAYMENT = { phone: "8 905 589 03 71", bank: "Т-Банк", name: "Александр Б." };
 export const getPayment = () => store.getSetting("payment", DEFAULT_PAYMENT);
+// Два вида реквизитов:
+//  • СБП по телефону: { phone, bank, name, link? }
+//  • расчётный счёт ИП: { type: "account", name, inn, acc, bic, corr, bank } — для него
+//    делаем QR-код по ГОСТ Р 56042 (ST00012): приложение банка само заполнит получателя, сумму и назначение.
+export const isAccount = (p) => p?.type === "account";
+export const payPurpose = (o) => `Оплата заказа №${o.id}. НДС не облагается`;
+/** Строка для QR-кода «оплата по реквизитам» с суммой заказа (в копейках). */
+export function accountQr(p, o) {
+  const f = (x) => String(x ?? "").replace(/[|\r\n]/g, " ").trim();
+  return ["ST00012", `Name=${f(p.name)}`, `PersonalAcc=${p.acc}`, `BankName=${f(p.bank)}`, `BIC=${p.bic}`, `CorrespAcc=${p.corr}`,
+    `PayeeINN=${p.inn}`, `Sum=${Math.round(o.total * 100)}`, `Purpose=${f(payPurpose(o))}`].join("|");
+}
+/** Контрольная цифра расчётного счёта (проверка по БИК) — ловит опечатки в номере. */
+export function accountValid(acc, bic) {
+  if (!/^\d{20}$/.test(acc) || !/^\d{9}$/.test(bic)) return false;
+  const s = bic.slice(-3) + acc;
+  let t = 0;
+  for (let i = 0; i < 23; i++) t += Number(s[i]) * [7, 1, 3][i % 3];
+  return t % 10 === 0;
+}
+/** Реквизиты текстом (для Telegram, WhatsApp и писем). */
+export function payLines(p, o) {
+  if (isAccount(p))
+    return [`Перевод на расчётный счёт:`, `👤 ${p.name}`, `ИНН ${p.inn}`, `Счёт ${p.acc}`, `🏦 ${p.bank}, БИК ${p.bic}`, `Корр. счёт ${p.corr}`, `Назначение: «${payPurpose(o)}»`];
+  return [`Перевод по СБП (по номеру телефона):`, `📱 ${p.phone}`, `🏦 ${p.bank}`, `👤 ${p.name}`, `В комментарии к переводу: «Заказ ${o.id}».`];
+}
 export function paymentText(o) {
   const p = getPayment();
   const head = `Заказ №${o.id} принят 🍵\nК оплате: ${rub(o.total)}`;
   if (!p) return `${head}\n\nРеквизиты для оплаты пришлём в этом чате.`;
-  return `${head}\n\nПереведите по СБП (по номеру телефона):\n📱 ${p.phone}\n🏦 ${p.bank}\n👤 ${p.name}\n\nВ комментарии к переводу укажите «Заказ ${o.id}». После перевода нажмите кнопку ниже — мы проверим и подтвердим.`;
+  const qr = isAccount(p) ? `\n\nПроще всего — QR-код: откройте «Мои заказы» в магазине (кнопка «Магазин» внизу), сохраните QR-код и загрузите его в приложении банка в разделе «Оплата по QR». Сумма и все реквизиты заполнятся сами.` : "";
+  return `${head}\n\n${payLines(p, o).join("\n")}${qr}\n\nПосле перевода нажмите кнопку ниже — мы проверим и подтвердим.`;
 }
 const payButton = (o) => ({ inline_keyboard: [[{ text: "✅ Я оплатил", callback_data: `paid:${o.id}` }]] });
 
@@ -247,7 +274,7 @@ export function sitePaymentMessage(o) {
   const lines = [`Здравствуйте! Это «Синица» 🍵`, `Заказ №${o.id} подтвердили. К оплате: ${rub(o.total)}.`];
   const url = siteOrderUrl(o);
   if (url) lines.push("", `Оплатить можно на странице заказа — там QR-код и реквизиты:`, url);
-  if (p) lines.push("", `Или переводом по СБП:`, `📱 ${p.phone}`, `🏦 ${p.bank}`, `👤 ${p.name}`, `В комментарии к переводу: «Заказ ${o.id}».`);
+  if (p) lines.push("", ...payLines(p, o));
   if (p?.link) lines.push("", `Ссылка на оплату: ${p.link}`);
   return lines.join("\n");
 }
@@ -302,13 +329,12 @@ export function orderEmail(o, event) {
     text = `Спасибо за заказ! Проверим наличие и пришлём на эту почту сумму и реквизиты для оплаты.`;
     html = `<p>${escH(text)}</p>`;
   } else if (event === "accepted") {
-    const pay = p ? [`Переведите ${rub(o.total)} по СБП:`, `📱 ${p.phone}`, `🏦 ${p.bank}`, `👤 ${p.name}`, `В комментарии к переводу: «Заказ ${o.id}».`] : [`Реквизиты для оплаты пришлём отдельно.`];
+    const pay = p ? payLines(p, o) : [`Реквизиты для оплаты пришлём отдельно.`];
     text = [`Заказ подтвердили, всё есть в наличии. К оплате: ${rub(o.total)}.`, "", ...pay, ...(p?.link ? ["", `Оплатить в приложении банка: ${p.link}`] : []), "", `QR-код для оплаты и кнопка «Я оплатил» — на странице заказа: ${page}`].join("\n");
     html = `<p>Заказ подтвердили, всё есть в наличии. К оплате: <b>${escH(rub(o.total))}</b>.</p>
 ${p ? `<div style="background:#faf6ef;border:1px solid #edbe82;border-radius:12px;padding:14px 16px;margin:12px 0">
-<div style="font-weight:bold;margin-bottom:6px">Перевод по СБП</div>
-<div>📱 ${escH(p.phone)}<br>🏦 ${escH(p.bank)}<br>👤 ${escH(p.name)}</div>
-<div style="color:#888;font-size:13px;margin-top:8px">В комментарии к переводу: «Заказ ${o.id}»</div>
+<div style="font-weight:bold;margin-bottom:6px">${escH(payLines(p, o)[0].replace(/:$/, ""))}</div>
+<div>${payLines(p, o).slice(1).map(escH).join("<br>")}</div>
 ${p.link ? `<p style="margin:12px 0 0"><a href="${escH(p.link)}" style="color:#7a4b8f;font-weight:bold">Открыть оплату в приложении банка →</a></p>` : ""}</div>` : ""}
 <p>QR-код для оплаты и кнопка «Я оплатил» — на странице заказа (кнопка ниже).</p>`;
   } else {
@@ -348,6 +374,7 @@ export function linkedText(o) {
   return `Готово! Заказ №${o.id} с сайта привязан к этому чату 🍵\nВсе новости по заказу будем присылать сюда.\n\n${now}`;
 }
 
+const withQr = (p, o) => (isAccount(p) ? { ...p, qr: accountQr(p, o), purpose: payPurpose(o) } : p);
 /** Публичное представление заказа для мини-приложения. */
 export function publicOrder(o) {
   return {
@@ -360,7 +387,7 @@ export function publicOrder(o) {
     delivery: o.delivery,
     canCancel: o.status === "new",
     // Ждёт оплаты: показываем реквизиты в «Моих заказах»
-    payment: o.status === "accepted" ? getPayment() : null,
+    payment: o.status === "accepted" ? withQr(getPayment(), o) : null,
     paidClaim: !!o.paid_claim_at,
     tgLinked: !!(o.user_id || o.tg_chat),
   };

@@ -967,6 +967,7 @@ function payHTML(o, siteToken = "") {
   if (o.status !== "accepted") return "";
   if (!o.payment) return `<p class="muted small" style="margin:8px 0 0">Реквизиты для оплаты пришлём ${siteToken ? "в выбранный мессенджер" : "в чате с ботом"}.</p>`;
   const p = o.payment;
+  if (p.type === "account") return payAccountHTML(o, p, siteToken);
   const qr = p.link ? qrSVG(p.link) : "";
   return `<div class="pay"><div class="eyebrow">К оплате ${rub(o.total)}</div>
     ${p.link ? `<div class="pay-qr">${qr ? `<div class="qr">${qr}</div>` : ""}<div><p class="small" style="margin:0 0 8px">Наведите камеру телефона на QR-код или нажмите кнопку — откроется перевод в приложении банка.</p>
@@ -977,6 +978,30 @@ function payHTML(o, siteToken = "") {
     <p class="small" style="margin:6px 0 0">🏦 ${esc(p.bank)} · 👤 ${esc(p.name)}</p>
     <p class="muted small" style="margin:6px 0 10px">В комментарии к переводу: «Заказ ${o.id}»</p>
     ${o.paidClaim ? `<p class="small" style="margin:0;color:var(--gold)">Вы отметили оплату — проверим и подтвердим.</p>` : siteToken ? `<button class="btn wide" data-paid-site="${o.id}" data-t="${esc(siteToken)}">✅ Я оплатил</button>` : `<button class="btn wide" data-paid="${o.id}">✅ Я оплатил</button>`}</div>`;
+}
+// Оплата на расчётный счёт ИП: QR по ГОСТ (ST00012) с суммой, банк заполнит всё сам
+function qrImg(text) {
+  try {
+    qrcode.stringToBytes = qrcode.stringToBytesFuncs["UTF-8"];
+    const q = qrcode(0, "M"); q.addData(text, "Byte"); q.make();
+    return q.createDataURL(6, 24);
+  } catch { return ""; }
+}
+const copyRow = (label, v) => `<button class="pay-row" data-copy="${esc(v)}"><span><small class="muted">${label}</small><br>${esc(v)}</span><small>скопировать</small></button>`;
+function payAccountHTML(o, p, siteToken) {
+  const src = qrImg(p.qr);
+  return `<div class="pay"><div class="eyebrow">К оплате ${rub(o.total)}</div>
+    ${src ? `<div class="pay-qr"><div class="qr"><img src="${src}" alt="QR-код для оплаты заказа №${o.id}" width="180" height="180"></div><div>
+      <p class="small" style="margin:0 0 8px">Откройте приложение своего банка → «Оплата по QR» и наведите камеру. Если вы смотрите с телефона — сохраните QR-код и загрузите его из галереи. Сумма и реквизиты заполнятся сами.</p>
+      <a class="btn wide" href="${src}" download="sinitsa-zakaz-${o.id}.gif">Сохранить QR-код</a>
+      <p class="small muted" style="margin:6px 0 0">На iPhone можно просто удержать палец на QR-коде → «Сохранить в Фото».</p></div></div>` : ""}
+    <details class="pay-req"><summary class="small">Реквизиты для перевода вручную</summary>
+      <p class="small" style="margin:6px 0">${esc(p.name)} · ИНН ${esc(p.inn)}</p>
+      ${copyRow("Расчётный счёт", p.acc)}${copyRow("БИК", p.bic)}
+      <p class="small" style="margin:6px 0 0">🏦 ${esc(p.bank)} · корр. счёт ${esc(p.corr)}</p>
+      ${copyRow("Назначение платежа", p.purpose)}
+    </details>
+    ${o.paidClaim ? `<p class="small" style="margin:10px 0 0;color:var(--gold)">Вы отметили оплату — проверим и подтвердим.</p>` : siteToken ? `<button class="btn wide" style="margin-top:10px" data-paid-site="${o.id}" data-t="${esc(siteToken)}">✅ Я оплатил</button>` : `<button class="btn wide" style="margin-top:10px" data-paid="${o.id}">✅ Я оплатил</button>`}</div>`;
 }
 // Заказы с сайта: помним номера на этом устройстве, статус сообщаем лично
 function loadSiteOrders() { try { return JSON.parse(localStorage.getItem("siteOrders") || "[]"); } catch { return []; } }

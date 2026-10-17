@@ -254,6 +254,12 @@ form label.need { color: #ff5c5c; }
 .pay-qr { display: flex; gap: 14px; align-items: center; margin: 8px 0 0; }
 .pay-qr .qr { flex: none; width: 132px; height: 132px; background: #fff; border-radius: 10px; padding: 6px; }
 .pay-qr .qr svg { width: 100%; height: 100%; display: block; }
+.pay-qr .qr img { width: 100%; height: 100%; display: block; image-rendering: pixelated; -webkit-touch-callout: default; }
+.pay-row + .pay-row { margin-top: 6px; }
+.pay-row span { text-align: left; word-break: break-all; }
+.pay-req { margin: 10px 0 0; }
+.pay-req summary { cursor: pointer; color: var(--lilac); }
+.pay-req .pay-row { margin-top: 6px; }
 @media (max-width: 420px) { .pay-qr { flex-direction: column; align-items: stretch; } .pay-qr .qr { align-self: center; width: 180px; height: 180px; } }
 
 

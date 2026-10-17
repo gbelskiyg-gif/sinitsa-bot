@@ -46,6 +46,8 @@ function buildMessage({ to, subject, text, html }) {
   ].join("\r\n");
 }
 
+const STEP_NAMES = ["подключение", "EHLO", "AUTH", "логин", "пароль", "MAIL FROM", "RCPT TO", "DATA", "текст письма", "QUIT"];
+
 /** Отправить письмо. Возвращает true/false, никогда не бросает исключение. */
 export function sendMail({ to, subject, text, html }) {
   if (!mailEnabled() || !EMAIL_RE.test(String(to || ""))) return Promise.resolve(false);
@@ -88,7 +90,8 @@ export function sendMail({ to, subject, text, html }) {
       const code = Number(last.slice(0, 3));
       buf = "";
       const [, expect] = steps[i];
-      if (code !== expect) return finish(false, `${steps[i][0]?.split(" ")[0] || "connect"} → ${last}`);
+      // в лог пишем только название шага: логин и пароль (base64) не должны попадать в журнал
+      if (code !== expect) return finish(false, `${STEP_NAMES[i] || "шаг " + i} → ${last}`);
       i++;
       if (i >= steps.length) return finish(true);
       sock.write(steps[i][0] + "\r\n");

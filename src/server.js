@@ -234,7 +234,8 @@ async function api(req, res, url) {
 
   // Подписка «Чайный клуб»: тарифы, оформление, страница подписки по ключу
   if (req.method === "GET" && url.pathname === "/api/club") {
-    const periods = Object.fromEntries(Object.entries(SUB_PERIODS).filter(([, p]) => !p.autorenew || ykRecurring()));
+    // Пока ЮKassa не подключена — показываем все тарифы как витрину (оформить нельзя)
+    const periods = Object.fromEntries(Object.entries(SUB_PERIODS).filter(([, p]) => !p.autorenew || ykRecurring() || !ykEnabled()));
     return send(res, 200, {
       enabled: ykEnabled(),
       plans: Object.entries(SUB_PLANS).map(([key, p]) => ({ key, ...p, prices: Object.fromEntries(Object.keys(periods).map((k) => [k, subPrice(key, k)])) })),

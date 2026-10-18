@@ -1176,7 +1176,7 @@ async function mySubs() {
 async function renderClub() {
   if (!S.club) { try { S.club = await api("/api/club"); } catch { S.club = { enabled: false }; } }
   const C = S.club;
-  if (!C.enabled) { $("#view").innerHTML = `<div class="empty"><h2>Чайный клуб скоро откроется</h2><p>Раз в месяц — конверт с новым чаем и открыткой. Следите за новостями в нашем боте.</p><a class="btn" href="#catalog">В каталог</a></div>`; return; }
+  if (!C.plans?.length) { $("#view").innerHTML = `<div class="empty"><h2>Чайный клуб скоро откроется</h2><p>Раз в месяц — конверт с новым чаем и открыткой.</p><a class="btn" href="#catalog">В каталог</a></div>`; return; }
   const f = loadForm();
   const K = (S.clubSel ||= { plan: C.plans[0].key, period: C.periods.month ? "month" : "3", gift: false });
   if (!C.periods[K.period]) K.period = "3";
@@ -1200,8 +1200,10 @@ async function renderClub() {
       ${per.autorenew ? `<label class="consent"><input type="checkbox" id="c-autopay"> <span>Согласен на ежемесячное списание ${rub(price)} с привязанной карты до отмены подписки</span></label>` : ""}
       <label class="consent"><input type="checkbox" id="c-consent"> <span>Даю <a href="/consent" data-doc>согласие на обработку персональных данных</a> и принимаю <a href="/privacy" data-doc>политику конфиденциальности</a></span></label>
       <p class="err" id="c-err" role="alert"></p>
-      <button class="btn wide" id="c-send">${K.gift ? "Подарить" : "Оформить"} · ${rub(price)}${per.autorenew ? " в месяц" : ""}</button>
-      <p class="small muted" style="text-align:center;margin:8px 0 0">Оплата картой или по СБП через ЮKassa, чек придёт на почту.</p>
+      ${C.enabled ? `<button class="btn wide" id="c-send">${K.gift ? "Подарить" : "Оформить"} · ${rub(price)}${per.autorenew ? " в месяц" : ""}</button>
+      <p class="small muted" style="text-align:center;margin:8px 0 0">Оплата картой или по СБП через ЮKassa, чек придёт на почту.</p>`
+      : `<button class="btn wide" id="c-send" disabled>Оформление откроется в ближайшие дни</button>
+      <p class="small muted" style="text-align:center;margin:8px 0 0">Хотите в числе первых? Напишите нам в Telegram <a href="https://t.me/sinitsa_chai_bot">@sinitsa_chai_bot</a> — сообщим, когда откроемся.</p>`}
     </form>`;
   mySubs().then((list) => { const box = $("#my-subs"); if (box && list.length) box.innerHTML = `<h3 style="margin:0 0 8px">Мои подписки</h3>${list.map(subCardHTML).join("")}`; });
   $("#c-gift").onchange = (e) => { K.gift = e.target.checked; renderClub(); };
@@ -1218,6 +1220,7 @@ async function renderClub() {
   };
   $("#cf").onsubmit = async (e) => {
     e.preventDefault();
+    if (!C.enabled) return;
     const data = Object.fromEntries(new FormData(e.target));
     const err = (t, id) => { $("#c-err").textContent = t; if (id) { $(id).focus(); $(id).closest("label")?.classList.add("need"); } };
     document.querySelectorAll("#cf label.need").forEach((x) => x.classList.remove("need"));
@@ -1310,7 +1313,7 @@ document.addEventListener("keydown", (e) => {
     Object.assign(S, { teas: data.teas, kinds: data.kinds, recipes: data.recipes, mugRecipes: data.mugRecipes, tastes: data.tastes, sets: data.sets || [], delivery: data.delivery || {}, freeFrom: data.freeDeliveryFrom || 0, deliveryInfo: data.deliveryInfo || "" });
     if (authed()) api("/api/me").then((me) => (S.me = me)).catch(() => {});
     S.club = await api("/api/club").catch(() => ({ enabled: false }));
-    document.querySelectorAll("[data-club-link]").forEach((a) => (a.hidden = !S.club.enabled));
+    document.querySelectorAll("[data-club-link]").forEach((a) => (a.hidden = !S.club.plans?.length));
     if (!inTelegram()) mountPromo(); // на сайте карусель стоит в шапке главной
   } catch {
     $("#view").innerHTML = `<div class="empty"><h2>Не удалось загрузить каталог</h2><p>Проверьте интернет и откройте магазин ещё раз.</p></div>`;

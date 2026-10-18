@@ -4,6 +4,7 @@ import { DELIVERY, KINDS, PACKS, PROMOS, STATUS, deliveryCost, findTea, normaliz
 import * as store from "./db.js";
 import { esc, tgSafe } from "./telegram.js";
 import { menuKeyboard } from "./menu.js";
+import { ykEnabled } from "./yookassa.js";
 
 export class OrderError extends Error {}
 
@@ -134,6 +135,7 @@ export function orderText(o, { forAdmin = false, username = "" } = {}) {
     lines.push("", `👤 ${esc(o.name)}${username ? ` (@${esc(username)})` : ""}`, `📞 ${esc(o.phone)}`);
     if (o.address) lines.push(`📍 ${esc(o.address)}`);
     if (o.status === "accepted" && o.paid_claim_at) lines.push("💳 Покупатель сообщил, что оплатил — проверьте банк");
+    if (o.yk_status === "succeeded") lines.push("💳 Оплачен онлайн через ЮKassa, чек отправлен");
     if (o.comment) lines.push(`💬 ${esc(o.comment)}`);
   }
   return lines.join("\n");
@@ -193,11 +195,14 @@ export function payLines(p, o) {
 export function paymentText(o) {
   const p = getPayment();
   const head = `Заказ №${o.id} принят 🍵\nК оплате: ${rub(o.total)}`;
+  if (ykEnabled()) return `${head}\n\nОплатить можно картой или по СБП — нажмите кнопку ниже. Электронный чек придёт автоматически, а мы сразу увидим оплату.`;
   if (!p) return `${head}\n\nРеквизиты для оплаты пришлём в этом чате.`;
   const qr = isAccount(p) ? `\n\nПроще всего — QR-код: откройте «Мои заказы» в магазине (кнопка «Магазин» внизу), сохраните QR-код и загрузите его в приложении банка в разделе «Оплата по QR». Сумма и все реквизиты заполнятся сами.` : "";
   return `${head}\n\n${payLines(p, o).join("\n")}${qr}\n\nПосле перевода нажмите кнопку ниже — мы проверим и подтвердим.`;
 }
-const payButton = (o) => ({ inline_keyboard: [[{ text: "✅ Я оплатил", callback_data: `paid:${o.id}` }]] });
+export const payButton = (o) => ykEnabled()
+  ? { inline_keyboard: [[{ text: "💳 Оплатить картой или СБП", web_app: { url: `${PUBLIC_URL}/?tab=orders` } }]] }
+  : { inline_keyboard: [[{ text: "✅ Я оплатил", callback_data: `paid:${o.id}` }]] };
 
 /** Покупатель сообщил об оплате: отмечаем и зовём продавца проверить. */
 export async function claimPaid(order, username = "") {
@@ -273,6 +278,7 @@ export function sitePaymentMessage(o) {
   const p = getPayment();
   const lines = [`Здравствуйте! Это «Синица» 🍵`, `Заказ №${o.id} подтвердили. К оплате: ${rub(o.total)}.`];
   const url = siteOrderUrl(o);
+  if (ykEnabled() && url) { lines.push("", `Оплатить картой или по СБП можно на странице заказа:`, url); return lines.join("\n"); }
   if (url) lines.push("", `Оплатить можно на странице заказа — там QR-код и реквизиты:`, url);
   if (p) lines.push("", ...payLines(p, o));
   if (p?.link) lines.push("", `Ссылка на оплату: ${p.link}`);
@@ -328,6 +334,10 @@ export function orderEmail(o, event) {
   if (event === "created") {
     text = `Спасибо за заказ! Проверим наличие и пришлём на эту почту сумму и реквизиты для оплаты.`;
     html = `<p>${escH(text)}</p>`;
+  } else if (event === "accepted" && ykEnabled()) {
+    text = `Заказ подтвердили, всё есть в наличии. К оплате: ${rub(o.total)}.\n\nОплатить картой или по СБП можно на странице заказа: ${page}\nЭлектронный чек придёт на эту почту.`;
+    html = `<p>Заказ подтвердили, всё есть в наличии. К оплате: <b>${escH(rub(o.total))}</b>.</p>
+<p>Оплатить картой или по СБП можно на странице заказа — кнопка ниже. Электронный чек придёт на эту почту.</p>`;
   } else if (event === "accepted") {
     const pay = p ? payLines(p, o) : [`Реквизиты для оплаты пришлём отдельно.`];
     text = [`Заказ подтвердили, всё есть в наличии. К оплате: ${rub(o.total)}.`, "", ...pay, ...(p?.link ? ["", `Оплатить в приложении банка: ${p.link}`] : []), "", `QR-код для оплаты и кнопка «Я оплатил» — на странице заказа: ${page}`].join("\n");
@@ -362,7 +372,7 @@ export async function notifyCustomer(order) {
     if (!order.user_id)
       for (const a of notifyChats())
         await tgSafe("sendMessage", { chat_id: a, text: `🌐 Заказ №${order.id} с сайта принят. Покупатель подключил бота — сумма и реквизиты ушли ему в Telegram автоматически.` });
-    return tgSafe("sendMessage", { chat_id: chat, text: paymentText(order), reply_markup: getPayment() ? payButton(order) : menuKeyboard(chat) });
+    return tgSafe("sendMessage", { chat_id: chat, text: paymentText(order), reply_markup: getPayment() || ykEnabled() ? payButton(order) : menuKeyboard(chat) });
   }
   const t = CUSTOMER_STATUS[order.status];
   if (t) await tgSafe("sendMessage", { chat_id: chat, text: t.replace("{id}", order.id), reply_markup: menuKeyboard(chat) });
@@ -387,7 +397,8 @@ export function publicOrder(o) {
     delivery: o.delivery,
     canCancel: o.status === "new",
     // Ждёт оплаты: показываем реквизиты в «Моих заказах»
-    payment: o.status === "accepted" ? withQr(getPayment(), o) : null,
+    payment: o.status === "accepted" ? (ykEnabled() ? { online: true } : withQr(getPayment(), o)) : null,
+    paidOnline: o.yk_status === "succeeded",
     paidClaim: !!o.paid_claim_at,
     tgLinked: !!(o.user_id || o.tg_chat),
   };

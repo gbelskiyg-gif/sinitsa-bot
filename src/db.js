@@ -82,6 +82,10 @@ for (const sql of [
   "ALTER TABLE orders ADD COLUMN tg_chat INTEGER",
   "ALTER TABLE orders ADD COLUMN email TEXT NOT NULL DEFAULT ''",
   "ALTER TABLE events ADD COLUMN src TEXT NOT NULL DEFAULT 'tg'",
+  // онлайн-оплата через ЮKassa: номер платежа, его статус, выбит ли чек полного расчёта
+  "ALTER TABLE orders ADD COLUMN yk_id TEXT",
+  "ALTER TABLE orders ADD COLUMN yk_status TEXT",
+  "ALTER TABLE orders ADD COLUMN receipt2 INTEGER NOT NULL DEFAULT 0",
 ]) {
   try {
     db.exec(sql);
@@ -89,6 +93,33 @@ for (const sql of [
     /* колонка уже есть */
   }
 }
+
+// Подписка «Чайный клуб»: раз в месяц конверт с чаем
+db.exec(`
+  CREATE TABLE IF NOT EXISTS subs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    token TEXT NOT NULL,
+    user_id INTEGER NOT NULL DEFAULT 0,
+    plan TEXT NOT NULL,
+    period TEXT NOT NULL,              -- month (автосписание) | 3 | 6 (предоплата)
+    price INTEGER NOT NULL,            -- цена одного платежа
+    envelopes INTEGER NOT NULL,        -- сколько конвертов в одном платеже
+    status TEXT NOT NULL DEFAULT 'pending', -- pending | active | past_due | finished | cancelled
+    autorenew INTEGER NOT NULL DEFAULT 0,
+    left_count INTEGER NOT NULL DEFAULT 0,  -- оплачено и ещё не отправлено конвертов
+    shipped INTEGER NOT NULL DEFAULT 0,
+    name TEXT NOT NULL, phone TEXT NOT NULL, email TEXT NOT NULL DEFAULT '',
+    ship_to TEXT NOT NULL DEFAULT '',  -- получатель (для подарка) — имя и телефон
+    address TEXT NOT NULL DEFAULT '',
+    note TEXT NOT NULL DEFAULT '',
+    gift INTEGER NOT NULL DEFAULT 0,
+    yk_method TEXT,                    -- сохранённый способ оплаты для автосписаний
+    pay_id TEXT, pay_amount INTEGER NOT NULL DEFAULT 0, pay_env INTEGER NOT NULL DEFAULT 0, pay_shipped INTEGER NOT NULL DEFAULT 0,
+    charge_id TEXT,                    -- текущее автосписание, ждём ответа ЮKassa
+    next_charge TEXT, next_ship TEXT, ship_notified TEXT,
+    consent_at TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
 
 // Отпечатки телефонов для старых заказов (где номер ещё не удалён)
 for (const r of db.prepare("SELECT id, phone FROM orders WHERE phone_key IS NULL AND phone != ''").all()) {
@@ -261,6 +292,37 @@ export function recentOrderCount(userId, minutes) {
     .prepare("SELECT COUNT(*) AS n FROM orders WHERE user_id = ? AND created_at > datetime('now', ?)")
     .get(userId, `-${minutes} minutes`).n;
 }
+/** Онлайн-оплата: запомнить платёж ЮKassa и его статус. */
+export function setOrderPayment(id, ykId, ykStatus) {
+  db.prepare("UPDATE orders SET yk_id = ?, yk_status = ?, updated_at = datetime('now') WHERE id = ?").run(ykId, ykStatus, id);
+  return getOrder(id);
+}
+export function markReceipt2(id) {
+  db.prepare("UPDATE orders SET receipt2 = 1 WHERE id = ?").run(id);
+}
+
+// ---------- подписки ----------
+const SUB_FIELDS = ["status", "autorenew", "left_count", "shipped", "yk_method", "pay_id", "pay_amount", "pay_env", "pay_shipped", "charge_id", "next_charge", "next_ship", "ship_notified", "user_id"];
+export function createSub(s) {
+  const r = db.prepare(
+    `INSERT INTO subs (token, user_id, plan, period, price, envelopes, autorenew, name, phone, email, ship_to, address, note, gift, consent_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+  ).run(s.token, s.userId || 0, s.plan, s.period, s.price, s.envelopes, s.autorenew ? 1 : 0, s.name, s.phone, s.email || "", s.shipTo || "", s.address || "", s.note || "", s.gift ? 1 : 0);
+  return getSub(Number(r.lastInsertRowid));
+}
+export const getSub = (id) => db.prepare("SELECT * FROM subs WHERE id = ?").get(id) || null;
+export function updateSub(id, fields) {
+  const keys = Object.keys(fields).filter((k) => SUB_FIELDS.includes(k));
+  if (keys.length) db.prepare(`UPDATE subs SET ${keys.map((k) => `${k} = ?`).join(", ")}, updated_at = datetime('now') WHERE id = ?`).run(...keys.map((k) => fields[k]), id);
+  return getSub(id);
+}
+export const userSubs = (userId) => db.prepare("SELECT * FROM subs WHERE user_id = ? AND status != 'pending' ORDER BY id DESC").all(userId);
+export const activeSubs = () => db.prepare("SELECT * FROM subs WHERE status IN ('active','past_due') ORDER BY id").all();
+/** Ежемесячные подписки, которым пора списать оплату (и списание ещё не запущено). */
+export const subsToCharge = (now) => db.prepare("SELECT * FROM subs WHERE status = 'active' AND autorenew = 1 AND yk_method IS NOT NULL AND charge_id IS NULL AND left_count = 0 AND next_charge <= ?").all(now);
+/** Оплаченные конверты, которые пора собрать и отправить (продавцу ещё не напоминали). */
+export const subsToShip = (now) => db.prepare("SELECT * FROM subs WHERE status = 'active' AND left_count > 0 AND next_ship <= ? AND (ship_notified IS NULL OR ship_notified != next_ship)").all(now);
+
 export function setStatus(id, status) {
   db.prepare(
     "UPDATE orders SET status = ?, updated_at = datetime('now'), done_at = CASE WHEN ? = 'done' THEN datetime('now') ELSE done_at END WHERE id = ?"
@@ -273,6 +335,11 @@ export function anonymizeOldOrders(days = 30) {
     .prepare(
       `UPDATE orders SET name = '', phone = '', address = '', comment = '', email = ''
        WHERE status IN ('done','cancelled') AND updated_at < datetime('now', ?) AND (phone != '' OR name != '' OR email != '')`
+    )
+    .run(`-${days} days`).changes + db
+    .prepare(
+      `UPDATE subs SET name = '', phone = '', email = '', ship_to = '', address = '', note = '', yk_method = NULL
+       WHERE status IN ('finished','cancelled') AND updated_at < datetime('now', ?) AND (phone != '' OR name != '')`
     )
     .run(`-${days} days`).changes;
 }

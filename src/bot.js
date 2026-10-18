@@ -3,7 +3,8 @@ import { DELIVERY_INFO, STATUS, TEAS, findTea, rub } from "./catalog.js";
 import * as store from "./db.js";
 import crypto from "node:crypto";
 import { confirmLoginCode, loginCodeValid } from "./loginlink.js";
-import { accountValid, isAccount, payLines, adminKeyboard, canMove, claimPaid, getPayment, linkedText, notifyCustomer, orderText, refreshAdminMessages, rejectPaid, siteStartPayload } from "./orders.js";
+import { orderShipped, shipSub, subsSummary } from "./payments.js";
+import { accountValid, isAccount, payLines, payButton, adminKeyboard, canMove, claimPaid, getPayment, linkedText, notifyCustomer, orderText, refreshAdminMessages, rejectPaid, siteStartPayload } from "./orders.js";
 import { esc, poll, tg, tgSafe } from "./telegram.js";
 import { BTN, MENU_VERSION, menuKeyboard } from "./menu.js";
 import { requestWholesale } from "./wholesale.js";
@@ -79,7 +80,7 @@ function inlineMenu(userId) {
     [cb("orders"), cb("delivery")],
     [cb("about"), { text: "📢 Наш канал", url: CHANNEL_URL }],
   ];
-  if (isAdmin(userId)) rows.push([cb("active"), cb("stock")], [cb("payment"), cb("stats")], [cb("sheet")]);
+  if (isAdmin(userId)) rows.push([cb("active"), cb("stock")], [cb("payment"), cb("stats")], [cb("sheet"), cb("subs")]);
   return { inline_keyboard: rows };
 }
 const isMenuWord = (text) => /^\/menu(@\w+)?$|^(меню|menu|кнопки|главное меню)[.!?]*$/i.test(text.trim());
@@ -107,7 +108,7 @@ async function linkSiteOrder(msg, payload) {
   const linked = store.linkOrderChat(o.id, msg.chat.id);
   await tgSafe("sendMessage", {
     chat_id: msg.chat.id, text: linkedText(linked),
-    reply_markup: linked.status === "accepted" && getPayment() && !linked.paid_claim_at ? { inline_keyboard: [[{ text: "✅ Я оплатил", callback_data: `paid:${linked.id}` }]] } : menuKeyboard(msg.from.id),
+    reply_markup: linked.status === "accepted" && !linked.paid_claim_at ? payButton(linked) : menuKeyboard(msg.from.id),
   });
   for (const chat of notifyChats())
     await tgSafe("sendMessage", { chat_id: chat, text: `🔗 Покупатель заказа №${o.id} с сайта подключил бота${msg.from.username ? ` (@${msg.from.username})` : ""} — статусы и реквизиты будут уходить ему автоматически.` });
@@ -118,6 +119,19 @@ async function onStart(msg) {
   const chat = msg.chat.id;
   const payload = String(msg.text || "").split(/\s+/)[1] || "";
   if (payload.startsWith("o") && (await linkSiteOrder(msg, payload))) { store.markMenu(msg.from.id, MENU_VERSION); return; }
+  // Вернулись из ЮKassa после оплаты заказа или подписки
+  const pm = /^(paid|sub)_(\d+)$/.exec(payload);
+  if (pm) {
+    const o = pm[1] === "paid" ? store.getOrder(Number(pm[2])) : null;
+    const mine = o && (o.user_id || o.tg_chat) === msg.from.id;
+    const text = pm[1] === "sub" ? "Спасибо! Как только ЮKassa подтвердит оплату, пришлём сюда сообщение о подписке 🍵"
+      : !mine ? "Спасибо! Статус заказа пришлём сюда."
+      : o.status === "accepted" ? `Проверяем оплату заказа №${o.id}… Как только ЮKassa её подтвердит, пришлём сообщение сюда.`
+      : `Заказ №${o.id}: ${STATUS[o.status].toLowerCase()}. Спасибо! 🍵`;
+    await tgSafe("sendMessage", { chat_id: chat, text, reply_markup: menuKeyboard(msg.from.id) });
+    store.markMenu(msg.from.id, MENU_VERSION);
+    return;
+  }
   // Вход на сайт через бота
   const lm = /^login_([0-9a-f]{32})$/.exec(payload);
   if (lm) {
@@ -381,6 +395,7 @@ async function onMessage(msg) {
           "⚠️ В формуле секретный ключ: не публикуйте её и не открывайте доступ к таблице посторонним — там телефоны и адреса покупателей.",
       });
     if (text.startsWith("/active") || text === BTN.active) return onActive(msg);
+    if (text.startsWith("/subs") || text === BTN.subs) return tgSafe("sendMessage", { chat_id: msg.chat.id, text: subsSummary(), parse_mode: "HTML" });
     if (text.startsWith("/stock") || text === BTN.stock)
       return tgSafe("sendMessage", { chat_id: msg.chat.id, text: "Наличие чаёв. Нажмите, чтобы переключить:", reply_markup: stockKeyboard() });
     if (text.startsWith("/admin")) return tgSafe("sendMessage", { chat_id: msg.chat.id, text: ADMIN_HELP, parse_mode: "HTML" });
@@ -525,6 +540,15 @@ async function onCallback(q) {
     return answer(`${tea.name}: ${now ? "нет в наличии" : "в наличии"}`);
   }
 
+  // Конверт подписки отправлен
+  if (data.startsWith("sub:")) {
+    if (!isAdmin(q.from.id)) return answer();
+    const upd = await shipSub(Number(data.split(":")[1]));
+    if (!upd) return answer("Уже отмечено");
+    await tgSafe("editMessageReplyMarkup", { chat_id: chat, message_id: q.message.message_id, reply_markup: { inline_keyboard: [[{ text: "✅ Отправлено", callback_data: "noop" }]] } });
+    return answer("Отметили, покупателю написали");
+  }
+
   if (data.startsWith("ord:")) {
     const [, id, to] = data.split(":");
     const order = store.getOrder(Number(id));
@@ -537,6 +561,7 @@ async function onCallback(q) {
       : [...updated.adminMsgs, [chat, q.message.message_id]];
     await refreshAdminMessages({ ...updated, adminMsgs: msgs });
     await notifyCustomer(updated);
+    if (to === "shipped") await orderShipped(updated); // онлайн-оплата: чек полного расчёта
     return answer("Готово");
   }
   return answer();

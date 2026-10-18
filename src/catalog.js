@@ -163,3 +163,17 @@ export function packInfo(tea, pack) {
 export function rub(n) {
   return n.toLocaleString("ru-RU").replace(/ /g, " ") + " ₽";
 }
+
+// ---------- подписка «Чайный клуб» ----------
+// Раз в месяц конверт: чаи по 20 г и открытка с историей и способом заваривания. Доставка входит в цену.
+export const SUB_PLANS = {
+  intro: { name: "Знакомство", price: 690, what: "2 чая по 20 г и открытка", note: "чтобы каждый месяц пробовать новое" },
+  gourmet: { name: "Ценитель", price: 1490, what: "3 чая по 20 г, один из них премиальный, и открытка", note: "уишаньские утёсы, ГАБА, выдержанные пуэры" },
+};
+// month — платёж каждый месяц с автосписанием; 3 и 6 — предоплата сразу (6 конвертов по цене 5)
+export const SUB_PERIODS = {
+  month: { label: "Каждый месяц", envelopes: 1, pay: 1, autorenew: true },
+  3: { label: "3 месяца", envelopes: 3, pay: 3 },
+  6: { label: "6 месяцев", envelopes: 6, pay: 5, note: "6-й конверт в подарок" },
+};
+export const subPrice = (plan, period) => SUB_PLANS[plan].price * SUB_PERIODS[period].pay;

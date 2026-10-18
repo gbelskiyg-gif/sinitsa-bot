@@ -365,3 +365,18 @@ form label.need { color: #ff5c5c; }
 .mc-step { grid-column: 1 / -1; display: inline-flex; align-items: center; gap: 10px; }
 .mc-step button { width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--line); background: none; color: var(--ink); cursor: pointer; font-size: 16px; line-height: 1; }
 .mc-step button:hover { border-color: var(--gold); color: var(--gold); }
+
+/* Чайный клуб (подписка) */
+.club-plans { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+.club-plan { display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); color: var(--ink); font: inherit; cursor: pointer; }
+.club-plan b { font-family: Prata, serif; font-weight: 400; font-size: 18px; }
+.club-plan span { font-size: 13px; }
+.club-plan small { color: var(--muted); font-size: 12px; }
+.club-plan em { font-style: normal; color: var(--gold); font-weight: 700; margin-top: 4px; }
+.club-plan[aria-pressed="true"] { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset; background: radial-gradient(circle at 100% 0, #edbe8222, transparent 60%), var(--card); }
+#view > label.consent { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; line-height: 1.5; }
+#view > label.consent input { width: 20px; height: 20px; margin: 1px 0 0; flex: none; accent-color: var(--gold); }
+.sub-card { margin-bottom: 10px; }
+.btn.sm { padding: 8px 14px; font-size: 13px; width: auto; }
+@media (max-width: 380px) { .club-plans { grid-template-columns: 1fr; } }
+.sc-slide.club .sc-txt small { color: #f2c48d; }

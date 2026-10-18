@@ -170,6 +170,7 @@ function renderSets() {
   if (S.builder) return renderBuilder();
   $("#view").innerHTML = `<h2 class="section-title">Наборы</h2>
     <p class="note" style="margin-top:0">Три разных чая одной фасовки — 20, 50 или 100 г. Скидка 10% на любой набор.</p>
+    ${S.club?.enabled ? `<a class="sets-banner" href="#club"><span>✉️</span><span><b>Чайный клуб</b><small>Конверт с новым чаем каждый месяц — себе или в подарок</small></span><span class="more-price">→</span></a>` : ""}
     <button class="sets-banner build-start" id="build"><span>✋</span><span><b>Собрать свой набор</b><small>Выберите от 3 до 6 любых чаёв — скидка та же, 10%</small></span><span class="more-price">→</span></button>
     ${S.sets.length ? `<div class="sets-list">${S.sets.map((set) => {
       const pack = S.setPack[set.key] || "20";
@@ -245,6 +246,10 @@ function promoSlides() {
       eye: "🎁 Наборы чая", title: "Три чая в одной коробке — скидка 10%",
       text: "ГАБА, пуэры, улуны по 20, 50 или 100 г. Или соберите свой набор из любых 3–6 чаёв.", cta: `Наборы — от ${rub(from)}` });
   }
+  if (S.club?.enabled) out.push({ cls: "club", attr: `data-promo="club"`,
+    img: `<img src="/teas/kinds/red.webp" alt="Конверт с чаем" loading="lazy">`,
+    eye: "✉️ Чайный клуб", title: "Каждый месяц — конверт с новым чаем",
+    text: "Чаи по 20 г и открытка с историей. Можно оформить себе или подарить.", cta: `Подписка — от ${rub(Math.min(...S.club.plans.map((p) => p.price)))} в месяц` });
   if (S.teas.some((x) => x.premium && x.available)) out.push({ cls: "prem", attr: `data-promo="premium"`,
     img: `<img src="/teas/kinds/dark_oolong.webp" alt="Тёмный утёсный улун" loading="lazy">`,
     eye: "✦ Премиум", title: "Редкие чаи для особого случая",
@@ -294,6 +299,7 @@ function mountPromo() {
 function openPromo(kind) {
   track("promo", kind);
   if (kind === "sets") { location.hash = "#sets"; return; }
+  if (kind === "club") { location.hash = "#club"; return; }
   S.group = "premium"; S.query = "";
   if ((location.hash || "#catalog") !== "#catalog") location.hash = "#catalog"; else renderCatalog();
   setTimeout(() => $("#groups")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
@@ -967,6 +973,9 @@ function payHTML(o, siteToken = "") {
   if (o.status !== "accepted") return "";
   if (!o.payment) return `<p class="muted small" style="margin:8px 0 0">Реквизиты для оплаты пришлём ${siteToken ? "в выбранный мессенджер" : "в чате с ботом"}.</p>`;
   const p = o.payment;
+  if (p.online) return `<div class="pay"><div class="eyebrow">К оплате ${rub(o.total)}</div>
+    <button class="btn wide" data-pay-online="${o.id}"${siteToken ? ` data-t="${esc(siteToken)}"` : ""}>💳 Оплатить картой или СБП</button>
+    <p class="small muted" style="margin:8px 0 0">Оплата через ЮKassa. Электронный чек придёт автоматически, а мы сразу увидим оплату. Если вы только что оплатили — статус обновится в течение минуты.</p></div>`;
   if (p.type === "account") return payAccountHTML(o, p, siteToken);
   const qr = p.link ? qrSVG(p.link) : "";
   return `<div class="pay"><div class="eyebrow">К оплате ${rub(o.total)}</div>
@@ -1002,6 +1011,20 @@ function payAccountHTML(o, p, siteToken) {
       ${copyRow("Назначение платежа", p.purpose)}
     </details>
     ${o.paidClaim ? `<p class="small" style="margin:10px 0 0;color:var(--gold)">Вы отметили оплату — проверим и подтвердим.</p>` : siteToken ? `<button class="btn wide" style="margin-top:10px" data-paid-site="${o.id}" data-t="${esc(siteToken)}">✅ Я оплатил</button>` : `<button class="btn wide" style="margin-top:10px" data-paid="${o.id}">✅ Я оплатил</button>`}</div>`;
+}
+// Открыть страницу оплаты ЮKassa: в Telegram — во встроенном браузере, на сайте — в этой вкладке
+function openPay(url) {
+  if (!url) return toast("Не получилось открыть оплату");
+  if (inTelegram() && tgApp?.openLink) tgApp.openLink(url); else location.href = url;
+}
+async function payOnline(btn) {
+  btn.disabled = true;
+  try {
+    const path = btn.dataset.t ? `/api/site-orders/${btn.dataset.payOnline}?t=${encodeURIComponent(btn.dataset.t)}&pay=1` : `/api/orders/${btn.dataset.payOnline}/pay`;
+    const { url } = await api(path, { method: "POST" });
+    openPay(url);
+  } catch (err) { toast(err.message); }
+  setTimeout(() => (btn.disabled = false), 3000);
 }
 // Заказы с сайта: помним номера на этом устройстве, статус сообщаем лично
 function loadSiteOrders() { try { return JSON.parse(localStorage.getItem("siteOrders") || "[]"); } catch { return []; } }
@@ -1060,6 +1083,8 @@ async function renderOrders() {
     await Promise.all(list.map(async (x) => { const o = await siteOrderStatus(x); if (o) live[x.id] = o; }));
     if ((location.hash || "") === "#orders" && !authed()) draw(live);
     $("#view").onclick = async (e) => {
+      const po = e.target.closest("[data-pay-online]");
+      if (po) return payOnline(po);
       const ps = e.target.closest("[data-paid-site]");
       if (ps) {
         ps.disabled = true;
@@ -1090,6 +1115,8 @@ async function renderOrders() {
       <button class="link" data-repeat="${o.id}">Повторить</button></span></div></div>`).join("");
     S.lastOrders = orders;
     $("#view").onclick = async (e) => {
+      const po = e.target.closest("[data-pay-online]");
+      if (po) return payOnline(po);
       const pd = e.target.closest("[data-paid]");
       if (pd) {
         pd.disabled = true;
@@ -1124,6 +1151,95 @@ async function renderOrders() {
   }
 }
 
+// ---------- подписка «Чайный клуб» ----------
+function loadSubs() { try { return JSON.parse(localStorage.getItem("subs") || "[]"); } catch { return []; } }
+function saveSubToken(id, token) { try { localStorage.setItem("subs", JSON.stringify([{ id, token }, ...loadSubs().filter((x) => x.id !== id)].slice(0, 10))); } catch {} }
+const envWord = (n) => plural(n, "конверт", "конверта", "конвертов");
+function subCardHTML(x) {
+  return `<div class="line sub-card" style="display:block"><div style="display:flex;justify-content:space-between;gap:12px"><h3>Подписка «${esc(x.plan)}»${x.gift ? " 🎁" : ""}</h3><span class="status ${x.status === "active" ? "paid" : x.status === "past_due" ? "cancelled" : "new"}">${esc(x.statusLabel)}</span></div>
+    <div class="muted small">${esc(x.what)} · ${esc(x.period.toLowerCase())} · ${rub(x.price)}</div>
+    <div class="small" style="margin-top:6px">Отправлено конвертов: ${x.shipped}${x.left ? ` · оплачено ещё: ${x.left}` : ""}${x.nextCharge ? ` · следующее списание ${esc(x.nextCharge)}` : ""}</div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px">
+      ${x.canPay ? `<button class="btn sm" data-sub-pay="${x.id}" data-t="${esc(x.token)}">${x.status === "finished" ? "Продлить" : "Оплатить"} · ${rub(x.price)}</button>` : ""}
+      ${x.canCancel ? `<button class="link" data-sub-cancel="${x.id}" data-t="${esc(x.token)}">${x.monthly ? "Отменить автосписание" : "Отменить"}</button>` : ""}
+    </div></div>`;
+}
+async function mySubs() {
+  const out = new Map();
+  if (authed()) { try { (await api("/api/my-subs")).subs.forEach((x) => out.set(x.id, x)); } catch {} }
+  await Promise.all(loadSubs().map(async (x) => {
+    if (out.has(x.id)) return;
+    try { const r = await api(`/api/subs/${x.id}?t=${encodeURIComponent(x.token)}`); out.set(x.id, { ...r.sub, token: r.token }); } catch {}
+  }));
+  return [...out.values()].filter((x) => x.status !== "pending" || loadSubs().some((y) => y.id === x.id)).sort((a, b) => b.id - a.id);
+}
+async function renderClub() {
+  if (!S.club) { try { S.club = await api("/api/club"); } catch { S.club = { enabled: false }; } }
+  const C = S.club;
+  if (!C.enabled) { $("#view").innerHTML = `<div class="empty"><h2>Чайный клуб скоро откроется</h2><p>Раз в месяц — конверт с новым чаем и открыткой. Следите за новостями в нашем боте.</p><a class="btn" href="#catalog">В каталог</a></div>`; return; }
+  const f = loadForm();
+  const K = (S.clubSel ||= { plan: C.plans[0].key, period: C.periods.month ? "month" : "3", gift: false });
+  if (!C.periods[K.period]) K.period = "3";
+  if (K.gift && C.periods[K.period].autorenew) K.period = "3";
+  const plan = C.plans.find((p) => p.key === K.plan), per = C.periods[K.period], price = plan.prices[K.period];
+  $("#view").innerHTML = `<h2 class="section-title">Чайный клуб</h2>
+    <p class="note" style="margin-top:0">Раз в месяц — конверт с чаем и открыткой: история чая, как заваривать и с чем пить. Каждый месяц — новая тема. Доставка входит в цену.</p>
+    <div id="my-subs"></div>
+    <div class="club-plans">${C.plans.map((p) => `<button class="club-plan" data-plan="${p.key}" aria-pressed="${p.key === K.plan}"><b>${esc(p.name)}</b><span>${esc(p.what)}</span><small>${esc(p.note)}</small><em>${rub(p.price)} в месяц</em></button>`).join("")}</div>
+    <div class="chips sizes" style="margin:14px 0 6px">${["month", "3", "6"].filter((k) => C.periods[k] && !(K.gift && C.periods[k].autorenew)).map((k) => `<button class="chip" data-period="${k}" aria-pressed="${k === K.period}">${esc(C.periods[k].label)}${C.periods[k].autorenew ? "" : ` · ${rub(plan.prices[k])}`}</button>`).join("")}</div>
+    <p class="small muted" style="margin:0 0 6px">${per.autorenew ? "Списываем раз в месяц, отменить можно в любой момент." : `${per.envelopes} ${envWord(per.envelopes)} — оплата сразу${per.note ? `, ${esc(per.note)}` : ""}.`}</p>
+    <label class="consent" style="margin:6px 0 14px"><input type="checkbox" id="c-gift" ${K.gift ? "checked" : ""}> <span>🎁 Это подарок — отправим конверты другому человеку</span></label>
+    <form id="cf" novalidate>
+      <label>Ваше имя<input id="c-name" name="name" maxlength="80" value="${esc(f.name || tgApp?.initDataUnsafe?.user?.first_name || S.auth?.user?.first_name || "")}"></label>
+      <label>Ваш телефон<input id="c-phone" name="phone" type="tel" maxlength="30" placeholder="+7 900 000-00-00" value="${esc(f.phone || "")}"></label>
+      <label>Почта — пришлём чек и новости подписки<input id="c-email" name="email" type="email" inputmode="email" maxlength="120" placeholder="name@mail.ru" value="${esc(f.email || "")}"></label>
+      ${K.gift ? `<label>Кому дарим: имя и телефон получателя<input id="c-shipto" name="shipTo" maxlength="120" placeholder="Анна, +7 900 000-00-00"></label>
+        <label>Пожелание для открытки (необязательно)<textarea name="note" rows="2" maxlength="300"></textarea></label>` : ""}
+      <label>Адрес для конвертов: индекс, город, улица, дом, квартира — или пункт выдачи<input id="c-address" name="address" maxlength="300"></label>
+      <label class="consent"><input type="checkbox" id="c-terms"> <span>Согласен с <a href="/terms#club" data-doc>условиями подписки</a></span></label>
+      ${per.autorenew ? `<label class="consent"><input type="checkbox" id="c-autopay"> <span>Согласен на ежемесячное списание ${rub(price)} с привязанной карты до отмены подписки</span></label>` : ""}
+      <label class="consent"><input type="checkbox" id="c-consent"> <span>Даю <a href="/consent" data-doc>согласие на обработку персональных данных</a> и принимаю <a href="/privacy" data-doc>политику конфиденциальности</a></span></label>
+      <p class="err" id="c-err" role="alert"></p>
+      <button class="btn wide" id="c-send">${K.gift ? "Подарить" : "Оформить"} · ${rub(price)}${per.autorenew ? " в месяц" : ""}</button>
+      <p class="small muted" style="text-align:center;margin:8px 0 0">Оплата картой или по СБП через ЮKassa, чек придёт на почту.</p>
+    </form>`;
+  mySubs().then((list) => { const box = $("#my-subs"); if (box && list.length) box.innerHTML = `<h3 style="margin:0 0 8px">Мои подписки</h3>${list.map(subCardHTML).join("")}`; });
+  $("#c-gift").onchange = (e) => { K.gift = e.target.checked; renderClub(); };
+  $("#view").onclick = async (e) => {
+    const pl = e.target.closest("[data-plan]"); if (pl) { K.plan = pl.dataset.plan; return renderClub(); }
+    const pr = e.target.closest("[data-period]"); if (pr) { K.period = pr.dataset.period; return renderClub(); }
+    const sp = e.target.closest("[data-sub-pay]");
+    if (sp) { sp.disabled = true; try { openPay((await api(`/api/subs/${sp.dataset.subPay}/pay?t=${encodeURIComponent(sp.dataset.t)}`, { method: "POST" })).url); } catch (err) { toast(err.message); } sp.disabled = false; return; }
+    const sc = e.target.closest("[data-sub-cancel]");
+    if (sc) {
+      if (sc.dataset.sure !== "1") { sc.dataset.sure = "1"; sc.textContent = "Точно отменить?"; return; }
+      try { await api(`/api/subs/${sc.dataset.subCancel}/cancel?t=${encodeURIComponent(sc.dataset.t)}`, { method: "POST" }); toast("Подписка отменена. Оплаченные конверты всё равно отправим"); renderClub(); } catch (err) { toast(err.message); }
+    }
+  };
+  $("#cf").onsubmit = async (e) => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(e.target));
+    const err = (t, id) => { $("#c-err").textContent = t; if (id) { $(id).focus(); $(id).closest("label")?.classList.add("need"); } };
+    document.querySelectorAll("#cf label.need").forEach((x) => x.classList.remove("need"));
+    if (!String(data.name || "").trim()) return err("Укажите имя.", "#c-name");
+    const d = String(data.phone || "").replace(/\D/g, "");
+    if (d.length < 10 || d.length > 15) return err("Проверьте телефон: нужно от 10 до 15 цифр.", "#c-phone");
+    if (!authed() && !String(data.email || "").trim()) return err("Укажите почту — пришлём на неё чек.", "#c-email");
+    if (K.gift && String(data.shipTo || "").trim().length < 2) return err("Укажите, кому дарите.", "#c-shipto");
+    if (String(data.address || "").trim().length < 10) return err("Укажите полный адрес для конвертов.", "#c-address");
+    if (!$("#c-terms").checked) return err("Отметьте согласие с условиями подписки.", "#c-terms");
+    if (per.autorenew && !$("#c-autopay").checked) return err("Отметьте согласие на ежемесячное списание.", "#c-autopay");
+    if (!$("#c-consent").checked) return err("Отметьте согласие на обработку персональных данных.", "#c-consent");
+    $("#c-send").disabled = true; $("#c-err").textContent = "";
+    try {
+      const r = await api("/api/subs", { method: "POST", body: JSON.stringify({ ...data, plan: K.plan, period: K.period, gift: K.gift, terms: true, consent: true, autopay: per.autorenew }) });
+      saveSubToken(r.sub.id, r.token); track("sub_start", `${K.plan} · ${K.period}`);
+      openPay(r.url);
+    } catch (e2) { $("#c-err").textContent = e2.message; }
+    $("#c-send").disabled = false;
+  };
+}
+
 // ---------- навигация ----------
 function route() {
   const tab = (location.hash || "#catalog").slice(1) || "catalog";
@@ -1139,6 +1255,7 @@ function route() {
   else if (tab === "cart") renderCart();
   else if (tab === "orders") renderOrders();
   else if (tab === "sets") renderSets();
+  else if (tab === "club") renderClub();
   else renderCatalog();
 }
 document.addEventListener("click", (e) => {
@@ -1192,6 +1309,8 @@ document.addEventListener("keydown", (e) => {
     const data = await api("/api/catalog");
     Object.assign(S, { teas: data.teas, kinds: data.kinds, recipes: data.recipes, mugRecipes: data.mugRecipes, tastes: data.tastes, sets: data.sets || [], delivery: data.delivery || {}, freeFrom: data.freeDeliveryFrom || 0, deliveryInfo: data.deliveryInfo || "" });
     if (authed()) api("/api/me").then((me) => (S.me = me)).catch(() => {});
+    S.club = await api("/api/club").catch(() => ({ enabled: false }));
+    document.querySelectorAll("[data-club-link]").forEach((a) => (a.hidden = !S.club.enabled));
     if (!inTelegram()) mountPromo(); // на сайте карусель стоит в шапке главной
   } catch {
     $("#view").innerHTML = `<div class="empty"><h2>Не удалось загрузить каталог</h2><p>Проверьте интернет и откройте магазин ещё раз.</p></div>`;
@@ -1206,13 +1325,17 @@ document.addEventListener("keydown", (e) => {
     } catch {}
     history.replaceState(null, "", "/#orders"); route(); return;
   }
+  if (qs.get("sub") && qs.get("t")) {
+    saveSubToken(Number(qs.get("sub")), qs.get("t"));
+    history.replaceState(null, "", "/#club"); route(); return;
+  }
   let tab = qs.get("tab");
   if (!tab && !location.hash && location.pathname === "/podbor") tab = "quiz";
   // Ссылка со страницы чая: /shop#tea-12 — открываем карточку поверх каталога
   const deep = location.hash.match(/^#tea-(\d+)$/);
   if (deep) { history.replaceState(null, "", `${location.pathname}#catalog`); route(); if (tea(deep[1])) openTea(deep[1]); return; }
-  if (["quiz", "orders", "cart", "catalog", "sets"].includes(tab)) history.replaceState(null, "", `${location.pathname}#${tab}`);
-  else if (!/^#(quiz|orders|cart|catalog|sets)$/.test(location.hash)) history.replaceState(null, "", `${location.pathname}${location.search}#catalog`);
+  if (["quiz", "orders", "cart", "catalog", "sets", "club"].includes(tab)) history.replaceState(null, "", `${location.pathname}#${tab}`);
+  else if (!/^#(quiz|orders|cart|catalog|sets|club)$/.test(location.hash)) history.replaceState(null, "", `${location.pathname}${location.search}#catalog`);
   track("app_open", tab || "");
   route();
 })();

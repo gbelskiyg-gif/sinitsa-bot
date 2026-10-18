@@ -25,6 +25,20 @@ import { menuKeyboard } from "./menu.js";
 import { requestWholesale } from "./wholesale.js";
 import { checkToken, ordersCsv } from "./export.js";
 import { sitePage } from "./site.js";
+import { buildSub, cancelSub, handleWebhook, payOrder, paySub, publicSub, startSub } from "./payments.js";
+import { ykEnabled, ykRecurring } from "./yookassa.js";
+import { SUB_PERIODS, SUB_PLANS, subPrice } from "./catalog.js";
+
+const tokenOk = (want, got) => typeof got === "string" && !!want && got.length === want.length && crypto.timingSafeEqual(Buffer.from(got), Buffer.from(want));
+// Онлайн-оплата не сработала (ЮKassa недоступна, ошибка в данных) — понятный ответ покупателю, подробности в лог
+async function payLink(res, fn) {
+  try { return send(res, 200, await fn()); }
+  catch (e) {
+    if (e instanceof OrderError) throw e;
+    console.error("[ЮKassa]", e.message);
+    return send(res, 502, { error: "Не получилось открыть оплату. Попробуйте через минуту или напишите нам в Telegram." });
+  }
+}
 
 const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "public");
 const TYPES = {
@@ -203,11 +217,45 @@ async function api(req, res, url) {
     if (!order || !order.site_token || t.length !== order.site_token.length || !crypto.timingSafeEqual(Buffer.from(t), Buffer.from(order.site_token)))
       return send(res, 404, { error: "Заказ не найден." });
     if (req.method === "GET" && !so[2]) return send(res, 200, { order: publicOrder(order) });
+    if (req.method === "POST" && url.searchParams.get("pay") === "1") return payLink(res, () => payOrder(order));
     if (req.method === "POST" && so[2]) {
       const r = await claimPaid(order, "");
       if (!r.ok) return send(res, 409, { error: r.error });
       return send(res, 200, { order: publicOrder(r.order) });
     }
+  }
+
+  // ЮKassa: уведомление о платеже (данные перепроверяем запросом к ЮKassa)
+  if (req.method === "POST" && url.pathname === "/api/yookassa") {
+    const body = await readJson(req, 50_000);
+    try { await handleWebhook(body); } catch (e) { console.error("[ЮKassa webhook]", e.message); return send(res, 500, { error: "retry" }); }
+    return send(res, 200, {});
+  }
+
+  // Подписка «Чайный клуб»: тарифы, оформление, страница подписки по ключу
+  if (req.method === "GET" && url.pathname === "/api/club") {
+    const periods = Object.fromEntries(Object.entries(SUB_PERIODS).filter(([, p]) => !p.autorenew || ykRecurring()));
+    return send(res, 200, {
+      enabled: ykEnabled(),
+      plans: Object.entries(SUB_PLANS).map(([key, p]) => ({ key, ...p, prices: Object.fromEntries(Object.keys(periods).map((k) => [k, subPrice(key, k)])) })),
+      periods,
+    });
+  }
+  if (req.method === "POST" && url.pathname === "/api/subs") {
+    if (!ykEnabled()) return send(res, 400, { error: "Подписка скоро откроется." });
+    if (!siteRateOk(clientIp(req))) return send(res, 429, { error: "Слишком много попыток подряд. Напишите нам в Telegram @sinitsa_chai_bot, поможем." });
+    const body = await readJson(req);
+    const draft = buildSub(body, auth(req));
+    return payLink(res, async () => { const r = await startSub(draft); return { sub: publicSub(r.sub), token: r.sub.token, url: r.url }; });
+  }
+  const sm = url.pathname.match(/^\/api\/subs\/(\d+)(\/pay|\/cancel)?$/);
+  if (sm) {
+    const sub = store.getSub(Number(sm[1]));
+    const u = auth(req);
+    if (!sub || !(tokenOk(sub.token, url.searchParams.get("t")) || (u && sub.user_id && sub.user_id === u.id))) return send(res, 404, { error: "Подписка не найдена." });
+    if (req.method === "GET" && !sm[2]) return send(res, 200, { sub: publicSub(sub), token: sub.token });
+    if (req.method === "POST" && sm[2] === "/pay") return payLink(res, () => paySub(sub));
+    if (req.method === "POST" && sm[2] === "/cancel") return send(res, 200, { sub: publicSub(await cancelSub(sub)) });
   }
 
   // Обезличенная статистика сайта: где посетители «отваливаются» (без входа — по случайному номеру браузера)
@@ -271,6 +319,10 @@ async function api(req, res, url) {
     return send(res, 200, { claimed: n });
   }
 
+  if (req.method === "GET" && url.pathname === "/api/my-subs") {
+    return send(res, 200, { subs: store.userSubs(user.id).map((s) => ({ ...publicSub(s), token: s.token })) });
+  }
+
   if (req.method === "GET" && url.pathname === "/api/orders") {
     return send(res, 200, { orders: store.userOrders(user.id).map(publicOrder) });
   }
@@ -299,6 +351,13 @@ async function api(req, res, url) {
       reply_markup: menuKeyboard(user.id),
     });
     return send(res, 201, { order: publicOrder(order) });
+  }
+
+  const op = url.pathname.match(/^\/api\/orders\/(\d+)\/pay$/);
+  if (req.method === "POST" && op) {
+    const order = store.getOrder(Number(op[1]));
+    if (!order || (order.user_id || order.tg_chat) !== user.id) return send(res, 404, { error: "Заказ не найден." });
+    return payLink(res, () => payOrder(order));
   }
 
   const pm = url.pathname.match(/^\/api\/orders\/(\d+)\/paid$/);

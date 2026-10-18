@@ -234,6 +234,7 @@ async function api(req, res, url) {
 
   // Подписка «Чайный клуб»: тарифы, оформление, страница подписки по ключу
   if (req.method === "GET" && url.pathname === "/api/club") {
+    if (process.env.CLUB !== "1") return send(res, 200, { enabled: false, plans: [], periods: {} }); // клуб пока выключен
     // Пока ЮKassa не подключена — показываем все тарифы как витрину (оформить нельзя)
     const periods = Object.fromEntries(Object.entries(SUB_PERIODS).filter(([, p]) => !p.autorenew || ykRecurring() || !ykEnabled()));
     return send(res, 200, {
@@ -243,7 +244,7 @@ async function api(req, res, url) {
     });
   }
   if (req.method === "POST" && url.pathname === "/api/subs") {
-    if (!ykEnabled()) return send(res, 400, { error: "Подписка скоро откроется." });
+    if (!ykEnabled() || process.env.CLUB !== "1") return send(res, 400, { error: "Подписка скоро откроется." });
     if (!siteRateOk(clientIp(req))) return send(res, 429, { error: "Слишком много попыток подряд. Напишите нам в Telegram @sinitsa_chai_bot, поможем." });
     const body = await readJson(req);
     const draft = buildSub(body, auth(req));

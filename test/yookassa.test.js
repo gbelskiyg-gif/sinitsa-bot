@@ -15,6 +15,7 @@ process.env.YOOKASSA_API = "https://yk.mock/v3";
 process.env.YOOKASSA_SHOP_ID = "1000";
 process.env.YOOKASSA_SECRET_KEY = "test_secret";
 process.env.YOOKASSA_RECURRING = "1";
+process.env.CLUB = "1";
 
 const tgSent = [];
 const yk = { payments: new Map(), receipts: [], creates: [], n: 0 };

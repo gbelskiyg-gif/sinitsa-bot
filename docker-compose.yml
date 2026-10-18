@@ -19,6 +19,8 @@ services:
       DOMAIN: ${DOMAIN}
       # куда ещё могут зайти (www, старый адрес) — всё перенаправляется на DOMAIN
       REDIRECT_FROM: ${REDIRECT_FROM:-www.${DOMAIN}}
+      # прежний адрес сайта — продолжает работать для старых кнопок в Telegram
+      OLD_DOMAIN: ${OLD_DOMAIN:-localhost}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

@@ -256,7 +256,7 @@ function promoSlides() {
   if (S.teas.some((x) => x.premium && x.available)) out.push({ cls: "prem", attr: `data-promo="premium"`,
     img: `<img src="/teas/kinds/dark_oolong.webp" alt="Тёмный утёсный улун" loading="lazy">`,
     eye: "✦ Премиум", title: "Редкие чаи для особого случая",
-    text: "Утёсные улуны Уишань со старых кустов, выдержанные пуэры и хэйча Любао.", cta: "Смотреть премиум" });
+    text: "Утёсные улуны со старых кустов, лучшие тайваньские ГАБА, выдержанный шэн и хэйча Любао.", cta: "Смотреть премиум" });
   return out;
 }
 let promoTimer = null;

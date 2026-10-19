@@ -108,6 +108,20 @@ npm test
 ```
 
 
+## Метрика в боте
+
+Счётчик Яндекс Метрики (`METRIKA_ID`, по умолчанию 113675520) стоит на всех страницах и включается после того, как посетитель принял cookie. Цели воронки — JS-события `tea_open`, `quiz_start`, `quiz_done`, `cart_add`, `checkout_open`, `order_sent`.
+
+Кнопка «📈 Яндекс Метрика» в «📊 Статистике» показывает сводку: посетители, воронка по целям, источники, устройства. Нужен токен **только на чтение**:
+
+1. oauth.yandex.ru → «Создать приложение» → «Для доступа к API или отладки» (или «Веб-сервисы» с Redirect URI `https://oauth.yandex.ru/verification_code`).
+2. Доступ: «Яндекс.Метрика → Получение статистики, чтение параметров своих и доверенных счётчиков» (`metrika:read`). Больше ничего не отмечать.
+3. Открыть `https://oauth.yandex.ru/authorize?response_type=token&client_id=<ClientID приложения>` и разрешить — на экране появится токен (действует около года).
+4. На сервере, не показывая токен на экране:
+   ```
+   cd ~/sinitsa-bot && read -rs -p "Токен Метрики: " T && echo && sed -i '/^METRIKA_TOKEN=/d' .env && printf 'METRIKA_TOKEN=%s\n' "$T" >> .env && unset T && docker compose up -d --force-recreate app
+   ```
+
 ## Онлайн-оплата и чеки (ЮKassa)
 
 Модуль `src/yookassa.js` (API) и `src/payments.js` (заказы и подписка). Пока в `.env` нет `YOOKASSA_SHOP_ID`

@@ -9,6 +9,7 @@ import { esc, poll, tg, tgSafe } from "./telegram.js";
 import { BTN, MENU_VERSION, menuKeyboard } from "./menu.js";
 import { requestWholesale } from "./wholesale.js";
 import { sheetFormula } from "./export.js";
+import { metrikaReport } from "./metrika.js";
 
 // «37 чаёв», «31 чай», «32 чая» — число берём из каталога, чтобы не устаревало
 function teasCount(n = TEAS.length) {
@@ -302,7 +303,7 @@ async function sendStats(chat, days) {
   const { text, carts } = statsText(days);
   const kb = carts.filter((c) => !store.remindedRecently(c.user_id, 14)).slice(0, 8)
     .map((c) => [{ text: `💬 Напомнить: ${(c.first_name || "покупатель").slice(0, 20)}`, callback_data: `rem:${c.user_id}` }]);
-  kb.push([{ text: days === 7 ? "За 30 дней" : "За 7 дней", callback_data: `stats:${days === 7 ? 30 : 7}` }]);
+  kb.push([{ text: days === 7 ? "За 30 дней" : "За 7 дней", callback_data: `stats:${days === 7 ? 30 : 7}` }, { text: "📈 Яндекс Метрика", callback_data: `ym:${days}` }]);
   return tgSafe("sendMessage", { chat_id: chat, text: text.slice(0, 4000), parse_mode: "HTML", reply_markup: { inline_keyboard: kb } });
 }
 
@@ -509,6 +510,13 @@ async function onCallback(q) {
 
   if (!isAdmin(q.from.id)) return answer("Недоступно");
 
+  if (data.startsWith("ym:")) {
+    const days = Number(data.split(":")[1]) === 30 ? 30 : 7;
+    await answer("Спрашиваем Метрику…");
+    const text = await metrikaReport(days);
+    return tgSafe("sendMessage", { chat_id: chat, text: text.slice(0, 4000), parse_mode: "HTML",
+      reply_markup: { inline_keyboard: [[{ text: days === 7 ? "Метрика за 30 дней" : "Метрика за 7 дней", callback_data: `ym:${days === 7 ? 30 : 7}` }]] } });
+  }
   if (data.startsWith("stats:")) {
     await answer();
     return sendStats(chat, Number(data.split(":")[1]) === 30 ? 30 : 7);

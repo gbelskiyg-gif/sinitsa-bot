@@ -148,6 +148,8 @@ async function onStart(msg) {
     store.markMenu(msg.from.id, MENU_VERSION);
     return;
   }
+  // Откуда пришли: ссылка t.me/sinitsa_chai_bot?start=ig (метка — латиница, цифры, - и _)
+  try { store.logEvent(msg.from.id, "bot_start", /^[a-z0-9_-]{1,32}$/i.test(payload) ? payload.toLowerCase() : ""); } catch {}
   const photo = await tgSafe("sendPhoto", {
     chat_id: chat,
     photo: `${PUBLIC_URL}/emblem.jpg`,
@@ -281,6 +283,11 @@ export function statsText(days) {
   };
   block("📱 Мини-приложение в Telegram", "tg");
   block("🌐 Сайт", "site");
+  const starts = store.botStarts(days);
+  if (starts.length) {
+    const total = starts.reduce((a, r) => a + r.n, 0);
+    lines.push("", `🤖 <b>Нажали «Старт» в боте</b> — ${total}: ${starts.map((r) => `${esc(r.src || "без метки")} — ${r.n}`).join(", ")}`);
+  }
   const drop = store.quizDropoff(days);
   if (drop.length) {
     lines.push("", "<b>Где бросили подбор:</b>");

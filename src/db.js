@@ -164,6 +164,12 @@ export function funnel(days, src = "tg") {
   ).all(`-${days} days`, src);
   return Object.fromEntries(rows.map((r) => [r.name, r.n]));
 }
+/** Кто нажал «Старт» в боте и по какой ссылке (t.me/бот?start=ig и т. п.). */
+export function botStarts(days) {
+  return db.prepare(
+    "SELECT data AS src, COUNT(DISTINCT user_id) AS n FROM events WHERE name = 'bot_start' AND created_at > datetime('now', ?) GROUP BY data ORDER BY n DESC"
+  ).all(`-${days} days`);
+}
 /** До какого вопроса подбора дошли люди, которые его не закончили. */
 export function quizDropoff(days) {
   return db.prepare(

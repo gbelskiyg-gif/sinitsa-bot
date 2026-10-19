@@ -132,3 +132,13 @@ test("слово «меню» присылает кнопки под сообщ�
   await _test.onCallback({ id: "m2", data: "m:sheet", from: { id: 520 }, message: { chat: { id: 520 }, message_id: 6 } });
   assert.ok(!sent.some((m) => /IMPORTDATA/.test(m.text || "")));
 });
+
+test("старт бота по ссылке с меткой виден в статистике", async () => {
+  const start = (id, text) => _test.onMessage({ message_id: 1, text, chat: { id, type: "private" }, from: { id, first_name: "Гость" } });
+  await start(801, "/start ig");
+  await start(802, "/start IG");
+  await start(803, "/start");
+  await start(804, "/start <script>");
+  const { text } = _test.statsText(7);
+  assert.match(text, /Нажали «Старт» в боте<\/b> — 4: ig — 2, без метки — 2/);
+});

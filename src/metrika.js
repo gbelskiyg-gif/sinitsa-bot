@@ -45,13 +45,14 @@ export async function metrikaReport(days = 7) {
     const others = gl.filter((g) => !funnel.includes(g)).slice(0, Math.max(0, 14 - funnel.length));
     const goalList = [...funnel, ...others];
 
-    const [tot, src, eng, dev, gr, where] = await Promise.all([
+    const [tot, src, eng, dev, gr, where, utm] = await Promise.all([
       stat(days, { metrics: "ym:s:visits,ym:s:users,ym:s:pageviews,ym:s:bounceRate,ym:s:avgVisitDurationSeconds,ym:s:percentNewVisitors" }),
       stat(days, { metrics: "ym:s:visits", dimensions: "ym:s:lastsignTrafficSource", sort: "-ym:s:visits", limit: "6" }),
       stat(days, { metrics: "ym:s:visits", dimensions: "ym:s:lastsignSourceEngine", sort: "-ym:s:visits", limit: "6" }),
       stat(days, { metrics: "ym:s:visits", dimensions: "ym:s:deviceCategory", sort: "-ym:s:visits", limit: "4" }),
       goalList.length ? stat(days, { metrics: goalList.map((g) => `ym:s:goal${g.id}users`).join(",") }) : null,
       stat(days, { metrics: "ym:s:users", dimensions: "ym:s:paramsLevel2", filters: "ym:s:paramsLevel1=='Где'", limit: "3" }).catch(() => null),
+      stat(days, { metrics: "ym:s:visits", dimensions: "ym:s:lastsignUTMSource,ym:s:lastsignUTMMedium", sort: "-ym:s:visits", limit: "8" }).catch(() => null),
     ]);
 
     const [visits, users, views, bounce, dur, fresh] = tot.totals || [];
@@ -77,6 +78,9 @@ export async function metrikaReport(days = 7) {
     if (srcRows.length) lines.push("", "<b>Откуда пришли</b>:", ...srcRows.map((r) => `${esc(r.name || "Не определено")} — ${num(r.v)}`));
     const engRows = rows(eng).filter((r) => r.name);
     if (engRows.length) lines.push("", "<b>Конкретные источники</b>:", ...engRows.map((r) => `${esc(r.name)} — ${num(r.v)}`));
+    const utmRows = (utm?.data || []).filter((d) => d.dimensions?.[0]?.name)
+      .map((d) => ({ name: [d.dimensions[0].name, d.dimensions[1]?.name].filter(Boolean).join(" / "), v: d.metrics?.[0] || 0 }));
+    if (utmRows.length) lines.push("", "<b>По ссылкам с метками</b>:", ...utmRows.map((r) => `${esc(r.name)} — ${num(r.v)}`));
     const devRows = rows(dev);
     if (devRows.length) lines.push("", `<b>Устройства</b>: ${devRows.map((r) => `${esc(r.name)} ${pct(r.v, visits)}`).join(" · ")}`);
 

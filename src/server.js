@@ -404,6 +404,15 @@ export function startServer(port) {
       // Магазин живёт на главной; старые адреса ведут туда же (?tab= магазин понимает сам)
       if (url.pathname === "/shop" || url.pathname === "/index.html") return redirect(res, "/" + url.search, 301);
       if (url.pathname === "/podbor") return redirect(res, "/?tab=quiz", 301);
+      // Короткие ссылки для соцсетей: метка источника видна в Метрике (Источники → Метки UTM)
+      const SHORT = {
+        "/ig": "?utm_source=instagram&utm_medium=bio",
+        "/ig-s": "?utm_source=instagram&utm_medium=stories",
+        "/ig-d": "?utm_source=instagram&utm_medium=direct",
+        "/tg": "?utm_source=telegram&utm_medium=channel",
+      };
+      const short = SHORT[url.pathname.replace(/\/+$/, "").toLowerCase()];
+      if (short) return redirect(res, "/" + short, 302);
       const page = sitePage(url.pathname, url.searchParams);
       if (page) {
         res.writeHead(page.status || 200, { "content-type": page.type || "text/html; charset=utf-8", "cache-control": "no-cache" });

@@ -317,6 +317,11 @@ test("магазин на главной: /shop и /podbor ведут туда, 
   assert.equal(r.headers.get("location"), "/?tab=cart");
   r = await fetch(base + "/podbor", { redirect: "manual" });
   assert.equal(r.headers.get("location"), "/?tab=quiz");
+  r = await fetch(base + "/ig", { redirect: "manual" });
+  assert.equal(r.status, 302);
+  assert.equal(r.headers.get("location"), "/?utm_source=instagram&utm_medium=bio");
+  r = await fetch(base + "/IG-S/", { redirect: "manual" });
+  assert.equal(r.headers.get("location"), "/?utm_source=instagram&utm_medium=stories");
 });
 
 test("заказ с сайта без Telegram: сумма по каталогу, способ связи, промокод по телефону", async () => {

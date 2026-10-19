@@ -100,7 +100,10 @@ function visitorId() {
     return v;
   } catch { return ""; }
 }
+// Ключевые шаги — ещё и цели Яндекс Метрики (идентификатор цели = имя события)
+const YM_GOALS = new Set(["tea_open", "quiz_start", "quiz_done", "sets_open", "cart_add", "cart_open", "checkout_open", "order_sent"]);
 function track(name, data = "") {
+  try { if (YM_GOALS.has(name) && window.ym && window.YM_ID) window.ym(window.YM_ID, "reachGoal", name); } catch {}
   if (!authed()) {
     if (inTelegram()) return;
     const v = visitorId(); if (!v) return;
@@ -860,7 +863,7 @@ function renderCheckout(total) {
   $("#view").onclick = null;
   $("#view").innerHTML = `<h2 class="section-title">Оформление</h2>
     ${authed() ? "" : loginBox("Заказ сохранится в профиле, статусы и реквизиты придут в Telegram. Или оформите без входа — ниже.")}
-    <form id="f" novalidate>
+    <form id="f" class="ym-hide-content" novalidate>
       <label>Имя<input id="f-name" name="name" required maxlength="80" value="${esc(f.name || u?.first_name || S.auth?.user?.first_name || "")}"></label>
       <label>Телефон<input id="f-phone" name="phone" type="tel" required maxlength="30" placeholder="+7 900 000-00-00" value="${esc(f.phone || "")}"></label>
       <label>Почта <span class="muted small" id="email-hint"></span><input id="f-email" name="email" type="email" inputmode="email" autocomplete="email" maxlength="120" placeholder="name@mail.ru" value="${esc(f.email || "")}"></label>
@@ -1189,7 +1192,7 @@ async function renderClub() {
     <div class="chips sizes" style="margin:14px 0 6px">${["month", "3", "6"].filter((k) => C.periods[k] && !(K.gift && C.periods[k].autorenew)).map((k) => `<button class="chip" data-period="${k}" aria-pressed="${k === K.period}">${esc(C.periods[k].label)}${C.periods[k].autorenew ? "" : ` · ${rub(plan.prices[k])}`}</button>`).join("")}</div>
     <p class="small muted" style="margin:0 0 6px">${per.autorenew ? "Списываем раз в месяц, отменить можно в любой момент." : `${per.envelopes} ${envWord(per.envelopes)} — оплата сразу${per.note ? `, ${esc(per.note)}` : ""}.`}</p>
     <label class="consent" style="margin:6px 0 14px"><input type="checkbox" id="c-gift" ${K.gift ? "checked" : ""}> <span>🎁 Это подарок — отправим конверты другому человеку</span></label>
-    <form id="cf" novalidate>
+    <form id="cf" class="ym-hide-content" novalidate>
       <label>Ваше имя<input id="c-name" name="name" maxlength="80" value="${esc(f.name || tgApp?.initDataUnsafe?.user?.first_name || S.auth?.user?.first_name || "")}"></label>
       <label>Ваш телефон<input id="c-phone" name="phone" type="tel" maxlength="30" placeholder="+7 900 000-00-00" value="${esc(f.phone || "")}"></label>
       <label>Почта — пришлём чек и новости подписки<input id="c-email" name="email" type="email" inputmode="email" maxlength="120" placeholder="name@mail.ru" value="${esc(f.email || "")}"></label>
@@ -1249,6 +1252,8 @@ function route() {
   // Сайт: блоки главной (заголовок, доставка, вопросы) видны только в каталоге
   if (document.body.dataset.tab && document.body.dataset.tab !== tab && !inTelegram()) window.scrollTo(0, 0);
   document.body.dataset.tab = tab;
+  // Личные данные (заказы, адреса) не попадают в записи Вебвизора
+  $("#view").classList.toggle("ym-hide-content", tab === "orders");
   document.querySelectorAll(".nav a").forEach((a) => a.classList.toggle("active", a.dataset.tab === tab));
   $("#view").onclick = null;
   if (tab !== "cart") { S.checkout = false; S.undo = null; }

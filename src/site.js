@@ -67,6 +67,19 @@ const KIND_TEXT = {
 };
 const KIND_SLUG = { gaba: "gaba", light_oolong: "svetlyj-ulun", dark_oolong: "temnyj-ulun", dancong: "dancun", red: "krasnyj-chaj", sheng: "shen-puer", shu: "shu-puer", puer: "puer", heicha: "heicha" };
 
+// ---------- Яндекс Метрика ----------
+// Номер счётчика публичный (он виден в коде любой страницы). METRIKA_ID= (пусто) в .env — выключить
+const METRIKA_ID = /^\d+$/.test(process.env.METRIKA_ID ?? "113675520") ? (process.env.METRIKA_ID ?? "113675520") : "";
+export const metrikaTag = () => METRIKA_ID ? `<script>
+window.YM_ID=${METRIKA_ID};
+(function(m,e,t,r,i,k,a){m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};m[i].l=1*new Date();
+for(var j=0;j<document.scripts.length;j++){if(document.scripts[j].src===r)return}
+k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)})
+(window,document,"script","https://mc.yandex.ru/metrika/tag.js?id=${METRIKA_ID}","ym");
+ym(${METRIKA_ID},"init",{ssr:true,webvisor:true,clickmap:true,trackHash:true,accurateTrackBounce:true,trackLinks:true});
+</script>
+<noscript><div><img src="https://mc.yandex.ru/watch/${METRIKA_ID}" style="position:absolute;left:-9999px" alt=""></div></noscript>` : "";
+
 // ---------- общий каркас ----------
 function layout({ title, description, canonical, image = "/emblem.jpg", jsonld = [], body, type = "website" }) {
   const ld = [
@@ -99,6 +112,7 @@ ${ld.map((x) => `<script type="application/ld+json">${JSON.stringify(x).replace(
 // Telegram открыл старую ссылку на главную — ведём сразу в магазин
 if (/tgWebAppData/.test(location.hash)) location.replace("/" + location.search + location.hash);
 </script>
+${metrikaTag()}
 </head>
 <body>
 <header class="hd"><div class="wrap hd-in">
@@ -222,7 +236,7 @@ ${ld.map((x) => `<script type="application/ld+json">${JSON.stringify(x).replace(
 ${siteFooter()}`;
 
   const tpl = fs.readFileSync(path.join(PUBLIC_DIR, "index.html"), "utf8");
-  return tpl.replace(/<title>.*?<\/title>/, head).replace("<!--SITE_TOP-->", top).replace("<!--SITE_BOTTOM-->", bottom);
+  return tpl.replace(/<title>.*?<\/title>/, head).replace("<!--SITE_TOP-->", top).replace("<!--SITE_BOTTOM-->", bottom).replace("</head>", `${metrikaTag()}\n</head>`);
 }
 
 // ---------- каталог ----------

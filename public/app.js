@@ -1344,6 +1344,11 @@ document.addEventListener("keydown", (e) => {
   if (deep) { history.replaceState(null, "", `${location.pathname}#catalog`); route(); if (tea(deep[1])) openTea(deep[1]); return; }
   if (["quiz", "orders", "cart", "catalog", "sets", "club"].includes(tab)) history.replaceState(null, "", `${location.pathname}#${tab}`);
   else if (!/^#(quiz|orders|cart|catalog|sets|club)$/.test(location.hash)) history.replaceState(null, "", `${location.pathname}${location.search}#catalog`);
-  track("app_open", tab || "");
+  // Ссылка сразу на раздел каталога: /?group=premium (короткая ссылка /ig-p)
+  const grp = qs.get("group");
+  const openGroup = GROUPS.some(([k]) => k === grp) && location.hash === "#catalog";
+  if (openGroup) S.group = grp;
+  track("app_open", tab || (openGroup ? `group:${grp}` : ""));
   route();
+  if (openGroup) setTimeout(() => $("#groups")?.scrollIntoView({ behavior: "smooth", block: "start" }), 300);
 })();

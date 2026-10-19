@@ -409,6 +409,7 @@ export function startServer(port) {
         "/ig": "?utm_source=instagram&utm_medium=bio",
         "/ig-s": "?utm_source=instagram&utm_medium=stories",
         "/ig-d": "?utm_source=instagram&utm_medium=direct",
+        "/ig-p": "?group=premium&utm_source=instagram&utm_medium=stories&utm_campaign=premium",
         "/tg": "?utm_source=telegram&utm_medium=channel",
       };
       const short = SHORT[url.pathname.replace(/\/+$/, "").toLowerCase()];

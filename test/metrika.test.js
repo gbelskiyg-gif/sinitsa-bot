@@ -26,6 +26,7 @@ globalThis.fetch = async (url, opts = {}) => {
   if (!dim) return Response.json({ totals: metrics.split(",").map((_, i) => 20 - i * 5) });
   if (dim === "ym:s:lastsignTrafficSource") return Response.json({ data: [{ dimensions: [{ name: "Переходы из социальных сетей" }], metrics: [30] }] });
   if (dim === "ym:s:lastsignSourceEngine") return Response.json({ data: [{ dimensions: [{ name: "Instagram" }], metrics: [25] }, { dimensions: [{ name: null }], metrics: [5] }] });
+  if (dim === "ym:s:paramsLevel2") { assert.equal(u.searchParams.get("filters"), "ym:s:paramsLevel1=='Где'"); return Response.json({ data: [{ dimensions: [{ name: "Мини-приложение" }], metrics: [12] }, { dimensions: [{ name: "Сайт" }], metrics: [28] }] }); }
   if (dim === "ym:s:deviceCategory") return Response.json({ data: [{ dimensions: [{ name: "Смартфоны" }], metrics: [45] }] });
   throw new Error("unexpected " + u);
 };
@@ -48,6 +49,7 @@ test("сводка: посетители, воронка по порядку, и
   assert.match(t, /Переход в мессенджер — 5/);
   assert.match(t, /Instagram — 25/);
   assert.match(t, /Смартфоны 90%/);
+  assert.match(t, /Где: Мини-приложение — 12 · Сайт — 28/);
   const data = calls.find((u) => u.pathname === "/stat/v1/data");
   assert.equal(data.searchParams.get("date1"), "6daysAgo");
   assert.equal(data.searchParams.get("ids"), "113675520");

@@ -81,7 +81,8 @@ function load(){if(window.YM_ID)return;window.YM_ID=ID;
 for(var j=0;j<document.scripts.length;j++){if(document.scripts[j].src===r)return}
 k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)})
 (window,document,"script","https://mc.yandex.ru/metrika/tag.js?id="+ID,"ym");
-ym(ID,"init",{ssr:true,webvisor:true,clickmap:true,trackHash:true,accurateTrackBounce:true,trackLinks:true});}
+var tg=!!(window.Telegram&&Telegram.WebApp&&Telegram.WebApp.initData);
+ym(ID,"init",{ssr:true,webvisor:true,clickmap:true,trackHash:true,accurateTrackBounce:true,trackLinks:true,params:{"Где":tg?"Мини-приложение":"Сайт"}});}
 function banner(){if(document.getElementById("ck"))return;
 var nav=document.querySelector(".nav"),off=nav&&nav.offsetHeight&&getComputedStyle(nav).position==="fixed"?nav.offsetHeight+10:16;
 var d=document.createElement("div");d.id="ck";d.setAttribute("role","dialog");d.setAttribute("aria-label","Файлы cookie");

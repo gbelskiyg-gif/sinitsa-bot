@@ -45,12 +45,13 @@ export async function metrikaReport(days = 7) {
     const others = gl.filter((g) => !funnel.includes(g)).slice(0, Math.max(0, 14 - funnel.length));
     const goalList = [...funnel, ...others];
 
-    const [tot, src, eng, dev, gr] = await Promise.all([
+    const [tot, src, eng, dev, gr, where] = await Promise.all([
       stat(days, { metrics: "ym:s:visits,ym:s:users,ym:s:pageviews,ym:s:bounceRate,ym:s:avgVisitDurationSeconds,ym:s:percentNewVisitors" }),
       stat(days, { metrics: "ym:s:visits", dimensions: "ym:s:lastsignTrafficSource", sort: "-ym:s:visits", limit: "6" }),
       stat(days, { metrics: "ym:s:visits", dimensions: "ym:s:lastsignSourceEngine", sort: "-ym:s:visits", limit: "6" }),
       stat(days, { metrics: "ym:s:visits", dimensions: "ym:s:deviceCategory", sort: "-ym:s:visits", limit: "4" }),
       goalList.length ? stat(days, { metrics: goalList.map((g) => `ym:s:goal${g.id}users`).join(",") }) : null,
+      stat(days, { metrics: "ym:s:users", dimensions: "ym:s:paramsLevel2", filters: "ym:s:paramsLevel1=='Где'", limit: "3" }).catch(() => null),
     ]);
 
     const [visits, users, views, bounce, dur, fresh] = tot.totals || [];
@@ -60,6 +61,9 @@ export async function metrikaReport(days = 7) {
       `Посетители: <b>${num(users)}</b> (новых ${Math.round(fresh || 0)}%) · визиты: ${num(visits)} · страниц: ${num(views)}`,
       `В среднем на сайте: ${m} мин ${s} с · ушли сразу (отказы): ${Math.round(bounce || 0)}%`,
     ];
+
+    const whereRows = where ? rows(where).filter((r) => r.name) : [];
+    if (whereRows.length) lines.push(`Где: ${whereRows.map((r) => `${esc(r.name)} — ${num(r.v)}`).join(" · ")}`);
 
     if (gr) {
       const vals = gr.totals || [];

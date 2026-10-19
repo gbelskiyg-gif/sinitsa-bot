@@ -70,15 +70,31 @@ const KIND_SLUG = { gaba: "gaba", light_oolong: "svetlyj-ulun", dark_oolong: "te
 // ---------- Яндекс Метрика ----------
 // Номер счётчика публичный (он виден в коде любой страницы). METRIKA_ID= (пусто) в .env — выключить
 const METRIKA_ID = /^\d+$/.test(process.env.METRIKA_ID ?? "113675520") ? (process.env.METRIKA_ID ?? "113675520") : "";
+// Метрика включается только после согласия на cookie (плашка внизу; выбор помним в браузере)
 export const metrikaTag = () => METRIKA_ID ? `<script>
-window.YM_ID=${METRIKA_ID};
+(function(){
+var ID=${METRIKA_ID},KEY="cookies";
+function get(){try{return localStorage.getItem(KEY)}catch(e){return null}}
+function set(v){try{localStorage.setItem(KEY,v)}catch(e){}}
+function load(){if(window.YM_ID)return;window.YM_ID=ID;
 (function(m,e,t,r,i,k,a){m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};m[i].l=1*new Date();
 for(var j=0;j<document.scripts.length;j++){if(document.scripts[j].src===r)return}
 k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)})
-(window,document,"script","https://mc.yandex.ru/metrika/tag.js?id=${METRIKA_ID}","ym");
-ym(${METRIKA_ID},"init",{ssr:true,webvisor:true,clickmap:true,trackHash:true,accurateTrackBounce:true,trackLinks:true});
-</script>
-<noscript><div><img src="https://mc.yandex.ru/watch/${METRIKA_ID}" style="position:absolute;left:-9999px" alt=""></div></noscript>` : "";
+(window,document,"script","https://mc.yandex.ru/metrika/tag.js?id="+ID,"ym");
+ym(ID,"init",{ssr:true,webvisor:true,clickmap:true,trackHash:true,accurateTrackBounce:true,trackLinks:true});}
+function banner(){if(document.getElementById("ck"))return;
+var nav=document.querySelector(".nav"),off=nav&&nav.offsetHeight&&getComputedStyle(nav).position==="fixed"?nav.offsetHeight+10:16;
+var d=document.createElement("div");d.id="ck";d.setAttribute("role","dialog");d.setAttribute("aria-label","Файлы cookie");
+d.style.cssText="position:fixed;z-index:60;left:50%;transform:translateX(-50%);bottom:"+off+"px;width:min(560px,calc(100% - 24px));box-sizing:border-box;padding:14px 16px;background:#211b28;color:#f4ede3;border:1px solid #36303b;border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,.45);font:14px/1.5 Manrope,Arial,sans-serif";
+d.innerHTML='<p style="margin:0 0 10px">Мы используем cookie и Яндекс Метрику, чтобы понимать, чем удобен магазин и что улучшить. Подробнее — в <a href="/privacy" style="color:#edbe82">политике конфиденциальности</a>.</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" data-ck="1" style="flex:1;min-width:120px;padding:10px 14px;border:0;border-radius:10px;background:#edbe82;color:#21141a;font:600 14px Manrope,Arial,sans-serif;cursor:pointer">Принять</button><button type="button" data-ck="0" style="flex:1;min-width:120px;padding:10px 14px;border:1px solid #36303b;border-radius:10px;background:transparent;color:#f4ede3;font:600 14px Manrope,Arial,sans-serif;cursor:pointer">Только необходимые</button></div>';
+d.addEventListener("click",function(e){var b=e.target.closest("[data-ck]");if(!b)return;var v=b.getAttribute("data-ck");set(v);d.remove();if(v==="1")load();});
+document.body.appendChild(d);}
+window.cookieSettings=function(){set("");banner();};
+var v=get();
+if(v==="1")load();
+else if(v!=="0"){if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",banner);else banner();}
+})();
+</script>` : "";
 
 // ---------- общий каркас ----------
 function layout({ title, description, canonical, image = "/emblem.jpg", jsonld = [], body, type = "website" }) {
@@ -130,7 +146,7 @@ ${metrikaTag()}
   <div class="ft-col"><b>Блог</b><a href="/blog">Все статьи</a>${ARTICLES.slice(0, 3).map((a) => `<a href="/blog/${a.slug}">${esc(a.h1.split(":")[0])}</a>`).join("")}</div>
   <div class="ft-col"><b>Мы на связи</b>${peopleLinks()}<a href="mailto:${esc(LEGAL.email)}">${esc(LEGAL.email)}</a><a href="${BOT}">Telegram-бот @sinitsa_chai_bot</a><a href="${CHANNEL}">Канал о чае</a><a href="${INSTAGRAM}">Instagram</a></div>
 </div><div class="wrap ft-legal small muted">
-  <a href="/terms">Условия доставки и возврата</a> · <a href="/privacy">Политика конфиденциальности</a> · <a href="/consent">Согласие на обработку данных</a><br>Продавец: ${esc(LEGAL.name)}, ИНН ${esc(LEGAL.inn)}${LEGAL.ogrnip ? `, ОГРНИП ${esc(LEGAL.ogrnip)}` : ""}, ${esc(LEGAL.address)}
+  <a href="/terms">Условия доставки и возврата</a> · <a href="/privacy">Политика конфиденциальности</a> · <a href="/consent">Согласие на обработку данных</a> · <a href="#" onclick="window.cookieSettings&&cookieSettings();return false">Настройки cookie</a><br>Продавец: ${esc(LEGAL.name)}, ИНН ${esc(LEGAL.inn)}${LEGAL.ogrnip ? `, ОГРНИП ${esc(LEGAL.ogrnip)}` : ""}, ${esc(LEGAL.address)}
 </div></footer>
 </body>
 </html>`;
@@ -184,7 +200,7 @@ function siteFooter() {
   <div class="s-col"><b>Покупателям</b><a href="/#catalog">Каталог</a><a href="/#quiz">Подбор чая</a><a href="/#sets">Наборы</a><a href="/#cart">Корзина</a></div>
   <div class="s-col"><b>Блог</b><a href="/blog">Все статьи</a>${ARTICLES.slice(0, 3).map((a) => `<a href="/blog/${a.slug}">${esc(a.h1.split(":")[0])}</a>`).join("")}</div>
   <div class="s-col"><b>Мы на связи</b>${peopleLinks()}<a href="mailto:${esc(LEGAL.email)}">${esc(LEGAL.email)}</a><a href="${BOT}">Telegram-бот @sinitsa_chai_bot</a><a href="${CHANNEL}">Канал о чае</a><a href="${INSTAGRAM}">Instagram</a></div>
-</div><p class="s-legal small muted"><a href="/terms">Условия доставки и возврата</a> · <a href="/privacy">Политика конфиденциальности</a> · <a href="/consent">Согласие на обработку данных</a><br>Продавец: ${esc(LEGAL.name)}, ИНН ${esc(LEGAL.inn)}${LEGAL.ogrnip ? `, ОГРНИП ${esc(LEGAL.ogrnip)}` : ""}, ${esc(LEGAL.address)}</p></footer>`;
+</div><p class="s-legal small muted"><a href="/terms">Условия доставки и возврата</a> · <a href="/privacy">Политика конфиденциальности</a> · <a href="/consent">Согласие на обработку данных</a> · <a href="#" onclick="window.cookieSettings&&cookieSettings();return false">Настройки cookie</a><br>Продавец: ${esc(LEGAL.name)}, ИНН ${esc(LEGAL.inn)}${LEGAL.ogrnip ? `, ОГРНИП ${esc(LEGAL.ogrnip)}` : ""}, ${esc(LEGAL.address)}</p></footer>`;
 }
 
 function homePage() {

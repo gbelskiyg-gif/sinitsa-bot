@@ -28,6 +28,7 @@ globalThis.fetch = async (url, opts = {}) => {
   if (dim === "ym:s:lastsignSourceEngine") return Response.json({ data: [{ dimensions: [{ name: "Instagram" }], metrics: [25] }, { dimensions: [{ name: null }], metrics: [5] }] });
   if (dim === "ym:s:paramsLevel2") { assert.equal(u.searchParams.get("filters"), "ym:s:paramsLevel1=='Где'"); return Response.json({ data: [{ dimensions: [{ name: "Мини-приложение" }], metrics: [12] }, { dimensions: [{ name: "Сайт" }], metrics: [28] }] }); }
   if (dim === "ym:s:lastsignUTMSource,ym:s:lastsignUTMMedium") return Response.json({ data: [{ dimensions: [{ name: "instagram" }, { name: "bio" }], metrics: [7] }, { dimensions: [{ name: null }, { name: null }], metrics: [3] }] });
+  if (mode === "partfail" && dim === "ym:s:deviceCategory") return new Response("{}", { status: 429 });
   if (dim === "ym:s:deviceCategory") return Response.json({ data: [{ dimensions: [{ name: "Смартфоны" }], metrics: [45] }] });
   throw new Error("unexpected " + u);
 };
@@ -55,6 +56,14 @@ test("сводка: посетители, воронка по порядку, и
   const data = calls.find((u) => u.pathname === "/stat/v1/data");
   assert.equal(data.searchParams.get("date1"), "6daysAgo");
   assert.equal(data.searchParams.get("ids"), "113675520");
+});
+
+test("один отчёт не отдался — сводка всё равно приходит", async () => {
+  mode = "partfail";
+  const t = await metrikaReport(7);
+  assert.match(t, /Посетители: <b>40<\/b>/);
+  assert.doesNotMatch(t, /Устройства/);
+  mode = "ok";
 });
 
 test("неверный токен — подсказка, а не падение", async () => {

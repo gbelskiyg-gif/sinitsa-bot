@@ -19,7 +19,7 @@ async function call(pathname, params = {}) {
     signal: AbortSignal.timeout(15000),
   });
   if (res.status === 401 || res.status === 403) throw new Error("auth");
-  if (!res.ok) throw new Error(`http ${res.status}`);
+  if (!res.ok) throw new Error(`http ${res.status} ${(await res.text().catch(() => "")).slice(0, 200)}`);
   return res.json();
 }
 
@@ -33,7 +33,7 @@ async function goals() {
   return (r.goals || []).map((g) => ({ id: g.id, name: g.name, event: g.conditions?.[0]?.url || "" }));
 }
 
-const rows = (r) => (r.data || []).map((d) => ({ name: d.dimensions?.[0]?.name || "", v: d.metrics?.[0] || 0 }));
+const rows = (r) => (r?.data || []).map((d) => ({ name: d.dimensions?.[0]?.name || "", v: d.metrics?.[0] || 0 }));
 
 export async function metrikaReport(days = 7) {
   if (!metrikaEnabled()) {
@@ -42,18 +42,19 @@ export async function metrikaReport(days = 7) {
   try {
     const gl = await goals();
     const funnel = FUNNEL.map((e) => gl.find((g) => g.event === e)).filter(Boolean);
-    const others = gl.filter((g) => !funnel.includes(g)).slice(0, Math.max(0, 14 - funnel.length));
+    const others = gl.filter((g) => !funnel.includes(g)).slice(0, Math.max(0, 10 - funnel.length));
     const goalList = [...funnel, ...others];
 
-    const [tot, src, eng, dev, gr, where, utm] = await Promise.all([
-      stat(days, { metrics: "ym:s:visits,ym:s:users,ym:s:pageviews,ym:s:bounceRate,ym:s:avgVisitDurationSeconds,ym:s:percentNewVisitors" }),
-      stat(days, { metrics: "ym:s:visits", dimensions: "ym:s:lastsignTrafficSource", sort: "-ym:s:visits", limit: "6" }),
-      stat(days, { metrics: "ym:s:visits", dimensions: "ym:s:lastsignSourceEngine", sort: "-ym:s:visits", limit: "6" }),
-      stat(days, { metrics: "ym:s:visits", dimensions: "ym:s:deviceCategory", sort: "-ym:s:visits", limit: "4" }),
-      goalList.length ? stat(days, { metrics: goalList.map((g) => `ym:s:goal${g.id}users`).join(",") }) : null,
-      stat(days, { metrics: "ym:s:users", dimensions: "ym:s:paramsLevel2", filters: "ym:s:paramsLevel1=='Где'", limit: "3" }).catch(() => null),
-      stat(days, { metrics: "ym:s:visits", dimensions: "ym:s:lastsignUTMSource,ym:s:lastsignUTMMedium", sort: "-ym:s:visits", limit: "8" }).catch(() => null),
-    ]);
+    // Метрика разрешает лишь несколько одновременных запросов — спрашиваем по очереди;
+    // всё, кроме общих цифр, необязательно: если один отчёт не отдался, сводка всё равно придёт
+    const opt = (params) => stat(days, params).catch((e) => { console.error("metrika part:", e.message); return null; });
+    const tot = await stat(days, { metrics: "ym:s:visits,ym:s:users,ym:s:pageviews,ym:s:bounceRate,ym:s:avgVisitDurationSeconds,ym:s:percentNewVisitors" });
+    const src = await opt({ metrics: "ym:s:visits", dimensions: "ym:s:lastsignTrafficSource", sort: "-ym:s:visits", limit: "6" });
+    const eng = await opt({ metrics: "ym:s:visits", dimensions: "ym:s:lastsignSourceEngine", sort: "-ym:s:visits", limit: "6" });
+    const dev = await opt({ metrics: "ym:s:visits", dimensions: "ym:s:deviceCategory", sort: "-ym:s:visits", limit: "4" });
+    const gr = goalList.length ? await opt({ metrics: goalList.map((g) => `ym:s:goal${g.id}users`).join(",") }) : null;
+    const where = await opt({ metrics: "ym:s:users", dimensions: "ym:s:paramsLevel2", filters: "ym:s:paramsLevel1=='Где'", limit: "3" });
+    const utm = await opt({ metrics: "ym:s:visits", dimensions: "ym:s:lastsignUTMSource,ym:s:lastsignUTMMedium", sort: "-ym:s:visits", limit: "8" });
 
     const [visits, users, views, bounce, dur, fresh] = tot.totals || [];
     const m = Math.floor((dur || 0) / 60), s = Math.round((dur || 0) % 60);
@@ -89,6 +90,6 @@ export async function metrikaReport(days = 7) {
   } catch (e) {
     if (e.message === "auth") return "📈 Метрика не пустила: токен не подходит или у него нет доступа к счётчику. Получите новый по инструкции в README.";
     console.error("metrika:", e.message);
-    return "📈 Не удалось получить данные Метрики. Попробуйте чуть позже.";
+    return `📈 Не удалось получить данные Метрики (${esc(e.message.slice(0, 60))}). Попробуйте чуть позже.`;
   }
 }

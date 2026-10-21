@@ -386,10 +386,35 @@ async function api(req, res, url) {
   return send(res, 404, { error: "Не найдено" });
 }
 
+// ---------- заглушка ----------
+// MAINTENANCE=1 в .env — сайт показывает заглушку, заказы с сайта не принимаются.
+// Магазин внутри Telegram (мини-приложение) и бот работают как обычно: страница-заглушка
+// узнаёт Telegram, ставит куку tg=1 и перезагружается — тогда сервер отдаёт магазин.
+const maintenance = () => process.env.MAINTENANCE === "1";
+const fromTelegram = (req) => /(?:^|;\s*)tg=1(?:;|$)/.test(req.headers.cookie || "");
+const STUB = `<!doctype html><html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex">
+<title>Синица — китайский чай · скоро откроемся</title><link rel="icon" href="/emblem.jpg">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script>if(window.Telegram&&Telegram.WebApp&&Telegram.WebApp.initData){document.cookie="tg=1; path=/; max-age=86400; SameSite=None; Secure";location.reload();}</script>
+<style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#100f15;color:#f4ede3;font:16px/1.6 Manrope,Arial,sans-serif;padding:24px;box-sizing:border-box;text-align:center}
+main{max-width:460px}img{width:120px;height:120px;border-radius:28px}h1{font:400 30px/1.2 Georgia,serif;color:#edbe82;margin:22px 0 10px}
+p{color:#b9afb9;margin:0 0 14px}a{display:inline-block;margin-top:8px;padding:12px 22px;border-radius:12px;background:#edbe82;color:#21141a;font-weight:700;text-decoration:none}</style></head>
+<body><main><img src="/emblem.jpg" alt="Синица"><h1>Скоро откроемся</h1>
+<p>Сайт магазина «Синица» готовится к запуску. Совсем скоро здесь можно будет выбрать и заказать китайский чай.</p>
+<p>А пока магазин работает в Telegram:</p><a href="https://t.me/sinitsa_chai_bot?start=site">Открыть @sinitsa_chai_bot</a></main></body></html>`;
+function stub(res) {
+  res.writeHead(503, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "retry-after": "86400" });
+  res.end(STUB);
+}
+
 export function startServer(port) {
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, "http://x");
     try {
+      if (maintenance() && !fromTelegram(req) && req.method === "POST" && /^\/api\/(site-orders|subs)$/.test(url.pathname)) {
+        return send(res, 503, { error: "Сайт скоро откроется. Пока заказать можно в Telegram: @sinitsa_chai_bot" });
+      }
       if (url.pathname.startsWith("/api/")) return await api(req, res, url);
       if (url.pathname === "/privacy") return html(res, privacyPage());
       if (url.pathname === "/consent") return html(res, consentPage());
@@ -401,6 +426,12 @@ export function startServer(port) {
         return res.end(ordersCsv());
       }
       if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, { error: "method" });
+      // Заглушка: все страницы (не картинки/скрипты), кроме служебных файлов для Яндекса
+      if (maintenance() && !fromTelegram(req)) {
+        const ext = path.extname(url.pathname);
+        const service = /^\/(robots\.txt|sitemap\.xml|yandex_[0-9a-f]+\.html)$/.test(url.pathname);
+        if (!service && (!ext || ext === ".html")) return stub(res);
+      }
       // Магазин живёт на главной; старые адреса ведут туда же (?tab= магазин понимает сам)
       if (url.pathname === "/shop" || url.pathname === "/index.html") return redirect(res, "/" + url.search, 301);
       if (url.pathname === "/podbor") return redirect(res, "/?tab=quiz", 301);

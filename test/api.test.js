@@ -519,3 +519,22 @@ test("оплата на расчётный счёт: QR по ГОСТ и про�
   assert.match(qr, /Purpose=Оплата заказа №7/);
   assert.ok(payLines(p, { id: 7, total: 1290 }).some((l) => l.includes("40802810100000012345")));
 });
+
+test("заглушка MAINTENANCE=1: сайт закрыт, Telegram и служебные файлы работают", async () => {
+  process.env.MAINTENANCE = "1";
+  try {
+    let r = await fetch(base + "/");
+    assert.equal(r.status, 503);
+    assert.match(await r.text(), /Скоро откроемся/);
+    assert.equal((await fetch(base + "/blog")).status, 503);
+    assert.equal((await fetch(base + "/robots.txt")).status, 200);
+    assert.equal((await fetch(base + "/emblem.jpg")).status, 200);
+    assert.equal((await fetch(base + "/privacy")).status, 200);
+    r = await fetch(base + "/", { headers: { cookie: "tg=1" } });
+    assert.equal(r.status, 200);
+    assert.match(await r.text(), /id="view"/);
+    r = await fetch(base + "/api/site-orders", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+    assert.equal(r.status, 503);
+    assert.equal((await fetch(base + "/api/catalog")).status, 200);
+  } finally { delete process.env.MAINTENANCE; }
+});

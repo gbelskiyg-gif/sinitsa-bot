@@ -17,7 +17,8 @@ export const checkToken = (key) => {
   return typeof key === "string" && key.length === t.length && crypto.timingSafeEqual(Buffer.from(key), Buffer.from(t));
 };
 
-const HEAD = ["№", "Дата (МСК)", "Статус", "Имя", "Telegram", "Телефон", "Доставка", "Адрес", "Состав", "Чай, ₽", "Скидки, ₽", "Доставка, ₽", "Итого, ₽", "Промокод", "Покупатель отметил оплату", "Комментарий", "Изменён (МСК)"];
+// Без имени, телефона, адреса и комментария: таблица лежит в Google (за рубежом). Контакты — в боте по кнопке.
+const HEAD = ["№", "Дата (МСК)", "Статус", "Доставка", "Состав", "Чай, ₽", "Скидки, ₽", "Доставка, ₽", "Итого, ₽", "Промокод", "Покупатель отметил оплату", "Изменён (МСК)"];
 const csvCell = (v) => {
   const s = String(v ?? "");
   // Не даём таблице принять текст за формулу
@@ -33,10 +34,9 @@ export function ordersCsv() {
     const disc = o.items.filter((i) => !i.teaId && i.sum < 0).reduce((s, i) => s + i.sum, 0);
     const dl = o.items.filter((i) => !i.teaId && i.sum > 0).reduce((s, i) => s + i.sum, 0);
     rows.push([
-      o.id, msk(o.created_at), STATUS[o.status] || o.status, o.name || o.tg_name || "", o.username ? "@" + o.username : String(o.user_id),
-      o.phone, DELIVERY[o.delivery]?.label || o.delivery, o.address,
+      o.id, msk(o.created_at), STATUS[o.status] || o.status, DELIVERY[o.delivery]?.label || o.delivery,
       tea.map((i) => `${i.name}, ${i.label} × ${i.qty}${i.set ? " (набор)" : ""}`).join("; "),
-      tea.reduce((s, i) => s + i.sum, 0), disc, dl, o.total, o.promo, o.paid_claim_at ? "да" : "", o.comment, msk(o.updated_at),
+      tea.reduce((s, i) => s + i.sum, 0), disc, dl, o.total, o.promo, o.paid_claim_at ? "да" : "", msk(o.updated_at),
     ]);
   }
   return "﻿" + rows.map((r) => r.map(csvCell).join(",")).join("\n") + "\n";

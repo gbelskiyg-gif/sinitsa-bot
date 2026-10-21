@@ -16,6 +16,10 @@ import {
   notifyAdminsNew,
   publicOrder,
   refreshAdminMessages,
+  cardKey,
+  siteContact,
+  sitePaymentMessage,
+  waNumber,
 } from "./orders.js";
 import { tgSafe } from "./telegram.js";
 import { createLoginCode, takeLoginCode } from "./loginlink.js";
@@ -387,6 +391,50 @@ async function api(req, res, url) {
   return send(res, 404, { error: "Не найдено" });
 }
 
+// ---------- карточка покупателя для продавца ----------
+// Имя, телефон и адрес не уходят в Telegram — продавец открывает их здесь, по секретной ссылке из бота.
+const escA = (x) => String(x ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+function cardPage(kind, id, key) {
+  const want = cardKey(kind, id);
+  if (typeof key !== "string" || key.length !== want.length || !crypto.timingSafeEqual(Buffer.from(key), Buffer.from(want))) return null;
+  const rows = [];
+  const row = (label, value, href) => value && rows.push(`<p><span>${label}</span>${href ? `<a href="${escA(href)}">${escA(value)}</a>` : escA(value)}</p>`);
+  const btns = [];
+  let title;
+  if (kind === "o") {
+    const o = store.getOrder(id);
+    if (!o) return null;
+    title = `Заказ №${o.id}`;
+    if (!o.name && !o.phone) rows.push("<p>Данные покупателя уже удалены (прошло 30 дней после заказа).</p>");
+    row("Имя", o.name || o.tg_name);
+    row("Телефон", o.phone, o.phone ? `tel:${o.phone.replace(/[^\d+]/g, "")}` : "");
+    row("Почта", o.email, o.email ? `mailto:${o.email}` : "");
+    if (o.username) row("Telegram", "@" + o.username, `https://t.me/${o.username}`);
+    row("Адрес / пункт выдачи", o.address);
+    row("Комментарий", o.comment);
+    if (!o.user_id && o.phone) {
+      const { how, nick } = siteContact(o);
+      const msg = sitePaymentMessage(o);
+      if (how === "WhatsApp") btns.push(`<a class="b" href="https://wa.me/${waNumber(o.phone)}?text=${encodeURIComponent(msg)}">💬 Отправить реквизиты в WhatsApp</a>`);
+      if (how === "Telegram" && nick) btns.push(`<a class="b" href="https://t.me/${escA(nick)}">✈️ Написать @${escA(nick)}</a>`);
+    }
+  } else if (kind === "s") {
+    const sb = store.getSub(id);
+    if (!sb) return null;
+    title = `Подписка №${sb.id}`;
+    row("Покупатель", sb.name);
+    row("Телефон", sb.phone, sb.phone ? `tel:${sb.phone.replace(/[^\d+]/g, "")}` : "");
+    row("Почта", sb.email);
+    if (sb.gift) row("Получатель", sb.ship_to);
+    row("Адрес / пункт выдачи", sb.address);
+    row("Открытка", sb.note);
+  } else return null;
+  return `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex">
+<title>${escA(title)}</title><style>body{margin:0;background:#100f15;color:#f4ede3;font:16px/1.5 Arial,sans-serif;padding:20px}h1{font:400 24px Georgia,serif;color:#edbe82;margin:0 0 16px}
+p{margin:0 0 14px}span{display:block;color:#b9afb9;font-size:13px}a{color:#edbe82}.b{display:block;margin:10px 0;padding:12px;border-radius:12px;background:#edbe82;color:#21141a;text-align:center;font-weight:700;text-decoration:none}</style></head>
+<body><h1>${escA(title)}</h1>${rows.join("")}${btns.join("")}</body></html>`;
+}
+
 // ---------- заглушка ----------
 // MAINTENANCE=1 в .env — сайт показывает заглушку, оформление заказов закрыто везде (и в Telegram).
 // Магазин внутри Telegram (мини-приложение) и бот работают как обычно: страница-заглушка
@@ -418,6 +466,12 @@ export function startServer(port) {
         return send(res, 503, { error: "Приём заказов откроется через пару дней. Напишите нам в Telegram @sinitsa_chai_bot — сообщим, как только откроемся." });
       }
       if (url.pathname.startsWith("/api/")) return await api(req, res, url);
+      const card = url.pathname.match(/^\/admin\/card\/(o|s)\/(\d+)$/);
+      if (card) {
+        const page = cardPage(card[1], Number(card[2]), url.searchParams.get("k"));
+        res.writeHead(page ? 200 : 404, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-robots-tag": "noindex", "referrer-policy": "no-referrer" });
+        return res.end(page || "Не найдено");
+      }
       if (url.pathname === "/privacy") return html(res, privacyPage());
       if (url.pathname === "/consent") return html(res, consentPage());
       if (url.pathname === "/terms") return html(res, termsPage());

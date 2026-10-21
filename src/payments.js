@@ -5,7 +5,7 @@ import { SUB_PERIODS, SUB_PLANS, rub, subPrice } from "./catalog.js";
 import * as store from "./db.js";
 import * as yk from "./yookassa.js";
 import { EMAIL_RE, sendMail } from "./mail.js";
-import { OrderError, notifyCustomer, refreshAdminMessages, siteOrderUrl } from "./orders.js";
+import { OrderError, cardUrl, notifyCustomer, refreshAdminMessages, siteOrderUrl } from "./orders.js";
 import { esc, tgSafe } from "./telegram.js";
 import crypto from "node:crypto";
 
@@ -275,9 +275,9 @@ export async function notifyShipDue() {
     const plan = SUB_PLANS[s.plan];
     await toAdmins(
       `📮 <b>Пора отправить конверт</b> — подписка №${s.id}, «${esc(plan.name)}» (${esc(plan.what)})\n` +
-        (s.gift ? `🎁 Получатель: ${esc(s.ship_to)} · от ${esc(s.name)}` : `👤 ${esc(s.name)} · 📞 ${esc(s.phone)}`) + `\n📍 ${esc(s.address)}` +
-        (s.note ? `\n💌 Открытка: ${esc(s.note)}` : "") + `\nОтправлено раньше: ${s.shipped}, оплачено ещё: ${s.left_count}`,
-      { reply_markup: { inline_keyboard: [[{ text: "📦 Конверт отправлен", callback_data: `sub:${s.id}:ship` }]] } }
+        (s.gift ? "🎁 Подарок — получатель, адрес и открытка по кнопке ниже" : "👤 Получатель и адрес — по кнопке ниже") +
+        `\nОтправлено раньше: ${s.shipped}, оплачено ещё: ${s.left_count}`,
+      { reply_markup: { inline_keyboard: [[{ text: "👤 Получатель и адрес", url: cardUrl("s", s.id) }], [{ text: "📦 Конверт отправлен", callback_data: `sub:${s.id}:ship` }]] } }
     );
     store.updateSub(s.id, { ship_notified: s.next_ship });
   }

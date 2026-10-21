@@ -170,7 +170,7 @@ test("подписка каждый месяц: первый платёж, ко�
   assert.equal(s.status, "active");
   assert.equal(s.left_count, 1);
   assert.equal(s.yk_method, `pm_${pid.split("_")[1]}`);
-  assert.ok(tgSent.some((m) => m.chat_id === 1 && /Пора отправить конверт/.test(m.text || "") && m.reply_markup?.inline_keyboard?.[0]?.[0]?.callback_data === `sub:${id}:ship`));
+  assert.ok(tgSent.some((m) => m.chat_id === 1 && /Пора отправить конверт/.test(m.text || "") && m.reply_markup?.inline_keyboard?.flat().some((b) => b.callback_data === `sub:${id}:ship`) && !(m.text || "").includes("📞")));
 
   // продавец отправил конверт — второй чек на цену конверта
   await payments.shipSub(id);

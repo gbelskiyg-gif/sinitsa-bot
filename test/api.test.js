@@ -271,7 +271,7 @@ test("опт не кладётся в корзину, «Я оптовик» пр
   assert.ok(!("meet" in cat.delivery));
 });
 
-test("таблица заказов для Google: только по секретной ссылке, со всеми полями", async () => {
+test("таблица заказов для Google: только по секретной ссылке, без персональных данных", async () => {
   const { exportToken } = await import("../src/export.js");
   let r = await fetch(base + "/export/orders.csv?key=wrong");
   assert.equal(r.status, 403);
@@ -279,7 +279,9 @@ test("таблица заказов для Google: только по секре�
   assert.equal(r.status, 200);
   const csv = await r.text();
   const [head, first] = csv.replace(/^\ufeff/, "").split("\n");
-  assert.match(head, /№,Дата \(МСК\),Статус,Имя,Telegram,Телефон,Доставка,Адрес,Состав/);
+  assert.match(head, /№,Дата \(МСК\),Статус,Доставка,Состав/);
+  assert.doesNotMatch(head, /Имя|Телефон|Адрес|Telegram|Комментарий/);
+  assert.doesNotMatch(csv, /\+7 ?9\d\d/, "телефонов в таблице нет");
   assert.ok(first && /^\d+,/.test(first), "есть строки заказов");
   assert.ok(!/^=/.test(csv.split(",").find((c) => c.startsWith("=")) || ""), "формулы не пропускаем");
 });
@@ -540,4 +542,22 @@ test("заглушка MAINTENANCE=1: сайт закрыт, Telegram и слу�
     r = await fetch(base + "/api/orders", { method: "POST", headers: { "content-type": "application/json", cookie: "tg=1" }, body: "{}" });
     assert.equal(r.status, 503, "и из Telegram заказ не принимаем");
   } finally { delete process.env.MAINTENANCE; }
+});
+
+test("карточка покупателя: только по секретной ссылке, в Telegram — без телефона", async () => {
+  const { cardUrl, orderText, adminKeyboard } = await import("../src/orders.js");
+  const store = await import("../src/db.js");
+  const o = store.getOrder(1);
+  assert.ok(o, "есть заказ");
+  const text = orderText(o, { forAdmin: true });
+  if (o.phone) assert.ok(!text.includes(o.phone), "телефона в сообщении нет");
+  const btn = adminKeyboard(o).inline_keyboard.flat().find((b) => b.url);
+  assert.ok(btn && btn.url === cardUrl("o", o.id));
+  const path = new URL(btn.url).pathname + new URL(btn.url).search;
+  let r = await fetch(base + path);
+  assert.equal(r.status, 200);
+  const html = await r.text();
+  if (o.phone) assert.ok(html.includes(o.phone.replace(/&/g, "&amp;")));
+  r = await fetch(base + `/admin/card/o/${o.id}?k=wrong`);
+  assert.equal(r.status, 404);
 });

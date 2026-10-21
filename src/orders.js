@@ -1,4 +1,5 @@
-import { PUBLIC_URL, notifyChats } from "./config.js";
+import { BOT_TOKEN, PUBLIC_URL, notifyChats } from "./config.js";
+import crypto from "node:crypto";
 import { EMAIL_RE, sendMail } from "./mail.js";
 import { DELIVERY, KINDS, PACKS, PROMOS, STATUS, deliveryCost, findTea, normalizePromo, packInfo, rub } from "./catalog.js";
 import * as store from "./db.js";
@@ -132,11 +133,11 @@ export function orderText(o, { forAdmin = false, username = "" } = {}) {
   const paid = o.items.some((i) => !i.teaId && i.sum > 0);
   lines.push(dl ? `🚚 ${dl.label}${dl.price && !paid ? " — бесплатно" : ""}` : "🚚 доставка по договорённости");
   if (forAdmin) {
-    lines.push("", `👤 ${esc(o.name)}${username ? ` (@${esc(username)})` : ""}`, `📞 ${esc(o.phone)}`);
-    if (o.address) lines.push(`📍 ${esc(o.address)}`);
+    // Имя, телефон, адрес и комментарий в Telegram не отправляем (его серверы за рубежом) —
+    // они на нашем сервере, по кнопке «👤 Покупатель и адрес»
+    lines.push("", "👤 Контакты, адрес и комментарий — по кнопке ниже");
     if (o.status === "accepted" && o.paid_claim_at) lines.push("💳 Покупатель сообщил, что оплатил — проверьте банк");
     if (o.yk_status === "succeeded") lines.push("💳 Оплачен онлайн через ЮKassa, чек отправлен");
-    if (o.comment) lines.push(`💬 ${esc(o.comment)}`);
   }
   return lines.join("\n");
 }
@@ -153,11 +154,16 @@ const NEXT = {
 };
 export const canMove = (from, to) => NEXT[from]?.some(([s]) => s === to);
 
+/** Секретная ссылка на карточку покупателя на нашем сервере: kind "o" — заказ, "s" — подписка. */
+export const cardKey = (kind, id) => crypto.createHmac("sha256", BOT_TOKEN).update(`card:${kind}:${id}`).digest("base64url").slice(0, 24);
+export const cardUrl = (kind, id) => `${PUBLIC_URL}/admin/card/${kind}/${id}?k=${cardKey(kind, id)}`;
+
 export function adminKeyboard(o) {
   const btns = NEXT[o.status].map(([s, label]) => ({ text: label, callback_data: `ord:${o.id}:${s}` }));
   // По две кнопки в ряд, чтобы подписи не обрезались
   const rows = [];
   for (let i = 0; i < btns.length; i += 2) rows.push(btns.slice(i, i + 2));
+  rows.push([{ text: "👤 Покупатель и адрес", url: cardUrl("o", o.id) }]);
   return { inline_keyboard: rows };
 }
 
@@ -288,21 +294,21 @@ export function sitePaymentMessage(o) {
 export const customerChat = (o) => o.user_id || o.tg_chat || null;
 /** Ссылка «Получать статус в Telegram» для заказа с сайта: t.me/бот?start=o<id>_<ключ> */
 export const siteStartPayload = (o) => (o.site_token ? `o${o.id}_${o.site_token.slice(0, 16)}` : "");
-async function helpAdminsWithSitePayment(o) {
+export function siteContact(o) {
   const contact = (String(o.comment || "").match(/Связь: (Telegram|WhatsApp|звонок)(?: (\S+))?/) || []);
-  const how = contact[1] || "звонок";
-  const nick = (contact[2] || "").replace(/^@/, "").replace(/[^\w]/g, "");
+  return { how: contact[1] || "звонок", nick: (contact[2] || "").replace(/^@/, "").replace(/[^\w]/g, "") };
+}
+async function helpAdminsWithSitePayment(o) {
+  const { how } = siteContact(o);
   const msg = sitePaymentMessage(o);
-  const buttons = [];
-  if (how === "WhatsApp") buttons.push([{ text: "💬 Отправить в WhatsApp", url: `https://wa.me/${waNumber(o.phone)}?text=${encodeURIComponent(msg)}` }]);
-  if (how === "Telegram" && nick) buttons.push([{ text: `✈️ Написать @${nick}`, url: `https://t.me/${nick}` }]);
+  const buttons = [[{ text: how === "WhatsApp" ? "💬 Открыть WhatsApp покупателя" : how === "Telegram" ? "✈️ Telegram покупателя" : "📞 Телефон покупателя", url: cardUrl("o", o.id) }]];
   const url = siteOrderUrl(o);
   if (url) buttons.push([{ text: "🔗 Страница оплаты заказа", url }]);
-  const hint = how === "WhatsApp" ? "Нажмите «Отправить в WhatsApp» — сообщение уже набрано, останется отправить."
-    : how === "Telegram" ? `Покупатель просил связаться в Telegram${nick ? ` (@${nick})` : ""}. Скопируйте текст ниже и отправьте ему.`
-    : `Покупатель просил позвонить: ${o.phone}. Реквизиты он увидит на странице заказа — или отправьте текст ниже по СМС.`;
+  const hint = how === "WhatsApp" ? "Покупатель просил WhatsApp: нажмите кнопку — на карточке будет кнопка с уже набранным сообщением."
+    : how === "Telegram" ? "Покупатель просил связаться в Telegram: ник — на карточке по кнопке. Отправьте ему текст ниже."
+    : "Покупатель просил позвонить: телефон — на карточке по кнопке. Реквизиты он увидит на странице заказа — или отправьте текст ниже по СМС.";
   for (const chat of notifyChats())
-    await tgSafe("sendMessage", { chat_id: chat, text: `🌐 Заказ №${o.id} с сайта принят.\n${hint}\n\nТекст для покупателя:\n\n${msg}`, ...(buttons.length ? { reply_markup: { inline_keyboard: buttons } } : {}), disable_web_page_preview: true });
+    await tgSafe("sendMessage", { chat_id: chat, text: `🌐 Заказ №${o.id} с сайта принят.\n${hint}\n\nТекст для покупателя:\n\n${msg}`, reply_markup: { inline_keyboard: buttons }, disable_web_page_preview: true });
 }
 
 // ---------- письма покупателю (дублируют Telegram; для WhatsApp и звонка — главный канал) ----------

@@ -1,6 +1,9 @@
 import { BOT_TOKEN } from "./config.js";
 
-const API = `https://api.telegram.org/bot${BOT_TOKEN}`;
+// TELEGRAM_API_BASE — адрес пересылки к Telegram, если с сервера api.telegram.org недоступен
+// (сервер в РФ, пересылка — на зарубежном сервере, см. relay/README.md)
+const BASE = (process.env.TELEGRAM_API_BASE || "https://api.telegram.org").replace(/\/+$/, "");
+const API = `${BASE}/bot${BOT_TOKEN}`;
 
 /** Вызов метода Telegram Bot API. Бросает ошибку, если Telegram ответил ok: false. */
 export async function tg(method, params = {}) {

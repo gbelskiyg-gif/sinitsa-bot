@@ -1,0 +1,18 @@
+# Запуск на зарубежном сервере:
+#   ALLOW_IP=<IP основного сервера> docker compose -f relay/docker-compose.yml up -d
+services:
+  relay:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      RELAY_HOST: ${RELAY_HOST:-201-34-144-127.sslip.io}
+      DOMAIN: ${DOMAIN:-sinitsa-chai.ru}
+      ALLOW_IP: ${ALLOW_IP:?укажите ALLOW_IP — IP основного сервера}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - relay_data:/data
+volumes:
+  relay_data:

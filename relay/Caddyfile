@@ -1,0 +1,21 @@
+# Пересылка запросов бота к Telegram (на зарубежном сервере).
+# Пускает только основной сервер (ALLOW_IP) и только пути Bot API — без персональных данных
+# на этом сервере: он ничего не хранит, просто передаёт запросы.
+{$RELAY_HOST} {
+	@tg {
+		path /bot* /file/bot*
+		remote_ip {$ALLOW_IP}
+	}
+	handle @tg {
+		reverse_proxy https://api.telegram.org {
+			header_up Host api.telegram.org
+			transport http {
+				response_header_timeout 90s
+			}
+		}
+	}
+	# Всё остальное (старые кнопки мини-приложения) — на основной сайт
+	handle {
+		redir https://{$DOMAIN}{uri} 302
+	}
+}

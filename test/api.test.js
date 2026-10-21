@@ -535,6 +535,9 @@ test("заглушка MAINTENANCE=1: сайт закрыт, Telegram и слу�
     assert.match(await r.text(), /id="view"/);
     r = await fetch(base + "/api/site-orders", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
     assert.equal(r.status, 503);
-    assert.equal((await fetch(base + "/api/catalog")).status, 200);
+    const cat = await (await fetch(base + "/api/catalog")).json();
+    assert.equal(cat.ordersPaused, true);
+    r = await fetch(base + "/api/orders", { method: "POST", headers: { "content-type": "application/json", cookie: "tg=1" }, body: "{}" });
+    assert.equal(r.status, 503, "и из Telegram заказ не принимаем");
   } finally { delete process.env.MAINTENANCE; }
 });

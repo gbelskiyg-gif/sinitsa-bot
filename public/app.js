@@ -856,6 +856,17 @@ function deliveryCost(k, total) {
 }
 function loadForm() { try { return JSON.parse(localStorage.getItem("form") || "{}"); } catch { return {}; } }
 function renderCheckout(total) {
+  if (S.ordersPaused) {
+    $("#view").onclick = null;
+    $("#view").innerHTML = `<h2 class="section-title">Оформление</h2>
+      <div style="padding:20px;text-align:center;background:var(--card);border:1px solid var(--line);border-radius:12px"><p style="font-size:34px;margin:0">🍵</p>
+      <h3 style="margin:8px 0">Приём заказов откроется через пару дней</h3>
+      <p class="muted">Корзина сохранится — вернитесь чуть позже и оформите заказ. Если хотите, чтобы мы сообщили об открытии, напишите нам в Telegram.</p>
+      <p><a class="btn" href="https://t.me/sinitsa_chai_bot?start=wait">Написать в @sinitsa_chai_bot</a></p>
+      <button class="btn ghost" id="back">← Назад в корзину</button></div>`;
+    $("#back").onclick = () => { S.checkout = false; renderCart(); };
+    return;
+  }
   if (!S.checkoutTracked) { S.checkoutTracked = true; track("checkout_open"); }
   const f = loadForm();
   const u = tgApp?.initDataUnsafe?.user;
@@ -1315,7 +1326,7 @@ document.addEventListener("keydown", (e) => {
   loadCart(); updateBadge(); loadAuth(); updateAccount();
   try {
     const data = await api("/api/catalog");
-    Object.assign(S, { teas: data.teas, kinds: data.kinds, recipes: data.recipes, mugRecipes: data.mugRecipes, tastes: data.tastes, sets: data.sets || [], delivery: data.delivery || {}, freeFrom: data.freeDeliveryFrom || 0, deliveryInfo: data.deliveryInfo || "" });
+    Object.assign(S, { teas: data.teas, kinds: data.kinds, recipes: data.recipes, mugRecipes: data.mugRecipes, tastes: data.tastes, sets: data.sets || [], delivery: data.delivery || {}, freeFrom: data.freeDeliveryFrom || 0, deliveryInfo: data.deliveryInfo || "", ordersPaused: !!data.ordersPaused });
     if (authed()) api("/api/me").then((me) => (S.me = me)).catch(() => {});
     S.club = await api("/api/club").catch(() => ({ enabled: false }));
     document.querySelectorAll("[data-club-link]").forEach((a) => (a.hidden = !S.club.plans?.length));

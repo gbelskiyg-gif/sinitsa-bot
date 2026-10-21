@@ -188,6 +188,7 @@ async function api(req, res, url) {
       delivery: DELIVERY,
       freeDeliveryFrom: FREE_DELIVERY_FROM,
       deliveryInfo: DELIVERY_INFO,
+      ordersPaused: maintenance(),
     });
   }
 
@@ -387,7 +388,7 @@ async function api(req, res, url) {
 }
 
 // ---------- заглушка ----------
-// MAINTENANCE=1 в .env — сайт показывает заглушку, заказы с сайта не принимаются.
+// MAINTENANCE=1 в .env — сайт показывает заглушку, оформление заказов закрыто везде (и в Telegram).
 // Магазин внутри Telegram (мини-приложение) и бот работают как обычно: страница-заглушка
 // узнаёт Telegram, ставит куку tg=1 и перезагружается — тогда сервер отдаёт магазин.
 const maintenance = () => process.env.MAINTENANCE === "1";
@@ -412,8 +413,9 @@ export function startServer(port) {
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, "http://x");
     try {
-      if (maintenance() && !fromTelegram(req) && req.method === "POST" && /^\/api\/(site-orders|subs)$/.test(url.pathname)) {
-        return send(res, 503, { error: "Сайт скоро откроется. Пока заказать можно в Telegram: @sinitsa_chai_bot" });
+      // Пауза: заказы, подписки и оптовые заявки не принимаем ни с сайта, ни из Telegram (персональные данные не собираем)
+      if (maintenance() && req.method === "POST" && /^\/api\/(orders|site-orders|subs|wholesale)$/.test(url.pathname)) {
+        return send(res, 503, { error: "Приём заказов откроется через пару дней. Напишите нам в Telegram @sinitsa_chai_bot — сообщим, как только откроемся." });
       }
       if (url.pathname.startsWith("/api/")) return await api(req, res, url);
       if (url.pathname === "/privacy") return html(res, privacyPage());

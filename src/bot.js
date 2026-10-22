@@ -388,6 +388,8 @@ async function onMessage(msg) {
   if (isAdmin(from.id)) {
     if (text.startsWith("/cancel") && awaitingPayment.delete(from.id)) return tgSafe("sendMessage", { chat_id: msg.chat.id, text: "Отменили, реквизиты не изменились.", reply_markup: menuKeyboard(from.id) });
     if (text.startsWith("/pay") || text === BTN.payment) return askPayment(msg);
+    // Нажали другую кнопку меню — выходим из ввода реквизитов и выполняем кнопку
+    if (awaitingPayment.has(from.id) && Object.values(BTN).includes(text)) awaitingPayment.delete(from.id);
     if (awaitingPayment.has(from.id) && text && !text.startsWith("/")) return savePayment(msg);
     if (text.startsWith("/stats") || text === BTN.stats) return sendStats(msg.chat.id, 7);
     if (text.startsWith("/sheet") || text === BTN.sheet)

@@ -142,3 +142,13 @@ test("старт бота по ссылке с меткой виден в ста
   const { text } = _test.statsText(7);
   assert.match(text, /Нажали «Старт» в боте<\/b> — 4: ig — 2, без метки — 2/);
 });
+
+test("в режиме ввода реквизитов кнопка меню не принимается за реквизиты", async () => {
+  const { BTN } = await import("../src/menu.js");
+  const say = (text) => _test.onMessage({ message_id: 1, text, chat: { id: 1, type: "private" }, from: { id: 1, first_name: "Админ" } });
+  await say(BTN.payment);
+  sent.length = 0;
+  await say(BTN.stats);
+  assert.ok(!sent.some((m) => /Не получилось разобрать/.test(m.text || "")), "не ругается");
+  assert.ok(sent.some((m) => /Статистика/.test(m.text || "")), "показал статистику");
+});

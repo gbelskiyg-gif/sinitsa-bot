@@ -190,7 +190,7 @@ async function askPayment(msg) {
   awaitingPayment.add(msg.from.id);
   return tgSafe("sendMessage", {
     chat_id: msg.chat.id,
-    text: `💳 Реквизиты для оплаты переводом\n\n${paymentInfo()}\n\nРасчётный счёт ИП (рекомендуем): скопируйте реквизиты счёта в приложении банка (кнопка «копировать» в разделе «Реквизиты счёта») и вставьте сюда одним сообщением. Нужны расчётный счёт, БИК, корр. счёт и название банка. Получатель и ИНН возьмём из данных ИП: ${LEGAL.name}, ИНН ${LEGAL.inn}.\n\nИли СБП по телефону — одним сообщением три строки:\n1) номер телефона для СБП\n2) банк\n3) получатель (имя и первая буква фамилии)\n4) по желанию — ссылка на оплату из приложения банка (например, «Ссылка для перевода» в Т-Банке). Из неё сайт сделает QR-код.\n\nНапример:\n+7 900 123-45-67\nТ-Банк\nАлександр Б.\nhttps://tbank.ru/cf/…\n\nОтмена — /cancel`,
+    text: `💳 Реквизиты для оплаты переводом\n\n${paymentInfo()}\n\nСкопируйте реквизиты счёта в приложении банка (кнопка «копировать» в разделе «Реквизиты счёта») и вставьте сюда одним сообщением. Нужны расчётный счёт, БИК, корр. счёт и название банка. Получатель и ИНН возьмём из данных ИП: ${LEGAL.name}, ИНН ${LEGAL.inn}.\n\nОтмена — /cancel`,
   });
 }
 /** Реквизиты счёта из текста, скопированного в банке: счёт 408…, БИК 04…, корр. счёт 301…, банк. */
@@ -224,7 +224,7 @@ async function savePayment(msg) {
   const [phone, bank, name] = all.filter((s) => s !== link);
   const digits = (phone || "").replace(/\D/g, "");
   if (!bank || !name || digits.length < 10 || digits.length > 12)
-    return tgSafe("sendMessage", { chat_id: msg.chat.id, text: "Не получилось разобрать. Нужно три строки: телефон, банк, получатель. Попробуйте ещё раз или /cancel." });
+    return tgSafe("sendMessage", { chat_id: msg.chat.id, text: "Не нашли расчётный счёт. Скопируйте реквизиты счёта ИП из приложения банка целиком и пришлите одним сообщением — или /cancel." });
   store.setSetting("payment", { phone: phone.slice(0, 30), bank: bank.slice(0, 60), name: name.slice(0, 60), ...(link ? { link } : {}) });
   awaitingPayment.delete(msg.from.id);
   return tgSafe("sendMessage", { chat_id: msg.chat.id, text: `Сохранили ✅\n\n${paymentInfo()}\n\nТеперь, когда вы принимаете заказ, бот сам отправит покупателю сумму и реквизиты с кнопкой «Я оплатил».`, reply_markup: menuKeyboard(msg.from.id) });

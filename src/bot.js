@@ -4,7 +4,7 @@ import * as store from "./db.js";
 import crypto from "node:crypto";
 import { confirmLoginCode, loginCodeValid } from "./loginlink.js";
 import { orderShipped, shipSub, subsSummary } from "./payments.js";
-import { accountValid, isAccount, payLines, payButton, adminKeyboard, canMove, claimPaid, getPayment, linkedText, notifyCustomer, orderText, refreshAdminMessages, rejectPaid, siteStartPayload } from "./orders.js";
+import { sendPayQr, accountValid, isAccount, payLines, payButton, adminKeyboard, canMove, claimPaid, getPayment, linkedText, notifyCustomer, orderText, refreshAdminMessages, rejectPaid, siteStartPayload } from "./orders.js";
 import { esc, poll, tg, tgSafe } from "./telegram.js";
 import { BTN, MENU_VERSION, menuKeyboard } from "./menu.js";
 import { requestWholesale } from "./wholesale.js";
@@ -111,6 +111,7 @@ async function linkSiteOrder(msg, payload) {
     chat_id: msg.chat.id, text: linkedText(linked),
     reply_markup: linked.status === "accepted" && !linked.paid_claim_at ? payButton(linked) : menuKeyboard(msg.from.id),
   });
+  if (linked.status === "accepted") await sendPayQr(msg.chat.id, linked);
   for (const chat of notifyChats())
     await tgSafe("sendMessage", { chat_id: chat, text: `🔗 Покупатель заказа №${o.id} с сайта подключил бота${msg.from.username ? ` (@${msg.from.username})` : ""} — статусы и реквизиты будут уходить ему автоматически.` });
   return true;

@@ -3,7 +3,8 @@ import crypto from "node:crypto";
 import { EMAIL_RE, sendMail } from "./mail.js";
 import { DELIVERY, KINDS, PACKS, PROMOS, STATUS, deliveryCost, findTea, normalizePromo, packInfo, rub } from "./catalog.js";
 import * as store from "./db.js";
-import { esc, tgSafe } from "./telegram.js";
+import { esc, tgPhoto, tgSafe } from "./telegram.js";
+import { qrPng } from "./qrpng.js";
 import { menuKeyboard } from "./menu.js";
 import { ykEnabled } from "./yookassa.js";
 
@@ -203,7 +204,7 @@ export function paymentText(o) {
   const head = `Заказ №${o.id} принят 🍵\nК оплате: ${rub(o.total)}`;
   if (ykEnabled()) return `${head}\n\nОплатить можно картой или по СБП — нажмите кнопку ниже. Электронный чек придёт автоматически, а мы сразу увидим оплату.`;
   if (!p) return `${head}\n\nРеквизиты для оплаты пришлём в этом чате.`;
-  const qr = isAccount(p) ? `\n\nПроще всего — QR-код: откройте «Мои заказы» в магазине (кнопка «Магазин» внизу), сохраните QR-код и загрузите его в приложении банка в разделе «Оплата по QR». Сумма и все реквизиты заполнятся сами.` : "";
+  const qr = isAccount(p) ? `\n\nПроще всего — QR-код: он придёт следующим сообщением. Сохраните картинку и загрузите её в приложении банка в разделе «Оплата по QR». Сумма и все реквизиты заполнятся сами.` : "";
   return `${head}\n\n${payLines(p, o).join("\n")}${qr}\n\nПосле перевода нажмите кнопку ниже — мы проверим и подтвердим.`;
 }
 export const payButton = (o) => ykEnabled()
@@ -378,10 +379,21 @@ export async function notifyCustomer(order) {
     if (!order.user_id)
       for (const a of notifyChats())
         await tgSafe("sendMessage", { chat_id: a, text: `🌐 Заказ №${order.id} с сайта принят. Покупатель подключил бота — сумма и реквизиты ушли ему в Telegram автоматически.` });
-    return tgSafe("sendMessage", { chat_id: chat, text: paymentText(order), reply_markup: getPayment() || ykEnabled() ? payButton(order) : menuKeyboard(chat) });
+    const sent = await tgSafe("sendMessage", { chat_id: chat, text: paymentText(order), reply_markup: getPayment() || ykEnabled() ? payButton(order) : menuKeyboard(chat) });
+    await sendPayQr(chat, order);
+    return sent;
   }
   const t = CUSTOMER_STATUS[order.status];
   if (t) await tgSafe("sendMessage", { chat_id: chat, text: t.replace("{id}", order.id), reply_markup: menuKeyboard(chat) });
+}
+/** Картинка с QR-кодом оплаты на расчётный счёт — сразу в чат, чтобы сохранить и открыть в банке. */
+export async function sendPayQr(chat, order) {
+  const p = getPayment();
+  if (!isAccount(p) || ykEnabled()) return null;
+  try {
+    return await tgPhoto(chat, qrPng(accountQr(p, order)),
+      `QR-код для оплаты заказа №${order.id} — ${rub(order.total)}.\nСохраните картинку и откройте её в приложении банка: «Оплата по QR» → «Из галереи». Сумма и реквизиты заполнятся сами.`);
+  } catch (e) { console.error("[qr]", e.message); return null; }
 }
 /** Сообщение покупателю сразу после привязки заказа с сайта к Telegram. */
 export function linkedText(o) {

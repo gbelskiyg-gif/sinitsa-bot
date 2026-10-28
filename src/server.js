@@ -21,7 +21,7 @@ import {
   sitePaymentMessage,
   waNumber,
 } from "./orders.js";
-import { tgSafe } from "./telegram.js";
+import { tgPhoto, tgSafe } from "./telegram.js";
 import { createLoginCode, takeLoginCode } from "./loginlink.js";
 const BOT_USERNAME = process.env.BOT_USERNAME || "sinitsa_chai_bot";
 import { consentPage, privacyPage, termsPage } from "./legal.js";
@@ -365,6 +365,23 @@ async function api(req, res, url) {
     const order = store.getOrder(Number(op[1]));
     if (!order || (order.user_id || order.tg_chat) !== user.id) return send(res, 404, { error: "Заказ не найден." });
     return payLink(res, () => payOrder(order));
+  }
+
+  // QR-код оплаты картинкой в чат с ботом (из мини-приложения скачать файл неудобно)
+  const oq = url.pathname.match(/^\/api\/orders\/(\d+)\/qr$/);
+  if (req.method === "POST" && oq) {
+    const order = store.getOrder(Number(oq[1]));
+    if (!order || (order.user_id || order.tg_chat) !== user.id) return send(res, 404, { error: "Заказ не найден." });
+    const body = await readJson(req, 600_000);
+    const png = Buffer.from(String(body.png || ""), "base64");
+    if (png.length < 100 || png.length > 400_000 || png.readUInt32BE(0) !== 0x89504e47) return send(res, 400, { error: "Не получилось сделать картинку." });
+    try {
+      await tgPhoto(user.id, png, `QR-код для оплаты заказа №${order.id} — ${order.total} ₽.\nСохраните картинку и откройте её в приложении банка: «Оплата по QR» → «Из галереи».`);
+    } catch (e) {
+      console.error("[qr]", e.message);
+      return send(res, 502, { error: "Не получилось отправить. Нажмите /start в боте и попробуйте ещё раз." });
+    }
+    return send(res, 200, { ok: true });
   }
 
   const pm = url.pathname.match(/^\/api\/orders\/(\d+)\/paid$/);

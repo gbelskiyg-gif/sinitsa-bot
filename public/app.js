@@ -1016,8 +1016,8 @@ function payAccountHTML(o, p, siteToken) {
   return `<div class="pay"><div class="eyebrow">К оплате ${rub(o.total)}</div>
     ${src ? `<div class="pay-qr"><div class="qr"><img src="${src}" alt="QR-код для оплаты заказа №${o.id}" width="180" height="180"></div><div>
       <p class="small" style="margin:0 0 8px">Откройте приложение своего банка → «Оплата по QR» и наведите камеру. Если вы смотрите с телефона — сохраните QR-код и загрузите его из галереи. Сумма и реквизиты заполнятся сами.</p>
-      <a class="btn wide" href="${src}" download="sinitsa-zakaz-${o.id}.gif">Сохранить QR-код</a>
-      <p class="small muted" style="margin:6px 0 0">На iPhone можно просто удержать палец на QR-коде → «Сохранить в Фото».</p></div></div>` : ""}
+      <button class="btn wide" data-save-qr="${o.id}" data-total="${o.total}">${inTelegram() ? "Прислать QR-код в чат" : "Сохранить QR-код в Фото"}</button>
+      <p class="small muted" style="margin:6px 0 0">${inTelegram() ? "Бот пришлёт картинку в чат — сохраните её и загрузите в приложении банка." : "Или удержите палец на QR-коде → «Сохранить в Фото»."}</p></div></div>` : ""}
     <details class="pay-req"><summary class="small">Реквизиты для перевода вручную</summary>
       <p class="small" style="margin:6px 0">${esc(p.name)} · ИНН ${esc(p.inn)}</p>
       ${copyRow("Расчётный счёт", p.acc)}${copyRow("БИК", p.bic)}
@@ -1025,6 +1025,46 @@ function payAccountHTML(o, p, siteToken) {
       ${copyRow("Назначение платежа", p.purpose)}
     </details>
     ${o.paidClaim ? `<p class="small" style="margin:10px 0 0;color:var(--gold)">Вы отметили оплату — проверим и подтвердим.</p>` : siteToken ? `<button class="btn wide" style="margin-top:10px" data-paid-site="${o.id}" data-t="${esc(siteToken)}">✅ Я оплатил</button>` : `<button class="btn wide" style="margin-top:10px" data-paid="${o.id}">✅ Я оплатил</button>`}</div>`;
+}
+// QR-код картинкой: белое поле и подпись — чтобы банк читал его из галереи
+function qrPng(img, id, total) {
+  const c = document.createElement("canvas"), W = 720, H = 820;
+  c.width = W; c.height = H;
+  const x = c.getContext("2d");
+  x.fillStyle = "#fff"; x.fillRect(0, 0, W, H);
+  x.imageSmoothingEnabled = false;
+  x.drawImage(img, 60, 40, 600, 600);
+  x.fillStyle = "#21141a"; x.textAlign = "center";
+  x.font = "600 40px Manrope, Arial, sans-serif"; x.fillText(`Заказ №${id} · ${rub(total)}`, W / 2, 710);
+  x.font = "28px Manrope, Arial, sans-serif"; x.fillStyle = "#666"; x.fillText("«Синица» · оплата по QR в приложении банка", W / 2, 765);
+  return new Promise((r) => c.toBlob(r, "image/png"));
+}
+async function saveQr(btn) {
+  const img = btn.closest(".pay")?.querySelector(".qr img");
+  if (!img) return;
+  const id = Number(btn.dataset.saveQr), blob = await qrPng(img, id, Number(btn.dataset.total));
+  if (!blob) return toast("Не получилось. Удержите палец на QR-коде и сохраните его");
+  if (inTelegram()) {
+    btn.disabled = true;
+    try {
+      const b64 = await new Promise((r) => { const f = new FileReader(); f.onload = () => r(String(f.result).split(",")[1]); f.readAsDataURL(blob); });
+      await api(`/api/orders/${id}/qr`, { method: "POST", body: JSON.stringify({ png: b64 }) });
+      toast("Отправили QR-код в чат с ботом ✅");
+      tgApp?.HapticFeedback?.notificationOccurred?.("success");
+    } catch (err) { toast(err.message); }
+    btn.disabled = false;
+    return;
+  }
+  const file = new File([blob], `sinitsa-zakaz-${id}.png`, { type: "image/png" });
+  // Телефон: системное меню «Поделиться» → «Сохранить изображение» (кладёт в Фото)
+  if (navigator.canShare?.({ files: [file] })) {
+    try { await navigator.share({ files: [file] }); } catch {}
+    return;
+  }
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = file.name;
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
 // Открыть страницу оплаты ЮKassa: в Telegram — во встроенном браузере, на сайте — в этой вкладке
 function openPay(url) {
@@ -1099,6 +1139,8 @@ async function renderOrders() {
     $("#view").onclick = async (e) => {
       const po = e.target.closest("[data-pay-online]");
       if (po) return payOnline(po);
+      const sq = e.target.closest("[data-save-qr]");
+      if (sq) return saveQr(sq);
       const ps = e.target.closest("[data-paid-site]");
       if (ps) {
         ps.disabled = true;
@@ -1131,6 +1173,8 @@ async function renderOrders() {
     $("#view").onclick = async (e) => {
       const po = e.target.closest("[data-pay-online]");
       if (po) return payOnline(po);
+      const sq = e.target.closest("[data-save-qr]");
+      if (sq) return saveQr(sq);
       const pd = e.target.closest("[data-paid]");
       if (pd) {
         pd.disabled = true;

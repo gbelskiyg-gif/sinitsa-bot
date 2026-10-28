@@ -21,6 +21,18 @@ export async function tg(method, params = {}) {
   return data.result;
 }
 
+/** Отправить картинку (PNG из памяти) — multipart, через тот же адрес, что и остальные вызовы. */
+export async function tgPhoto(chatId, png, caption = "") {
+  const fd = new FormData();
+  fd.append("chat_id", String(chatId));
+  if (caption) fd.append("caption", caption);
+  fd.append("photo", new Blob([png], { type: "image/png" }), "qr.png");
+  const res = await fetch(`${API}/sendPhoto`, { method: "POST", body: fd });
+  const data = await res.json().catch(() => ({ ok: false, description: `HTTP ${res.status}` }));
+  if (!data.ok) throw new Error(`sendPhoto: ${data.description}`);
+  return data.result;
+}
+
 /** Тихий вызов: ошибку пишет в лог и не роняет обработку. */
 export async function tgSafe(method, params) {
   try {

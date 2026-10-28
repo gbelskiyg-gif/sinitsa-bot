@@ -70,7 +70,7 @@ const KIND_SLUG = { gaba: "gaba", light_oolong: "svetlyj-ulun", dark_oolong: "te
 // ---------- Яндекс Метрика ----------
 // Номер счётчика публичный (он виден в коде любой страницы). METRIKA_ID= (пусто) в .env — выключить
 const METRIKA_ID = /^\d+$/.test(process.env.METRIKA_ID ?? "113675520") ? (process.env.METRIKA_ID ?? "113675520") : "";
-// Метрика включается только после согласия на cookie (плашка внизу; выбор помним в браузере)
+// Метрика работает сразу; плашка о cookie — уведомление, отключить можно в «Настройках cookie»
 export const metrikaTag = () => METRIKA_ID ? `<script>
 (function(){
 var ID=${METRIKA_ID},KEY="cookies";
@@ -87,17 +87,23 @@ var u=new URL(location.href);["order","t","sub"].forEach(function(k){u.searchPar
 if(/tgWebApp/.test(u.hash))u.hash="";Array.from(u.searchParams.keys()).forEach(function(k){if(/^tgWebApp/.test(k))u.searchParams.delete(k)});
 ym(ID,"init",{ssr:true,defer:true,webvisor:true,clickmap:true,trackHash:true,accurateTrackBounce:true,trackLinks:true,params:{"Где":tg?"Мини-приложение":"Сайт"}});
 ym(ID,"hit",u.toString(),{referer:document.referrer,title:document.title});}
-function banner(){if(document.getElementById("ck"))return;
+// Плашка — просто уведомление с кнопкой «Хорошо»; Метрика работает сразу.
+// Отказаться можно в «Настройках cookie» (подвал сайта и политика) — тогда Метрика больше не загружается.
+function box(html){var old=document.getElementById("ck");if(old)old.remove();
 var nav=document.querySelector(".nav"),off=nav&&nav.offsetHeight&&getComputedStyle(nav).position==="fixed"?nav.offsetHeight+10:16;
 var d=document.createElement("div");d.id="ck";d.setAttribute("role","dialog");d.setAttribute("aria-label","Файлы cookie");
 d.style.cssText="position:fixed;z-index:60;left:50%;transform:translateX(-50%);bottom:"+off+"px;width:min(560px,calc(100% - 24px));box-sizing:border-box;padding:14px 16px;background:#211b28;color:#f4ede3;border:1px solid #36303b;border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,.45);font:14px/1.5 Manrope,Arial,sans-serif";
-d.innerHTML='<div style="display:flex;gap:12px;align-items:center"><p style="margin:0;flex:1">Мы используем cookie, чтобы сайт работал удобнее. <a href="/privacy" style="color:#edbe82">Подробнее</a> · <button type="button" data-ck="0" style="padding:0;border:0;background:none;color:#8e7f90;font:inherit;text-decoration:underline;cursor:pointer">отказаться</button></p><button type="button" data-ck="1" style="flex:none;padding:10px 18px;border:0;border-radius:10px;background:#edbe82;color:#21141a;font:600 14px Manrope,Arial,sans-serif;cursor:pointer">Хорошо</button></div>';
-d.addEventListener("click",function(e){var b=e.target.closest("[data-ck]");if(!b)return;var v=b.getAttribute("data-ck");set(v);d.remove();if(v==="1")load();});
-document.body.appendChild(d);}
-window.cookieSettings=function(){set("");banner();};
+d.innerHTML=html;document.body.appendChild(d);return d;}
+var BTN="flex:none;padding:10px 18px;border-radius:10px;font:600 14px Manrope,Arial,sans-serif;cursor:pointer;";
+function banner(){var d=box('<div style="display:flex;gap:12px;align-items:center"><p style="margin:0;flex:1">Мы используем cookie, чтобы сайт работал удобнее. <a href="/privacy" style="color:#edbe82">Подробнее</a></p><button type="button" data-ok style="'+BTN+'border:0;background:#edbe82;color:#21141a">Хорошо</button></div>');
+d.querySelector("[data-ok]").onclick=function(){set("1");d.remove();};}
+window.cookieSettings=function(){var off=get()==="0";
+var d=box('<p style="margin:0 0 10px">'+(off?"Статистика посещений (Яндекс Метрика) выключена.":"Мы собираем обезличенную статистику посещений (Яндекс Метрика), чтобы улучшать магазин.")+'</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" data-v="'+(off?"1":"0")+'" style="'+BTN+'border:1px solid #36303b;background:transparent;color:#f4ede3">'+(off?"Включить статистику":"Отключить статистику")+'</button><button type="button" data-x style="'+BTN+'border:0;background:#edbe82;color:#21141a">Готово</button></div>');
+d.querySelector("[data-x]").onclick=function(){d.remove();};
+d.querySelector("[data-v]").onclick=function(){var v=this.getAttribute("data-v");set(v);d.remove();if(v==="1")load();else location.reload();};};
 var v=get();
-if(v==="1")load();
-else if(v!=="0"){if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",banner);else banner();}
+if(v!=="0")load();
+if(!v){if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",banner);else banner();}
 })();
 </script>` : "";
 

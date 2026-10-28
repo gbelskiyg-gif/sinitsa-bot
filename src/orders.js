@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { BOT_TOKEN, PUBLIC_URL, notifyChats } from "./config.js";
 import crypto from "node:crypto";
 import { EMAIL_RE, sendMail } from "./mail.js";
@@ -322,7 +323,7 @@ function mailLayout(title, bodyHtml, o) {
   const rows = o.items.map((i) => `<tr><td style="padding:6px 0;border-bottom:1px solid #eee">${escH(i.name)}${i.teaId ? `<br><span style="color:#888;font-size:13px">${escH(i.label)} × ${i.qty}</span>` : ""}</td><td style="padding:6px 0;border-bottom:1px solid #eee;text-align:right;white-space:nowrap">${i.sum < 0 ? "−" : ""}${escH(rub(Math.abs(i.sum)))}</td></tr>`).join("");
   return `<!doctype html><html><body style="margin:0;background:#f4efe8;font-family:Arial,sans-serif;color:#222">
 <div style="max-width:560px;margin:0 auto;padding:24px">
-<div style="background:#100f15;color:#edbe82;padding:18px 22px;border-radius:14px 14px 0 0;font:italic 26px Georgia,serif">Синица</div>
+<div style="background:#100f15;color:#edbe82;padding:14px 22px;border-radius:14px 14px 0 0;font:italic 26px Georgia,serif"><img src="cid:emblem.jpg" alt="" width="48" height="48" style="vertical-align:middle;border-radius:10px;margin-right:12px">Синица</div>
 <div style="background:#fff;padding:22px;border-radius:0 0 14px 14px">
 <h2 style="margin:0 0 12px;font:22px Georgia,serif">${escH(title)}</h2>
 ${bodyHtml}
@@ -353,7 +354,9 @@ ${p ? `<div style="background:#faf6ef;border:1px solid #edbe82;border-radius:12p
 <div style="font-weight:bold;margin-bottom:6px">${escH(payLines(p, o)[0].replace(/:$/, ""))}</div>
 <div>${payLines(p, o).slice(1).map(escH).join("<br>")}</div>
 ${p.link ? `<p style="margin:12px 0 0"><a href="${escH(p.link)}" style="color:#7a4b8f;font-weight:bold">Открыть оплату в приложении банка →</a></p>` : ""}</div>` : ""}
-<p>QR-код для оплаты и кнопка «Я оплатил» — на странице заказа (кнопка ниже).</p>`;
+${isAccount(p) ? `<p style="text-align:center;margin:16px 0 4px"><img src="cid:qr.png" alt="QR-код для оплаты" width="220" height="220" style="border:1px solid #eee;border-radius:12px"></p>
+<p style="text-align:center;color:#666;font-size:13px;margin:0 0 12px">Откройте приложение банка → «Оплата по QR» и наведите камеру (или сохраните картинку и загрузите из галереи). Сумма и реквизиты заполнятся сами.</p>` : ""}
+<p>После перевода нажмите «Я оплатил» на странице заказа (кнопка ниже).</p>`;
   } else {
     text = (CUSTOMER_STATUS[event] || "").replace("{id}", o.id).replace(/ сюда/g, " нам").replace("напишите нам сюда", "напишите нам");
     html = `<p>${escH(text).replace(/\n/g, "<br>")}</p>`;
@@ -361,10 +364,19 @@ ${p.link ? `<p style="margin:12px 0 0"><a href="${escH(p.link)}" style="color:#7
   const full = `${head}\n\n${text}\n\nСостав заказа:\n${itemsText(o)}\nИтого: ${rub(o.total)}\n\nЗаказ на сайте: ${page}\n\n— «Синица», китайский чай`;
   return { subject: `«Синица»: ${head}`, text: full, html: mailLayout(head, html, o) };
 }
+let EMBLEM = null;
+try { EMBLEM = fs.readFileSync(new URL("../public/emblem.jpg", import.meta.url)); } catch {}
 export async function emailCustomer(o, event) {
   if (!o?.email) return false;
   const m = orderEmail(o, event);
-  return m ? sendMail({ to: o.email, ...m }) : false;
+  if (!m) return false;
+  const images = [];
+  if (EMBLEM) images.push({ cid: "emblem.jpg", type: "image/jpeg", data: EMBLEM });
+  const p = getPayment();
+  if (event === "accepted" && !ykEnabled() && isAccount(p)) {
+    try { images.push({ cid: "qr.png", type: "image/png", data: qrPng(accountQr(p, o), { scale: 8 }) }); } catch {}
+  }
+  return sendMail({ to: o.email, ...m, images });
 }
 
 export async function notifyCustomer(order) {

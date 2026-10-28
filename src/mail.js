@@ -19,29 +19,52 @@ const b64 = (s) => Buffer.from(s, "utf8").toString("base64");
 const encWord = (s) => `=?UTF-8?B?${b64(s)}?=`;
 const wrap76 = (s) => s.replace(/.{1,76}/g, "$&\r\n");
 
-function buildMessage({ to, subject, text, html }) {
-  const boundary = "sinitsa-" + crypto.randomBytes(8).toString("hex");
+// images — картинки внутри письма: [{ cid, type, data: Buffer }], в HTML — <img src="cid:...">
+function buildMessage({ to, subject, text, html, images = [] }) {
+  const alt = "sinitsa-a-" + crypto.randomBytes(8).toString("hex");
+  const rel = "sinitsa-r-" + crypto.randomBytes(8).toString("hex");
   const domain = USER.split("@")[1] || "localhost";
-  return [
+  const head = [
     `From: ${encWord(FROM_NAME)} <${USER}>`,
     `To: <${to}>`,
     `Subject: ${encWord(subject)}`,
     `Date: ${new Date().toUTCString()}`,
     `Message-ID: <${crypto.randomUUID()}@${domain}>`,
     "MIME-Version: 1.0",
-    `Content-Type: multipart/alternative; boundary="${boundary}"`,
-    "",
-    `--${boundary}`,
+  ];
+  const alternative = [
+    `--${alt}`,
     "Content-Type: text/plain; charset=UTF-8",
     "Content-Transfer-Encoding: base64",
     "",
     wrap76(b64(text)),
-    `--${boundary}`,
+    `--${alt}`,
     "Content-Type: text/html; charset=UTF-8",
     "Content-Transfer-Encoding: base64",
     "",
     wrap76(b64(html)),
-    `--${boundary}--`,
+    `--${alt}--`,
+    "",
+  ];
+  if (!images.length) return [...head, `Content-Type: multipart/alternative; boundary="${alt}"`, "", ...alternative].join("\r\n");
+  return [
+    ...head,
+    `Content-Type: multipart/related; boundary="${rel}"`,
+    "",
+    `--${rel}`,
+    `Content-Type: multipart/alternative; boundary="${alt}"`,
+    "",
+    ...alternative,
+    ...images.flatMap((im) => [
+      `--${rel}`,
+      `Content-Type: ${im.type}; name="${im.cid}"`,
+      "Content-Transfer-Encoding: base64",
+      `Content-ID: <${im.cid}>`,
+      `Content-Disposition: inline; filename="${im.cid}"`,
+      "",
+      wrap76(im.data.toString("base64")),
+    ]),
+    `--${rel}--`,
     "",
   ].join("\r\n");
 }
@@ -49,9 +72,9 @@ function buildMessage({ to, subject, text, html }) {
 const STEP_NAMES = ["подключение", "EHLO", "AUTH", "логин", "пароль", "MAIL FROM", "RCPT TO", "DATA", "текст письма", "QUIT"];
 
 /** Отправить письмо. Возвращает true/false, никогда не бросает исключение. */
-export function sendMail({ to, subject, text, html }) {
+export function sendMail({ to, subject, text, html, images }) {
   if (!mailEnabled() || !EMAIL_RE.test(String(to || ""))) return Promise.resolve(false);
-  const data = buildMessage({ to, subject, text, html: html || `<pre>${text}</pre>` })
+  const data = buildMessage({ to, subject, text, html: html || `<pre>${text}</pre>`, images })
     .replace(/\r\n\./g, "\r\n..");
   const steps = [
     [null, 220],

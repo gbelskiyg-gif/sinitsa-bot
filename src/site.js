@@ -147,7 +147,7 @@ ${metrikaTag()}
     <a href="/">Каталог</a><a href="/#quiz">Подбор</a><a href="/#sets">Наборы</a><a href="/blog">Блог</a>
   </nav>
   <a class="logo" href="/"><img src="/emblem.jpg" alt="Синица — логотип" width="44" height="44"><span>Синица</span></a>
-  <a class="btn sm hd-cart" href="/#cart">Корзина</a>
+  <div class="hd-end"><div class="soc"><a href="https://t.me/sinitsa_chai" target="_blank" rel="noopener" aria-label="Наш Telegram-канал" title="Telegram-канал о чае"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 4.3 2.9 11.5c-.9.4-.9 1.6.1 1.9l4.6 1.4 1.8 5.6c.2.7 1.1.9 1.6.4l2.6-2.4 4.7 3.4c.6.4 1.4.1 1.6-.6l3.2-15.1c.2-.9-.7-1.6-1.6-1.2zM9.8 14.6l-.4 3.9-1.4-4.5 9.6-6.1z"/></svg></a><a href="https://www.instagram.com/sinitsa_chai/" target="_blank" rel="noopener" aria-label="Наш Instagram*" title="Instagram*"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3.5" y="3.5" width="17" height="17" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.3" cy="6.7" r="1" fill="currentColor" stroke="none"/></svg></a></div><a class="btn sm hd-cart" href="/#cart">Корзина</a></div>
 </div></header>
 <main>${body}</main>
 <footer class="ft"><div class="wrap ft-in">
@@ -155,9 +155,9 @@ ${metrikaTag()}
     <p class="muted small">Китайский чай с доставкой по России.<br>Каждый чай можно взять по 20 г на пробу.</p></div>
   <div class="ft-col"><b>Покупателям</b><a href="/">Каталог</a><a href="/#quiz">Подбор чая</a><a href="/#sets">Наборы</a><a href="/chai">Все чаи списком</a></div>
   <div class="ft-col"><b>Блог</b><a href="/blog">Все статьи</a>${ARTICLES.slice(0, 3).map((a) => `<a href="/blog/${a.slug}">${esc(a.h1.split(":")[0])}</a>`).join("")}</div>
-  <div class="ft-col"><b>Мы на связи</b>${peopleLinks()}<a href="mailto:${esc(LEGAL.email)}">${esc(LEGAL.email)}</a><a href="${BOT}">Telegram-бот @sinitsa_chai_bot</a><a href="${CHANNEL}">Канал о чае</a><a href="${INSTAGRAM}">Instagram</a></div>
+  <div class="ft-col"><b>Мы на связи</b>${peopleLinks()}<a href="mailto:${esc(LEGAL.email)}">${esc(LEGAL.email)}</a><a href="${BOT}">Telegram-бот @sinitsa_chai_bot</a><a href="${CHANNEL}">Канал о чае</a><a href="${INSTAGRAM}">Instagram*</a></div>
 </div><div class="wrap ft-legal small muted">
-  <a href="/terms">Условия доставки и возврата</a> · <a href="/privacy">Политика конфиденциальности</a> · <a href="/consent">Согласие на обработку данных</a> · <a href="#" onclick="window.cookieSettings&&cookieSettings();return false">Настройки cookie</a><br>Продавец: ${esc(LEGAL.name)}, ИНН ${esc(LEGAL.inn)}${LEGAL.ogrnip ? `, ОГРНИП ${esc(LEGAL.ogrnip)}` : ""}, ${esc(LEGAL.address)}
+  <a href="/terms">Условия доставки и возврата</a> · <a href="/privacy">Политика конфиденциальности</a> · <a href="/consent">Согласие на обработку данных</a> · <a href="#" onclick="window.cookieSettings&&cookieSettings();return false">Настройки cookie</a><br>Продавец: ${esc(LEGAL.name)}, ИНН ${esc(LEGAL.inn)}${LEGAL.ogrnip ? `, ОГРНИП ${esc(LEGAL.ogrnip)}` : ""}, ${esc(LEGAL.address)}<br>* Instagram принадлежит компании Meta, признанной экстремистской организацией и запрещённой в России.
 </div></footer>
 </body>
 </html>`;
@@ -210,8 +210,8 @@ function siteFooter() {
     <p class="muted small">Китайский чай с доставкой по России.<br>Каждый чай можно взять по 20 г на пробу.</p></div>
   <div class="s-col"><b>Покупателям</b><a href="/#catalog">Каталог</a><a href="/#quiz">Подбор чая</a><a href="/#sets">Наборы</a><a href="/#cart">Корзина</a></div>
   <div class="s-col"><b>Блог</b><a href="/blog">Все статьи</a>${ARTICLES.slice(0, 3).map((a) => `<a href="/blog/${a.slug}">${esc(a.h1.split(":")[0])}</a>`).join("")}</div>
-  <div class="s-col"><b>Мы на связи</b>${peopleLinks()}<a href="mailto:${esc(LEGAL.email)}">${esc(LEGAL.email)}</a><a href="${BOT}">Telegram-бот @sinitsa_chai_bot</a><a href="${CHANNEL}">Канал о чае</a><a href="${INSTAGRAM}">Instagram</a></div>
-</div><p class="s-legal small muted"><a href="/terms">Условия доставки и возврата</a> · <a href="/privacy">Политика конфиденциальности</a> · <a href="/consent">Согласие на обработку данных</a> · <a href="#" onclick="window.cookieSettings&&cookieSettings();return false">Настройки cookie</a><br>Продавец: ${esc(LEGAL.name)}, ИНН ${esc(LEGAL.inn)}${LEGAL.ogrnip ? `, ОГРНИП ${esc(LEGAL.ogrnip)}` : ""}, ${esc(LEGAL.address)}</p></footer>`;
+  <div class="s-col"><b>Мы на связи</b>${peopleLinks()}<a href="mailto:${esc(LEGAL.email)}">${esc(LEGAL.email)}</a><a href="${BOT}">Telegram-бот @sinitsa_chai_bot</a><a href="${CHANNEL}">Канал о чае</a><a href="${INSTAGRAM}">Instagram*</a></div>
+</div><p class="s-legal small muted"><a href="/terms">Условия доставки и возврата</a> · <a href="/privacy">Политика конфиденциальности</a> · <a href="/consent">Согласие на обработку данных</a> · <a href="#" onclick="window.cookieSettings&&cookieSettings();return false">Настройки cookie</a><br>Продавец: ${esc(LEGAL.name)}, ИНН ${esc(LEGAL.inn)}${LEGAL.ogrnip ? `, ОГРНИП ${esc(LEGAL.ogrnip)}` : ""}, ${esc(LEGAL.address)}<br>* Instagram принадлежит компании Meta, признанной экстремистской организацией и запрещённой в России.</p></footer>`;
 }
 
 function homePage() {

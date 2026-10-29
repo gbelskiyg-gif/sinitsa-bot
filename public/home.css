@@ -90,7 +90,7 @@ html:not(.tg) .top .site-acc { font-size: 14px; text-decoration: none; }
 @media (max-width: 899px) {
   .hdr-r { display: contents; }
   html:not(.tg) .top .sitenav { grid-column: 1; grid-row: 1; margin: 0; justify-self: start; }
-  html:not(.tg) .top .site-acc { grid-column: 3; grid-row: 1; justify-self: end; }
+  html:not(.tg) .top .hdr-end { grid-column: 3; grid-row: 1; justify-self: end; }
 }
 @media (max-width: 640px) { .sitenav a[data-home] { display: none; } }
 
@@ -105,3 +105,13 @@ html:not(.tg) .top .site-acc { font-size: 14px; text-decoration: none; }
 
 .tg-login { display: flex; flex-direction: column; gap: 6px; }
 .login-wait { color: var(--gold); font-size: 12px; }
+
+/* Соцсети в шапке: Telegram-канал и Instagram */
+.soc { display: flex; gap: 8px; }
+.soc a { width: 34px; height: 34px; border-radius: 50%; border: 1px solid #edbe8266; color: var(--gold, #edbe82); display: grid; place-items: center; transition: background .15s, color .15s, border-color .15s; }
+.soc a svg { width: 17px; height: 17px; fill: currentColor; }
+.soc a svg[fill="none"] { fill: none; }
+.soc a:hover { background: var(--gold, #edbe82); color: #21141a; border-color: var(--gold, #edbe82); }
+.hdr-end, .hd-end { display: flex; align-items: center; gap: 14px; }
+.tg .soc { display: none; }
+@media (max-width: 420px) { .soc a { width: 30px; height: 30px; } .soc a svg { width: 15px; height: 15px; } .hdr-end, .hd-end { gap: 8px; } .soc { gap: 6px; } }

@@ -397,6 +397,17 @@ test("заказ с сайта: по ключу видно статус, пос�
   assert.equal(paid.order.paidClaim, true);
 });
 
+test("промокод ТЕРРА10 для гостей выпускного «Терры»", async () => {
+  const { checkPromo } = await import("../src/orders.js");
+  for (const code of ["терра10", "Терра 10", "ТЕРРА10", "terra10"]) {
+    const r = checkPromo(code, true);
+    assert.equal(r.ok, true, code);
+    assert.equal(r.code, "TERRA10");
+    assert.equal(r.percent, 10);
+  }
+  assert.equal(checkPromo("ТЕРРА10", false).ok, false);
+});
+
 test("промокод: «синица 10» в любом регистре; повторный покупатель не проходит и после удаления номера", async () => {
   for (const code of ["синица10", "Синица 10", "СИНИЦА10", "sinitsa10"]) {
     const r = await fetch(`${base}/api/site-promo?code=${encodeURIComponent(code)}`).then((x) => x.json());

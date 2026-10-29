@@ -94,10 +94,13 @@ export const SETS = [
 // Промокоды. Регистр и русская раскладка («синица10») не важны.
 export const PROMOS = {
   SINITSA10: { percent: 10, firstOrderOnly: true, label: "Первый заказ −10%" },
+  // Пробники на выпускном школы «Терра»: по числу заказов с этим кодом видно, сколько покупателей пришло оттуда
+  TERRA10: { percent: 10, firstOrderOnly: true, label: "Гостям «Терры»: первый заказ −10%" },
 };
 export function normalizePromo(code) {
   let c = String(code || "").trim().toUpperCase().replace(/\s+/g, "");
   if (c.startsWith("СИНИЦА")) c = "SINITSA" + c.slice(6);
+  if (c.startsWith("ТЕРРА")) c = "TERRA" + c.slice(5);
   return c;
 }
 

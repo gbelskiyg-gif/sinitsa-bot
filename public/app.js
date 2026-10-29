@@ -952,9 +952,11 @@ function renderCheckout(total) {
     try {
       const { order, token } = await api(authed() ? "/api/orders" : "/api/site-orders", { method: "POST", body: JSON.stringify({ ...data, items: S.cart.filter((i) => !i.removed).map(({ removed, ...i }) => i), promo: S.promo?.code || "" }) });
       S.cart = []; saveCart(); S.checkout = false; S.promo = null; if (S.me) S.me.firstOrder = false;
+      // Письма с нового адреса почтовики иногда кладут в «Спам» — предупреждаем
+      const spam = data.email ? `<p class="small muted" style="margin-top:14px">📩 Письмо с подтверждением отправили на ${esc(data.email)}. Не видите его — загляните в папку «Спам» и нажмите «Не спам», тогда следующие письма придут во «Входящие».</p>` : "";
       if (authed()) {
         $("#view").innerHTML = `<div class="empty"><h2>Заказ №${order.id} отправлен 🍵</h2><p>Проверим наличие и напишем вам в Telegram, в чате с ботом @${BOT_NAME}. Как только подтвердим, придут сумма и реквизиты для оплаты.</p>
-          <a class="btn" href="#orders">Мои заказы</a></div>`;
+          <a class="btn" href="#orders">Мои заказы</a>${spam}</div>`;
       } else {
         saveSiteOrder(order, token); track("order_sent", order.id);
         const how = { tg: "в Telegram", wa: "в WhatsApp", call: "по телефону" }[data.contact] || "по телефону";
@@ -964,7 +966,7 @@ function renderCheckout(total) {
             <div class="row" style="justify-content:center;flex-wrap:wrap;gap:10px"><a class="btn tg-btn" href="${tgStartLink(order.id, token)}" target="_blank" rel="noopener">✈️ Получать статус в Telegram</a><a class="btn ghost" href="#orders">Мои заказы</a></div>`
           : `<p>Проверим наличие и свяжемся с вами ${how}.${data.email ? ` Подтверждение, сумму и реквизиты пришлём и на почту ${esc(data.email)}.` : ""} Как только подтвердим, в разделе «Заказы» здесь, на сайте, появятся QR-код и реквизиты для оплаты — никуда переходить не нужно.</p>
             <a class="btn" href="#orders">Мои заказы</a>
-            <p class="small muted" style="margin-top:14px">Удобнее получать новости в Telegram? <a href="${tgStartLink(order.id, token)}" target="_blank" rel="noopener">Подключите бота</a> — одно нажатие.</p>`}</div>`;
+            <p class="small muted" style="margin-top:14px">Удобнее получать новости в Telegram? <a href="${tgStartLink(order.id, token)}" target="_blank" rel="noopener">Подключите бота</a> — одно нажатие.</p>`}${spam}</div>`;
       }
       try { tgApp?.HapticFeedback?.notificationOccurred("success"); } catch {}
     } catch (err) {

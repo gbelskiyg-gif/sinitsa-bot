@@ -354,7 +354,8 @@ async function api(req, res, url) {
     emailCustomer(order, "created").catch(() => {});
     await tgSafe("sendMessage", {
       chat_id: user.id,
-      text: `Заказ №${order.id} получили 🍵\nПроверим наличие и напишем вам здесь. Как только подтвердим, бот пришлёт сумму и реквизиты для оплаты.`,
+      text: `Заказ №${order.id} получили 🍵\nПроверим наличие и напишем вам здесь. Как только подтвердим, бот пришлёт сумму и реквизиты для оплаты.`
+        + (order.email ? `\n\n📩 Подтверждение отправили и на ${order.email}. Если письма нет во «Входящих» — загляните в «Спам» и нажмите «Не спам».` : ""),
       reply_markup: menuKeyboard(user.id),
     });
     return send(res, 201, { order: publicOrder(order) });

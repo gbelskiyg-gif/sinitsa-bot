@@ -10,6 +10,7 @@ import { BTN, MENU_VERSION, menuKeyboard } from "./menu.js";
 import { requestWholesale } from "./wholesale.js";
 import { sheetFormula } from "./export.js";
 import { metrikaReport } from "./metrika.js";
+import { giveawayMenu, runGiveaway, trackGroupMessage } from "./giveaway.js";
 
 // «37 чаёв», «31 чай», «32 чая» — число берём из каталога, чтобы не устаревало
 function teasCount(n = TEAS.length) {
@@ -353,6 +354,8 @@ async function forwardToAdmins(msg) {
 }
 
 async function onGroupMessage(msg) {
+  // Группа обсуждения канала: запоминаем посты и комментарии для розыгрышей
+  if (trackGroupMessage(msg)) return;
   const text = msg.text || "";
   if (/^\/chatid(@\w+)?$/.test(text))
     return tgSafe("sendMessage", { chat_id: msg.chat.id, text: `ID этой группы: ${msg.chat.id}` });
@@ -409,6 +412,7 @@ async function onMessage(msg) {
     if (text.startsWith("/subs") || text === BTN.subs) return tgSafe("sendMessage", { chat_id: msg.chat.id, text: subsSummary(), parse_mode: "HTML" });
     if (text.startsWith("/stock") || text === BTN.stock)
       return tgSafe("sendMessage", { chat_id: msg.chat.id, text: "Наличие чаёв. Нажмите, чтобы переключить:", reply_markup: stockKeyboard() });
+    if (/^\/(rozygrysh|giveaway)/.test(text)) return giveawayMenu(msg.chat.id);
     if (text.startsWith("/admin")) return tgSafe("sendMessage", { chat_id: msg.chat.id, text: ADMIN_HELP, parse_mode: "HTML" });
     // Ответ продавца покупателю
     const reply = msg.reply_to_message;
@@ -442,6 +446,12 @@ async function onCallback(q) {
     const customerKeys = ["quiz", "shop", "orders", "delivery", "about"];
     if (!BTN[key] || (!customerKeys.includes(key) && !isAdmin(q.from.id))) return;
     return onMessage({ chat: { id: chat, type: "private" }, from: q.from, text: BTN[key] });
+  }
+  if (data.startsWith("gw:")) {
+    if (!isAdmin(q.from.id)) return answer("Недоступно");
+    await answer("Запускаем розыгрыш…");
+    const [, g, t] = data.split(":");
+    return runGiveaway(chat, Number(g), Number(t), q.from.id);
   }
   if (data === "about") {
     await answer();

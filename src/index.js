@@ -4,6 +4,7 @@ import { startBot } from "./bot.js";
 
 import * as store from "./db.js";
 import { tickSubs } from "./payments.js";
+import { cleanGiveaways } from "./giveaway.js";
 
 startServer(PORT);
 
@@ -12,6 +13,7 @@ const cleanup = () => {
   try {
     const n = store.anonymizeOldOrders(30);
     store.cleanOldEvents(90);
+    cleanGiveaways(30);
     if (n) console.log(`Обезличено старых заказов: ${n}`);
   } catch (e) {
     console.error("[cleanup]", e);

@@ -152,3 +152,34 @@ test("в режиме ввода реквизитов кнопка меню не
   assert.ok(!sent.some((m) => /Не получилось разобрать/.test(m.text || "")), "не ругается");
   assert.ok(sent.some((m) => /Статистика/.test(m.text || "")), "показал статистику");
 });
+
+test("розыгрыш: комментаторы-подписчики, отписавшиеся не участвуют", async () => {
+  const group = { id: -100777, type: "supergroup" };
+  const channel = { id: -100555, type: "channel", username: "sinitsa_chai" };
+  await _test.onMessage({ chat: group, message_id: 50, is_automatic_forward: true, sender_chat: channel, forward_origin: { message_id: 9 }, text: "🐛 Разыгрываем чай" });
+  const comment = (id, name) => _test.onMessage({ chat: group, message_id: 60 + id, message_thread_id: 50, from: { id, first_name: name }, text: "рискну" });
+  await comment(201, "Аня");
+  await comment(201, "Аня"); // второй комментарий того же человека не считается
+  await comment(202, "Боря"); // не подписан
+  await comment(1, "Продавец"); // админ не участвует
+  const prev = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    if (String(url).endsWith("/getChatMember")) {
+      const { user_id } = JSON.parse(opts.body);
+      return new Response(JSON.stringify({ ok: true, result: { status: user_id === 201 ? "member" : "left" } }));
+    }
+    return prev(url, opts);
+  };
+  try {
+    await _test.onMessage(adminMsg("/rozygrysh"));
+    const btn = last().reply_markup.inline_keyboard[0][0];
+    assert.match(btn.text, /^2 👤/);
+    await _test.onCallback({ id: "q", from: { id: 1 }, data: btn.callback_data, message: { chat: { id: 1 }, message_id: 1 } });
+    const final = last();
+    assert.match(final.text, /Комментариев: 2 · подписаны на канал: 1/);
+    assert.match(final.text, /Победитель: Аня/);
+    assert.match(final.text, /t\.me\/sinitsa_chai\/9/);
+  } finally {
+    globalThis.fetch = prev;
+  }
+});

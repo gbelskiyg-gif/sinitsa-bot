@@ -450,9 +450,9 @@ const QUESTIONS = [
     ["none", "✨", "Ни на что, хочу новое", "подберём по вкусам из следующих вопросов"]],
     gift: { title: "Что любит пить тот, кому дарите?", hint: "Подберём китайский чай, близкий по вкусу к его любимому напитку. Можно выбрать несколько",
       labels: { coffee: ["Кофе", "подберём плотный чай с нотами обжарки"], black: ["Чёрный чай", "подберём мягкий медовый красный чай"], green: ["Зелёный чай", "подберём свежий светлый улун"], herbal: ["Травяной или фруктовый", "подберём сладкий чай без горечи"], none: ["Не знаю", "подберём универсальный вкус"] } } },
-  { key: "time", multi: true, title: "Когда будете пить?", hint: "Утром предложим бодрящий чай, вечером — спокойный. Можно выбрать несколько", options: [
-    ["morning", "🌅", "Утром, чтобы проснуться"], ["day", "💻", "Днём, за делами"], ["evening", "🌙", "Вечером, без спешки"], ["food", "🍽", "После еды"]],
-    gift: { title: "Когда этот человек обычно пьёт чай?" } },
+  { key: "time", multi: true, title: "Какое настроение хочется от чая?", hint: "У каждого чая свой характер: одни бодрят, другие настраивают на дело или успокаивают. Можно выбрать несколько", options: [
+    ["morning", "☀️", "Бодрость", "проснуться, зарядиться"], ["day", "🎯", "Концентрация", "собраться, поработать"], ["evening", "🌙", "Спокойствие", "замедлиться, отдохнуть"], ["food", "🍽", "После еды"]],
+    gift: { title: "Какое настроение подарить?" } },
   { key: "likes", multi: true, exclusive: "any", title: "Какие ноты хочется во вкусе?", hint: "В китайском чае бывают оттенки мёда, фруктов, цветов. Поднимем выше чаи с выбранными нотами. Можно выбрать несколько", options: [
     ["honey", "🍯", "Мёд и выпечка"], ["fruit", "🍑", "Фрукты и сухофрукты"], ["flowers", "🌸", "Цветы"], ["nuts", "🌰", "Орехи и карамель"],
     ["fresh", "🌿", "Свежая зелень"], ["forest", "🌲", "Лес и дерево"], ["spice", "🌶", "Пряности"], ["any", "🤷", "Не знаю, всё подряд"]],
@@ -533,8 +533,10 @@ function feedbackBonus(t) {
 const WISH_LABEL = { stronger: "покрепче", softer: "помягче", sweeter: "послаще", aroma: "ароматнее", same: "так же, как в прошлый раз" };
 function timeBonus(t, tm) {
   const c = t.quiz.caffeine;
-  if (tm === "morning") return c === 3 ? 2 : 0;
-  if (tm === "evening") return c === 3 ? -3 : t.kind === "gaba" || t.kind === "light_oolong" ? 1 : 0;
+  const st = (t.effect?.state || "").toLowerCase();
+  if (tm === "morning") return (c === 3 ? 2 : 0) + (/бодрост/.test(st) && !/мягкая бодрост/.test(st) ? 1 : 0);
+  if (tm === "day") return /сосредоточ|собранн|ясност|внимани/.test(st) ? 2 : 0;
+  if (tm === "evening") return (c === 3 ? -3 : t.kind === "gaba" || t.kind === "light_oolong" ? 1 : 0) + (/спокойств|уют|тепло/.test(st) && c !== 3 ? 1 : 0);
   if (tm === "food") return ["shu", "dark_oolong", "puer"].includes(t.kind) ? 2 : 0;
   return 0;
 }
@@ -582,7 +584,7 @@ function pickThree(a) {
   const discovery = scored.find((x) => fresh(x) && !a.drink.some((d) => x.t.quiz.familiar.includes(d)) && x.matched.length)
     || scored.find(fresh) || scored.find((x) => !used.has(x.t.id));
   const picks = [["Точно понравится", safe], ["Чуть смелее", bolder], ["Открытие", discovery]].filter(([, x]) => x);
-  // Выбрали и утро, и вечер: в тройке должен быть и бодрый, и спокойный чай
+  // Выбрали и бодрость, и спокойствие: в тройке должен быть и бодрый, и спокойный чай
   if (a.time.includes("morning") && a.time.includes("evening") && picks.length === 3) {
     const bold = (x) => x.t.quiz.caffeine === 3;
     const ids = new Set(picks.map(([, x]) => x.t.id));
@@ -602,9 +604,11 @@ function whyText(x, a, role) {
   else if (role === "Открытие" && !x.matched.length) parts.push(gift ? "Что-то новое — хороший способ удивить." : "Что-то новое — попробуйте как открытие.");
   const c = x.t.quiz.caffeine;
   const morning = a.time.includes("morning"), evening = a.time.includes("evening");
-  if (morning && c === 3) parts.push(evening ? "Этот — для утра: хорошо бодрит." : "Хорошо бодрит утром.");
-  else if (evening && c === 3) parts.push("Вечером заваривайте коротко — так он мягче.");
-  else if (evening) parts.push(morning ? "Этот — для спокойного вечера." : "Подходит для спокойного вечера.");
+  const st = (x.t.effect?.state || "").toLowerCase();
+  if (morning && c === 3) parts.push(evening ? "Этот — для бодрости." : "Хорошо бодрит.");
+  else if (evening && c === 3) parts.push("Для спокойного вечера заваривайте коротко — так он мягче.");
+  else if (evening) parts.push(morning ? "Этот — для спокойствия." : "Настраивает на спокойный лад.");
+  if (a.time.includes("day") && /сосредоточ|собранн|ясност|внимани/.test(st)) parts.push("Для концентрации, за делами.");
   if (a.time.includes("food") && ["shu", "dark_oolong", "puer"].includes(x.t.kind)) parts.push("Хорош после еды.");
   if (!parts.length && gift && !x.t.quiz.bitter) parts.push("Мягкий, без горечи — беспроигрышный подарок.");
   return parts.join(" ");
